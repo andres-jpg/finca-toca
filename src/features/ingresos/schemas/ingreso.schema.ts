@@ -1,0 +1,11 @@
+import { z } from "zod";
+import { CONCEPTO_OPTIONS } from "@/types";
+
+export const ingresoSchema = z.object({
+  fecha: z.date().refine((val) => !isNaN(val.getTime()), { message: "La fecha es obligatoria" }),
+  concepto: z.enum(CONCEPTO_OPTIONS),
+  valor: z.number().positive("El valor debe ser mayor a 0"),
+  observaciones: z.string().optional(),
+});
+
+export type IngresoFormValues = z.infer<typeof ingresoSchema>;
