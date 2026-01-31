@@ -1,11 +1,3 @@
-export interface Milking {
-  id: number;
-  liters: number;
-  date: string;
-  observations: string | null;
-  created_at: string;
-}
-
 export interface Gasto {
   id: number;
   fecha: string;
@@ -20,12 +12,6 @@ export interface Ingreso {
   concepto: string;
   valor: number;
   observaciones: string | null;
-}
-
-export interface MilkingFormData {
-  liters: number;
-  date: Date;
-  observations?: string;
 }
 
 export interface GastoFormData {

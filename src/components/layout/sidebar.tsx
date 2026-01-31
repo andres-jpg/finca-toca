@@ -2,12 +2,16 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, Droplets, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  LayoutDashboard,
+  Droplets,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/milkings", label: "Ordeños", icon: Droplets },
   { href: "/dashboard/gastos", label: "Gastos", icon: TrendingDown },
   { href: "/dashboard/ingresos", label: "Ingresos", icon: TrendingUp },
 ];
@@ -23,7 +27,9 @@ export function Sidebar() {
       <nav className="flex-1 px-3 py-2 space-y-1">
         {navItems.map(({ href, label, icon: Icon }) => {
           const isActive =
-            href === "/dashboard" ? pathname === href : pathname.startsWith(href);
+            href === "/dashboard"
+              ? pathname === href
+              : pathname.startsWith(href);
           return (
             <Link
               key={href}
@@ -32,7 +38,7 @@ export function Sidebar() {
                 "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
                 isActive
                   ? "bg-gray-700 text-white"
-                  : "text-gray-400 hover:bg-gray-800 hover:text-white"
+                  : "text-gray-400 hover:bg-gray-800 hover:text-white",
               )}
             >
               <Icon className="h-5 w-5" />
