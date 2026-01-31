@@ -28,13 +28,24 @@ export interface IngresoFormData {
   observaciones?: string;
 }
 
-export const CONCEPTO_OPTIONS = [
-  "Alimentación",
+export const GASTO_OPTIONS = [
   "Veterinario",
+  "Concentrado",
+  "Sal",
+  "Medicamentos",
+  "Combustible",
   "Transporte",
-  "Mantenimiento",
-  "Servicios",
+  "Salario",
+  "Arriendo",
+  "Limpieza",
   "Otros",
 ] as const;
 
-export type ConceptoOption = (typeof CONCEPTO_OPTIONS)[number];
+export const INGRESO_OPTIONS = [
+  "Leche",
+  "Venta terneros",
+  "Venta vacas",
+] as const;
+
+export type GastoOption = (typeof GASTO_OPTIONS)[number];
+export type IngresoOption = (typeof INGRESO_OPTIONS)[number];

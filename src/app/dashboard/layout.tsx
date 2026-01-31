@@ -5,12 +5,8 @@ import { Header } from "@/components/layout/header";
 
 export default async function DashboardLayout({
   children,
-  stats,
-  charts,
 }: {
   children: React.ReactNode;
-  stats?: React.ReactNode;
-  charts?: React.ReactNode;
 }) {
   const supabase = await createClient();
   const {
@@ -27,8 +23,6 @@ export default async function DashboardLayout({
       <div className="flex-1 flex flex-col">
         <Header email={session.user.email ?? ""} />
         <main className="flex-1 p-6 bg-gray-50">
-          {stats}
-          {charts}
           {children}
         </main>
       </div>

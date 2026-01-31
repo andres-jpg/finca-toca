@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/shared/date-picker";
 import { toast } from "sonner";
-import { CONCEPTO_OPTIONS } from "@/types";
+import { GASTO_OPTIONS } from "@/types";
 import type { Gasto } from "@/types";
 
 interface FormValues {
@@ -84,7 +84,7 @@ export function GastoForm({ gasto, onSuccess }: GastoFormProps) {
             <SelectValue placeholder="Seleccionar concepto" />
           </SelectTrigger>
           <SelectContent>
-            {CONCEPTO_OPTIONS.map((option) => (
+            {GASTO_OPTIONS.map((option) => (
               <SelectItem key={option} value={option}>
                 {option}
               </SelectItem>

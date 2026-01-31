@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { formatDate } from "@/lib/utils";
 import type { Gasto } from "@/types";
 
 export async function getGastos(): Promise<Gasto[]> {
@@ -23,7 +24,7 @@ export async function createGasto(formData: {
 }) {
   const supabase = await createClient();
   const { error } = await supabase.from("gastos").insert({
-    fecha: formData.fecha.toISOString().split("T")[0],
+    fecha: formatDate(formData.fecha),
     concepto: formData.concepto,
     valor: formData.valor,
     observaciones: formData.observaciones || null,
@@ -42,7 +43,7 @@ export async function updateGasto(
   const { error } = await supabase
     .from("gastos")
     .update({
-      fecha: formData.fecha.toISOString().split("T")[0],
+      fecha: formatDate(formData.fecha),
       concepto: formData.concepto,
       valor: formData.valor,
       observaciones: formData.observaciones || null,

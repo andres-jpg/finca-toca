@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  BarChart,
-  Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -22,7 +22,7 @@ interface IngresoRow {
   valor: number;
 }
 
-interface GastosIngresosBarChartProps {
+interface GastosIngresosLineChartProps {
   gastos: GastoRow[];
   ingresos: IngresoRow[];
 }
@@ -37,20 +37,20 @@ function getMonthLabel(key: string) {
   return `${months[parseInt(month, 10) - 1]} ${year}`;
 }
 
-export function GastosInbresosBarChart({ gastos, ingresos }: GastosIngresosBarChartProps) {
-  const monthMap = new Map<string, { gastos: number; ingresos: number }>();
+export function GastosIngresosLineChart({ gastos, ingresos }: GastosIngresosLineChartProps) {
+  const monthMap = new Map<string, { Gastos: number; Ingresos: number }>();
 
   gastos.forEach((g) => {
     const key = getMonthKey(g.fecha);
-    const entry = monthMap.get(key) ?? { gastos: 0, ingresos: 0 };
-    entry.gastos += g.valor;
+    const entry = monthMap.get(key) ?? { Gastos: 0, Ingresos: 0 };
+    entry.Gastos += g.valor;
     monthMap.set(key, entry);
   });
 
   ingresos.forEach((i) => {
     const key = getMonthKey(i.fecha);
-    const entry = monthMap.get(key) ?? { gastos: 0, ingresos: 0 };
-    entry.ingresos += i.valor;
+    const entry = monthMap.get(key) ?? { Gastos: 0, Ingresos: 0 };
+    entry.Ingresos += i.valor;
     monthMap.set(key, entry);
   });
 
@@ -58,29 +58,32 @@ export function GastosInbresosBarChart({ gastos, ingresos }: GastosIngresosBarCh
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, val]) => ({
       month: getMonthLabel(key),
-      Gastos: val.gastos,
-      Ingresos: val.ingresos,
+      ...val,
     }));
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base font-medium">Gastos vs Ingresos por mes</CardTitle>
+        <CardTitle className="text-base font-medium">Gastos vs Ingresos</CardTitle>
       </CardHeader>
       <CardContent>
         {chartData.length === 0 ? (
           <p className="text-sm text-gray-500 text-center py-8">No hay datos</p>
         ) : (
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={chartData}>
+            <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(value: unknown) => `$${Number(value).toLocaleString("es-AR", { minimumFractionDigits: 2 })}`} />
+              <Tooltip
+                formatter={(value: unknown) =>
+                  `$${Number(value).toLocaleString("es-AR", { minimumFractionDigits: 2 })}`
+                }
+              />
               <Legend />
-              <Bar dataKey="Ingresos" fill="#22c55e" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Gastos" fill="#ef4444" radius={[4, 4, 0, 0]} />
-            </BarChart>
+              <Line type="monotone" dataKey="Ingresos" stroke="#22c55e" strokeWidth={2} dot={{ r: 4 }} />
+              <Line type="monotone" dataKey="Gastos" stroke="#ef4444" strokeWidth={2} dot={{ r: 4 }} />
+            </LineChart>
           </ResponsiveContainer>
         )}
       </CardContent>

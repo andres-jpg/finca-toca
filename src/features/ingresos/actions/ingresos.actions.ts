@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { formatDate } from "@/lib/utils";
 import type { Ingreso } from "@/types";
 
 export async function getIngresos(): Promise<Ingreso[]> {
@@ -23,7 +24,7 @@ export async function createIngreso(formData: {
 }) {
   const supabase = await createClient();
   const { error } = await supabase.from("ingresos").insert({
-    fecha: formData.fecha.toISOString().split("T")[0],
+    fecha: formatDate(formData.fecha),
     concepto: formData.concepto,
     valor: formData.valor,
     observaciones: formData.observaciones || null,
@@ -42,7 +43,7 @@ export async function updateIngreso(
   const { error } = await supabase
     .from("ingresos")
     .update({
-      fecha: formData.fecha.toISOString().split("T")[0],
+      fecha: formatDate(formData.fecha),
       concepto: formData.concepto,
       valor: formData.valor,
       observaciones: formData.observaciones || null,
