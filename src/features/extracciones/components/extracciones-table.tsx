@@ -7,20 +7,26 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/shared/data-table";
 import { EntityModal } from "@/components/shared/entity-modal";
-import { GastoForm } from "@/features/gastos/components/gasto-form";
-import { deleteGasto } from "@/features/gastos/actions/gastos.actions";
+import { ExtraccionForm } from "@/features/extracciones/components/extraccion-form";
+import { deleteExtraccion } from "@/features/extracciones/actions/extracciones.actions";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { MonthPicker } from "@/components/shared/month-picker";
-import type { Gasto } from "@/types";
+import type { ExtraccionLeche } from "@/types";
 
-function RowActions({ gasto, canEdit }: { gasto: Gasto; canEdit: boolean }) {
+function RowActions({
+  extraccion,
+  canEdit,
+}: {
+  extraccion: ExtraccionLeche;
+  canEdit: boolean;
+}) {
   const [editOpen, setEditOpen] = useState(false);
 
   const handleDelete = async () => {
     try {
-      await deleteGasto(gasto.id);
-      toast.success("Gasto eliminado");
+      await deleteExtraccion(extraccion.id);
+      toast.success("Extracción eliminada");
     } catch {
       toast.error("Error al eliminar");
     }
@@ -47,35 +53,41 @@ function RowActions({ gasto, canEdit }: { gasto: Gasto; canEdit: boolean }) {
       <EntityModal
         open={editOpen}
         onClose={() => setEditOpen(false)}
-        title="Editar gasto"
+        title="Editar extracción"
       >
-        <GastoForm gasto={gasto} onSuccess={() => setEditOpen(false)} />
+        <ExtraccionForm
+          extraccion={extraccion}
+          onSuccess={() => setEditOpen(false)}
+        />
       </EntityModal>
     </div>
   );
 }
 
-interface GastosTableProps {
-  gastos: Gasto[];
+interface ExtraccionesTableProps {
+  extracciones: ExtraccionLeche[];
   canEdit: boolean;
 }
 
-export function GastosTable({ gastos, canEdit }: GastosTableProps) {
+export function ExtraccionesTable({
+  extracciones,
+  canEdit,
+}: ExtraccionesTableProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
 
-  // Filtrar gastos por mes seleccionado
-  const filteredGastos = useMemo(() => {
-    return gastos.filter((gasto) => {
-      const gastoDate = new Date(gasto.fecha + "T00:00:00");
+  // Filtrar extracciones por mes seleccionado
+  const filteredExtracciones = useMemo(() => {
+    return extracciones.filter((extraccion) => {
+      const extraccionDate = new Date(extraccion.fecha + "T00:00:00");
       return (
-        gastoDate.getMonth() === selectedMonth.getMonth() &&
-        gastoDate.getFullYear() === selectedMonth.getFullYear()
+        extraccionDate.getMonth() === selectedMonth.getMonth() &&
+        extraccionDate.getFullYear() === selectedMonth.getFullYear()
       );
     });
-  }, [gastos, selectedMonth]);
+  }, [extracciones, selectedMonth]);
 
-  const columns: ColumnDef<Gasto>[] = useMemo(
+  const columns: ColumnDef<ExtraccionLeche>[] = useMemo(
     () => [
       {
         accessorKey: "fecha",
@@ -86,24 +98,16 @@ export function GastosTable({ gastos, canEdit }: GastosTableProps) {
         },
       },
       {
-        accessorKey: "concepto",
-        header: "Concepto",
-      },
-      {
-        accessorKey: "valor",
-        header: "Valor",
-        cell: ({ getValue }) =>
-          `$${getValue<number>().toLocaleString("es-AR", { minimumFractionDigits: 2 })}`,
-      },
-      {
-        accessorKey: "observaciones",
-        header: "Observaciones",
-        cell: ({ getValue }) => getValue<string | null>() ?? "—",
+        accessorKey: "litros",
+        header: "Litros",
+        cell: ({ getValue }) => `${getValue<number>().toFixed(1)} L`,
       },
       {
         id: "actions",
         header: "Acciones",
-        cell: ({ row }) => <RowActions gasto={row.original} canEdit={canEdit} />,
+        cell: ({ row }) => (
+          <RowActions extraccion={row.original} canEdit={canEdit} />
+        ),
       },
     ],
     [canEdit]
@@ -112,7 +116,7 @@ export function GastosTable({ gastos, canEdit }: GastosTableProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Gastos</h2>
+        <h2 className="text-lg font-semibold">Extracciones de Leche</h2>
         {canEdit && (
           <Button onClick={() => setModalOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
@@ -125,12 +129,12 @@ export function GastosTable({ gastos, canEdit }: GastosTableProps) {
         <span className="text-sm text-gray-600">Filtrar por mes:</span>
         <MonthPicker value={selectedMonth} onChange={setSelectedMonth} />
         <span className="text-sm text-gray-500">
-          {filteredGastos.length} registro(s)
+          {filteredExtracciones.length} registro(s)
         </span>
       </div>
 
       <DataTable
-        data={filteredGastos}
+        data={filteredExtracciones}
         columns={columns}
         filterPlaceholder=""
       />
@@ -138,9 +142,9 @@ export function GastosTable({ gastos, canEdit }: GastosTableProps) {
         <EntityModal
           open={modalOpen}
           onClose={() => setModalOpen(false)}
-          title="Nuevo gasto"
+          title="Nueva extracción"
         >
-          <GastoForm onSuccess={() => setModalOpen(false)} />
+          <ExtraccionForm onSuccess={() => setModalOpen(false)} />
         </EntityModal>
       )}
     </div>

@@ -1,10 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingDown, TrendingUp } from "lucide-react";
+import { TrendingDown, TrendingUp, Droplets, Milk } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { GastosDonutChart } from "@/charts/gastos-donut-chart";
 import { IngresosDonutChart } from "@/charts/ingresos-donut-chart";
 import { GastosIngresosLineChart } from "@/charts/gastos-ingresos-line-chart";
+import {
+  getLitrosDiaActual,
+  getLitrosMesActual,
+} from "@/features/extracciones/actions/extracciones.actions";
+import { checkRoutePermission } from "@/lib/auth/check-permissions";
 
 function getCurrentMonthRange() {
   const now = new Date();
@@ -27,6 +32,9 @@ function trend(current: number, previous: number) {
 }
 
 export default async function DashboardPage() {
+  // Verificar permisos: solo admin y viewer pueden acceder
+  await checkRoutePermission(["admin", "viewer"]);
+
   const supabase = await createClient();
   const current = getCurrentMonthRange();
   const last = getLastMonthRange();
@@ -38,6 +46,8 @@ export default async function DashboardPage() {
     { data: ingresosLast },
     { data: allGastos },
     { data: allIngresos },
+    litrosDia,
+    litrosMes,
   ] = await Promise.all([
     supabase.from("gastos").select("valor").gte("fecha", current.start).lte("fecha", current.end),
     supabase.from("gastos").select("valor").gte("fecha", last.start).lte("fecha", last.end),
@@ -45,6 +55,8 @@ export default async function DashboardPage() {
     supabase.from("ingresos").select("valor").gte("fecha", last.start).lte("fecha", last.end),
     supabase.from("gastos").select("fecha, concepto, valor").order("fecha", { ascending: true }),
     supabase.from("ingresos").select("fecha, concepto, valor").order("fecha", { ascending: true }),
+    getLitrosDiaActual(),
+    getLitrosMesActual(),
   ]);
 
   const totalGastos = (gastosCurr ?? []).reduce(
@@ -66,7 +78,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-500">
@@ -97,6 +109,30 @@ export default async function DashboardPage() {
             <p className="text-xs text-gray-500 mt-1">
               vs. mes anterior: {trend(totalIngresos, lastIngresos)}
             </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-500">
+              Leche hoy
+            </CardTitle>
+            <Droplets className="h-5 w-5 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{litrosDia.toFixed(1)} L</p>
+            <p className="text-xs text-gray-500 mt-1">Litros extraídos hoy</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-500">
+              Leche este mes
+            </CardTitle>
+            <Milk className="h-5 w-5 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{litrosMes.toFixed(1)} L</p>
+            <p className="text-xs text-gray-500 mt-1">Total del mes</p>
           </CardContent>
         </Card>
       </div>
