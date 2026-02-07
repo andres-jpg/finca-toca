@@ -14,10 +14,7 @@ export async function checkRoutePermission(
 ): Promise<UserRole> {
   const role = await getUserRole();
 
-  console.log("🔒 checkRoutePermission - Rol:", role, "Permitidos:", allowedRoles);
-
   if (!role || !allowedRoles.includes(role)) {
-    console.log("❌ Acceso denegado, redirigiendo a /dashboard/extracciones");
     redirect("/dashboard/extracciones");
   }
 

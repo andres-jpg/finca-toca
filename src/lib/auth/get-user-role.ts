@@ -9,10 +9,7 @@ export async function getUserRole(): Promise<UserRole | null> {
     data: { user },
   } = await supabase.auth.getUser();
 
-  console.log("🔍 getUserRole - Usuario:", user?.id, user?.email);
-
   if (!user) {
-    console.log("❌ getUserRole - No hay usuario autenticado");
     return null;
   }
 
@@ -24,22 +21,17 @@ export async function getUserRole(): Promise<UserRole | null> {
       .eq("user_id", user.id)
       .single();
 
-    console.log("📊 getUserRole - Query result:", { data, error });
-
     if (error) {
-      console.log("❌ getUserRole - Error:", error.message, error.details);
       return "user";
     }
 
     if (!data) {
-      console.log("⚠️ getUserRole - No se encontró rol para el usuario");
       return "user";
     }
 
-    console.log("✅ getUserRole - Rol encontrado:", data.rol);
     return data.rol as UserRole;
   } catch (err) {
-    console.log("❌ getUserRole - Exception:", err);
+    console.error(err);
     return "user"; // Default role en caso de error
   }
 }

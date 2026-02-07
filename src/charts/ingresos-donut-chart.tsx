@@ -20,6 +20,38 @@ interface IngresosDonutChartProps {
 
 const COLORS = ["#22c55e", "#3b82f6", "#f59e0b", "#8b5cf6", "#ec4899", "#ef4444"];
 
+const renderCustomLabel = ({
+  cx,
+  cy,
+  midAngle,
+  innerRadius,
+  outerRadius,
+  percent,
+  name,
+}: any) => {
+  const RADIAN = Math.PI / 180;
+  const radius = innerRadius + (outerRadius - innerRadius) * 1.3;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  // Acortar nombres largos
+  const shortName = name.length > 12 ? name.substring(0, 10) + '...' : name;
+
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="#374151"
+      textAnchor={x > cx ? "start" : "end"}
+      dominantBaseline="central"
+      fontSize="13"
+      fontWeight="500"
+    >
+      {`${shortName} ${(percent * 100).toFixed(0)}%`}
+    </text>
+  );
+};
+
 export function IngresosDonutChart({ ingresos }: IngresosDonutChartProps) {
   const conceptoMap = new Map<string, number>();
   ingresos.forEach((i) => {
@@ -32,28 +64,26 @@ export function IngresosDonutChart({ ingresos }: IngresosDonutChartProps) {
   }));
 
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader>
         <CardTitle className="text-base font-medium">Ingresos por concepto</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-2 sm:px-6">
         {chartData.length === 0 ? (
           <p className="text-sm text-gray-500 text-center py-8">No hay datos de ingresos</p>
         ) : (
-          <ResponsiveContainer width="100%" height={260}>
+          <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
                 data={chartData}
                 cx="50%"
                 cy="50%"
-                innerRadius={60}
-                outerRadius={100}
-                paddingAngle={3}
+                innerRadius={55}
+                outerRadius={85}
+                paddingAngle={2}
                 dataKey="value"
-                label={({ name, percent }) =>
-                  `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
-                }
-                labelLine={true}
+                label={renderCustomLabel}
+                labelLine={{ stroke: "#d1d5db", strokeWidth: 1 }}
               >
                 {chartData.map((_, index) => (
                   <Cell key={index} fill={COLORS[index % COLORS.length]} />
@@ -63,6 +93,12 @@ export function IngresosDonutChart({ ingresos }: IngresosDonutChartProps) {
                 formatter={(value: unknown) =>
                   `$${Number(value).toLocaleString("es-AR", { minimumFractionDigits: 2 })}`
                 }
+                contentStyle={{
+                  backgroundColor: "white",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "8px",
+                  padding: "8px 12px",
+                }}
               />
             </PieChart>
           </ResponsiveContainer>

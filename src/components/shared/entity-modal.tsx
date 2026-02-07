@@ -17,11 +17,11 @@ interface EntityModalProps {
 export function EntityModal({ open, onClose, title, children }: EntityModalProps) {
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent side="right" className="w-full max-w-md">
-        <SheetHeader>
+      <SheetContent side="right" className="w-full max-w-md overflow-y-auto">
+        <SheetHeader className="pb-4">
           <SheetTitle>{title}</SheetTitle>
         </SheetHeader>
-        <div className="mt-6">{children}</div>
+        <div className="px-1">{children}</div>
       </SheetContent>
     </Sheet>
   );

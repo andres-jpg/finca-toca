@@ -77,17 +77,19 @@ export default async function DashboardPage() {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
+    <div className="space-y-4 sm:space-y-6">
+      <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Dashboard</h1>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+        <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">
+            <CardTitle className="text-xs sm:text-sm font-medium text-gray-500">
               Gastos este mes
             </CardTitle>
-            <TrendingDown className="h-5 w-5 text-red-500" />
+            <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5 text-red-500 flex-shrink-0" />
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">
+            <p className="text-xl sm:text-2xl font-bold truncate">
               ${totalGastos.toLocaleString("es-AR", { minimumFractionDigits: 2 })}
             </p>
             <p className="text-xs text-gray-500 mt-1">
@@ -95,15 +97,15 @@ export default async function DashboardPage() {
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">
+            <CardTitle className="text-xs sm:text-sm font-medium text-gray-500">
               Ingresos este mes
             </CardTitle>
-            <TrendingUp className="h-5 w-5 text-green-500" />
+            <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-500 flex-shrink-0" />
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">
+            <p className="text-xl sm:text-2xl font-bold truncate">
               ${totalIngresos.toLocaleString("es-AR", { minimumFractionDigits: 2 })}
             </p>
             <p className="text-xs text-gray-500 mt-1">
@@ -111,33 +113,33 @@ export default async function DashboardPage() {
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">
+            <CardTitle className="text-xs sm:text-sm font-medium text-gray-500">
               Leche hoy
             </CardTitle>
-            <Droplets className="h-5 w-5 text-blue-500" />
+            <Droplets className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500 flex-shrink-0" />
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{litrosDia.toFixed(1)} L</p>
+            <p className="text-xl sm:text-2xl font-bold">{litrosDia.toFixed(1)} L</p>
             <p className="text-xs text-gray-500 mt-1">Litros extraídos hoy</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">
+            <CardTitle className="text-xs sm:text-sm font-medium text-gray-500">
               Leche este mes
             </CardTitle>
-            <Milk className="h-5 w-5 text-blue-600" />
+            <Milk className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 flex-shrink-0" />
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{litrosMes.toFixed(1)} L</p>
+            <p className="text-xl sm:text-2xl font-bold">{litrosMes.toFixed(1)} L</p>
             <p className="text-xs text-gray-500 mt-1">Total del mes</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         <GastosDonutChart gastos={allGastos ?? []} />
         <IngresosDonutChart ingresos={allIngresos ?? []} />
       </div>

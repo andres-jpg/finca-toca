@@ -63,6 +63,19 @@ export interface ExtraccionLecheFormData {
   litros: number;
 }
 
+// ===== VACAS =====
+export interface Vaca {
+  id: string;
+  created_at: string | null;
+  vaca_id: number;
+  nombre: string;
+}
+
+export interface VacaFormData {
+  vaca_id: number;
+  nombre: string;
+}
+
 // ===== ROLES DE USUARIO =====
 export type UserRole = "admin" | "user" | "viewer";
 

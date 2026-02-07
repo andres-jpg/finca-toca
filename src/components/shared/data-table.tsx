@@ -65,69 +65,75 @@ export function DataTable<TData>({
 
   return (
     <div className="space-y-4">
-      <Input
-        placeholder={filterPlaceholder}
-        value={globalFilter}
-        onChange={(e) => {
-          setGlobalFilter(e.target.value);
-          setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-        }}
-        className="max-w-sm"
-      />
-      <div className="rounded-md border overflow-x-auto">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead
-                    key={header.id}
-                    className="cursor-pointer select-none whitespace-nowrap"
-                    onClick={() => header.column.toggleSorting(header.column.getIsSorted() === "asc")}
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                    {header.column.getIsSorted() === "asc"
-                      ? " ↑"
-                      : header.column.getIsSorted() === "desc"
-                        ? " ↓"
-                        : ""}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowCount() === 0 ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="text-center text-gray-500 py-8">
-                  No se encontraron registros
-                </TableCell>
-              </TableRow>
-            ) : (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
+      {filterPlaceholder && (
+        <Input
+          placeholder={filterPlaceholder}
+          value={globalFilter}
+          onChange={(e) => {
+            setGlobalFilter(e.target.value);
+            setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+          }}
+          className="max-w-full sm:max-w-sm"
+        />
+      )}
+      <div className="rounded-lg border overflow-hidden shadow-sm bg-white">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <TableHead
+                      key={header.id}
+                      className="cursor-pointer select-none whitespace-nowrap bg-gray-50 font-semibold text-gray-700"
+                      onClick={() => header.column.toggleSorting(header.column.getIsSorted() === "asc")}
+                    >
+                      <div className="flex items-center gap-1">
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
+                        {header.column.getIsSorted() === "asc"
+                          ? " ↑"
+                          : header.column.getIsSorted() === "desc"
+                            ? " ↓"
+                            : ""}
+                      </div>
+                    </TableHead>
                   ))}
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {table.getRowCount() === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="text-center text-gray-500 py-8">
+                    No se encontraron registros
+                  </TableCell>
+                </TableRow>
+              ) : (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id} className="hover:bg-gray-50 transition-colors">
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id} className="whitespace-nowrap">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-gray-500">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+        <span className="text-xs sm:text-sm text-gray-500 order-2 sm:order-1">
           Página {table.getState().pagination.pageIndex + 1} de{" "}
           {Math.max(1, table.getPageCount())}
         </span>
-        <div className="flex gap-2">
+        <div className="flex gap-2 order-1 sm:order-2">
           <Button
             variant="outline"
             size="sm"
@@ -135,7 +141,7 @@ export function DataTable<TData>({
             disabled={!table.getCanPreviousPage()}
           >
             <ChevronLeft className="h-4 w-4" />
-            Anterior
+            <span className="hidden sm:inline">Anterior</span>
           </Button>
           <Button
             variant="outline"
@@ -143,7 +149,7 @@ export function DataTable<TData>({
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
           >
-            Siguiente
+            <span className="hidden sm:inline">Siguiente</span>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>

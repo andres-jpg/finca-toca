@@ -7,6 +7,7 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/shared/data-table";
 import { EntityModal } from "@/components/shared/entity-modal";
+import { DeleteConfirmationDialog } from "@/components/shared/delete-confirmation-dialog";
 import { ExtraccionForm } from "@/features/extracciones/components/extraccion-form";
 import { deleteExtraccion } from "@/features/extracciones/actions/extracciones.actions";
 import { Button } from "@/components/ui/button";
@@ -22,11 +23,13 @@ function RowActions({
   canEdit: boolean;
 }) {
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const handleDelete = async () => {
     try {
       await deleteExtraccion(extraccion.id);
       toast.success("Extracción eliminada");
+      setDeleteOpen(false);
     } catch {
       toast.error("Error al eliminar");
     }
@@ -36,20 +39,29 @@ function RowActions({
     return <span className="text-xs text-gray-400">Solo lectura</span>;
   }
 
+  const extraccionDate = format(
+    new Date(extraccion.fecha + "T00:00:00"),
+    "dd/MM/yyyy",
+    { locale: es }
+  );
+
   return (
-    <div className="flex gap-2">
-      <button
-        onClick={() => setEditOpen(true)}
-        className="text-gray-500 hover:text-gray-700"
-      >
-        <Pencil className="h-4 w-4" />
-      </button>
-      <button
-        onClick={handleDelete}
-        className="text-gray-500 hover:text-red-600"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+    <>
+      <div className="flex gap-2">
+        <button
+          onClick={() => setEditOpen(true)}
+          className="text-gray-500 hover:text-gray-700"
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
+        <button
+          onClick={() => setDeleteOpen(true)}
+          className="text-gray-500 hover:text-red-600"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+
       <EntityModal
         open={editOpen}
         onClose={() => setEditOpen(false)}
@@ -60,7 +72,14 @@ function RowActions({
           onSuccess={() => setEditOpen(false)}
         />
       </EntityModal>
-    </div>
+
+      <DeleteConfirmationDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onConfirm={handleDelete}
+        itemName={`extracción del ${extraccionDate} (${extraccion.litros}L)`}
+      />
+    </>
   );
 }
 
@@ -114,23 +133,25 @@ export function ExtraccionesTable({
   );
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Extracciones de Leche</h2>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Extracciones de Leche</h2>
+          <p className="text-sm text-gray-500 mt-1">
+            {filteredExtracciones.length} registro(s)
+          </p>
+        </div>
         {canEdit && (
-          <Button onClick={() => setModalOpen(true)}>
+          <Button onClick={() => setModalOpen(true)} className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             Agregar
           </Button>
         )}
       </div>
 
-      <div className="flex items-center gap-4">
-        <span className="text-sm text-gray-600">Filtrar por mes:</span>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-white p-4 rounded-lg border">
+        <span className="text-sm font-medium text-gray-700 flex-shrink-0">Filtrar por mes:</span>
         <MonthPicker value={selectedMonth} onChange={setSelectedMonth} />
-        <span className="text-sm text-gray-500">
-          {filteredExtracciones.length} registro(s)
-        </span>
       </div>
 
       <DataTable
