@@ -14,10 +14,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Finca Dashboard",
+  title: "Finca Toca",
   description: "Panel de gestión de finca",
   icons: {
-    icon: '/favicon.ico',
+    icon: "/favicon.ico",
   },
 };
 

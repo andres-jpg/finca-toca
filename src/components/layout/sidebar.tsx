@@ -1,9 +1,14 @@
 "use client";
-
-import { useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, TrendingDown, TrendingUp, Milk, PawPrint, Menu, X } from "lucide-react";
+import {
+  LayoutDashboard,
+  TrendingDown,
+  TrendingUp,
+  Milk,
+  PawPrint,
+  X,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types";
 
@@ -46,7 +51,11 @@ interface SidebarProps {
   onCloseMobileMenu?: () => void;
 }
 
-export function Sidebar({ role, mobileMenuOpen = false, onCloseMobileMenu }: SidebarProps = {}) {
+export function Sidebar({
+  role,
+  mobileMenuOpen = false,
+  onCloseMobileMenu,
+}: SidebarProps = {}) {
   const pathname = usePathname();
 
   // Filtrar items según rol del usuario
@@ -69,7 +78,7 @@ export function Sidebar({ role, mobileMenuOpen = false, onCloseMobileMenu }: Sid
         className={cn(
           "fixed lg:static inset-y-0 left-0 z-50 w-64 min-h-screen bg-gray-900 text-white flex flex-col transition-transform duration-300 ease-in-out",
           "lg:translate-x-0",
-          mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+          mobileMenuOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
         {/* Header con botón cerrar en móvil */}
@@ -115,7 +124,7 @@ export function Sidebar({ role, mobileMenuOpen = false, onCloseMobileMenu }: Sid
                     : "text-gray-400 hover:bg-gray-800 hover:text-white",
                 )}
               >
-                <Icon className="h-5 w-5 flex-shrink-0" />
+                <Icon className="h-5 w-5 shrink-0" />
                 {label}
               </Link>
             );
