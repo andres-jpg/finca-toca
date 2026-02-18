@@ -31,13 +31,15 @@ export interface IngresoFormData {
 export const GASTO_OPTIONS = [
   "Veterinario",
   "Concentrado",
-  "Sal",
+  "Maquinaria",
   "Medicamentos",
   "Combustible",
   "Transporte",
   "Salario",
   "Arriendo",
-  "Limpieza",
+  "Insumos de aseo",
+  "Suplementos",
+  "Praderas y forrajes",
   "Otros",
 ] as const;
 
@@ -45,6 +47,7 @@ export const INGRESO_OPTIONS = [
   "Leche",
   "Venta terneros",
   "Venta vacas",
+  "Venta toros",
 ] as const;
 
 export type GastoOption = (typeof GASTO_OPTIONS)[number];
