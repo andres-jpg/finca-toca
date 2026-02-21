@@ -4,19 +4,12 @@ import { signOut } from "@/features/auth/actions/auth.actions";
 import { Menu, LogOut } from "lucide-react";
 import type { UserRole } from "@/types";
 
-const roleLabels: Record<string, string> = {
-  admin: "Administrador",
-  viewer: "Solo lectura",
-  user: "Usuario",
-};
-
 interface HeaderProps {
   email: string;
-  role?: UserRole | null;
   onOpenMobileMenu?: () => void;
 }
 
-export function Header({ email, role, onOpenMobileMenu }: HeaderProps) {
+export function Header({ email, onOpenMobileMenu }: HeaderProps) {
 
   return (
     <header className="h-16 flex items-center justify-between px-4 sm:px-6 bg-white border-b border-stone-200 sticky top-0 z-30 text-stone-900">
@@ -32,11 +25,6 @@ export function Header({ email, role, onOpenMobileMenu }: HeaderProps) {
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="min-w-0">
             <p className="text-xs font-medium text-stone-900 truncate max-w-[180px]">{email}</p>
-            {role && (
-              <p className="text-xs text-stone-600 leading-tight">
-                {roleLabels[role] ?? role}
-              </p>
-            )}
           </div>
         </div>
 
