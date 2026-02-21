@@ -9,10 +9,38 @@ import { DeleteConfirmationDialog } from "@/components/shared/delete-confirmatio
 import { VacaForm } from "@/features/vacas/components/vaca-form";
 import { deleteVaca } from "@/features/vacas/actions/vacas.actions";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import type { Vaca } from "@/types";
 
-function RowActions({ vaca, canEdit }: { vaca: Vaca; canEdit: boolean }) {
+const ESTADO_LABELS: Record<string, string> = {
+  produccion: "Producción",
+  secado: "Secado",
+  pre_jardin: "Pre-jardín",
+  jardin: "Jardín",
+};
+
+const ESTADO_COLORS: Record<string, string> = {
+  produccion: "bg-green-100 text-green-700 hover:bg-green-100",
+  secado: "bg-yellow-100 text-yellow-700 hover:bg-yellow-100",
+  pre_jardin: "bg-blue-100 text-blue-700 hover:bg-blue-100",
+  jardin: "bg-purple-100 text-purple-700 hover:bg-purple-100",
+};
+
+const ORIGEN_LABELS: Record<string, string> = {
+  finca: "Finca",
+  externa: "Externa",
+};
+
+function RowActions({
+  vaca,
+  vacas,
+  canEdit,
+}: {
+  vaca: Vaca;
+  vacas: Vaca[];
+  canEdit: boolean;
+}) {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -50,7 +78,7 @@ function RowActions({ vaca, canEdit }: { vaca: Vaca; canEdit: boolean }) {
       </div>
 
       <EntityModal open={editOpen} onClose={() => setEditOpen(false)} title="Editar vaca">
-        <VacaForm vaca={vaca} onSuccess={() => setEditOpen(false)} />
+        <VacaForm vaca={vaca} vacas={vacas} onSuccess={() => setEditOpen(false)} />
       </EntityModal>
 
       <DeleteConfirmationDialog
@@ -82,12 +110,45 @@ export function VacasTable({ vacas, canEdit }: VacasTableProps) {
       },
       { accessorKey: "nombre", header: "Nombre" },
       {
+        accessorKey: "estado",
+        header: "Estado",
+        cell: ({ getValue }) => {
+          const val = getValue<string | null>();
+          if (!val) return <span className="text-gray-400">—</span>;
+          return (
+            <Badge className={ESTADO_COLORS[val] ?? ""}>
+              {ESTADO_LABELS[val] ?? val}
+            </Badge>
+          );
+        },
+      },
+      {
+        accessorKey: "origen",
+        header: "Origen",
+        cell: ({ getValue }) => {
+          const val = getValue<string | null>();
+          if (!val) return <span className="text-gray-400">—</span>;
+          return (
+            <Badge variant="outline" className={val === "externa" ? "text-orange-600 border-orange-300" : "text-gray-600"}>
+              {ORIGEN_LABELS[val] ?? val}
+            </Badge>
+          );
+        },
+      },
+      {
+        accessorKey: "madre_nombre",
+        header: "Madre",
+        cell: ({ getValue }) => getValue<string | null>() ?? "—",
+      },
+      {
         id: "actions",
         header: "Acciones",
-        cell: ({ row }) => <RowActions vaca={row.original} canEdit={canEdit} />,
+        cell: ({ row }) => (
+          <RowActions vaca={row.original} vacas={vacas} canEdit={canEdit} />
+        ),
       },
     ],
-    [canEdit]
+    [canEdit, vacas]
   );
 
   return (
@@ -109,7 +170,7 @@ export function VacasTable({ vacas, canEdit }: VacasTableProps) {
 
       {canEdit && (
         <EntityModal open={modalOpen} onClose={() => setModalOpen(false)} title="Nueva vaca">
-          <VacaForm onSuccess={() => setModalOpen(false)} />
+          <VacaForm vacas={vacas} onSuccess={() => setModalOpen(false)} />
         </EntityModal>
       )}
     </div>

@@ -13,9 +13,17 @@ import { deleteIngreso } from "@/features/ingresos/actions/ingresos.actions";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { MonthPicker } from "@/components/shared/month-picker";
-import type { Ingreso } from "@/types";
+import type { Ingreso, ConceptoIngreso } from "@/types";
 
-function RowActions({ ingreso, canEdit }: { ingreso: Ingreso; canEdit: boolean }) {
+function RowActions({
+  ingreso,
+  conceptos,
+  canEdit,
+}: {
+  ingreso: Ingreso;
+  conceptos: ConceptoIngreso[];
+  canEdit: boolean;
+}) {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -56,7 +64,7 @@ function RowActions({ ingreso, canEdit }: { ingreso: Ingreso; canEdit: boolean }
       </div>
 
       <EntityModal open={editOpen} onClose={() => setEditOpen(false)} title="Editar ingreso">
-        <IngresoForm ingreso={ingreso} onSuccess={() => setEditOpen(false)} />
+        <IngresoForm ingreso={ingreso} conceptos={conceptos} onSuccess={() => setEditOpen(false)} />
       </EntityModal>
 
       <DeleteConfirmationDialog
@@ -71,17 +79,21 @@ function RowActions({ ingreso, canEdit }: { ingreso: Ingreso; canEdit: boolean }
 
 interface IngresosTableProps {
   ingresos: Ingreso[];
+  conceptos: ConceptoIngreso[];
   canEdit: boolean;
 }
 
-export function IngresosTable({ ingresos, canEdit }: IngresosTableProps) {
+export function IngresosTable({ ingresos, conceptos, canEdit }: IngresosTableProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
 
   const filteredIngresos = useMemo(() => {
     return ingresos.filter((ingreso) => {
       const d = new Date(ingreso.fecha + "T00:00:00");
-      return d.getMonth() === selectedMonth.getMonth() && d.getFullYear() === selectedMonth.getFullYear();
+      return (
+        d.getMonth() === selectedMonth.getMonth() &&
+        d.getFullYear() === selectedMonth.getFullYear()
+      );
     });
   }, [ingresos, selectedMonth]);
 
@@ -90,9 +102,21 @@ export function IngresosTable({ ingresos, canEdit }: IngresosTableProps) {
       {
         accessorKey: "fecha",
         header: "Fecha",
-        cell: ({ getValue }) => format(new Date(getValue<string>() + "T00:00:00"), "dd/MM/yyyy", { locale: es }),
+        cell: ({ getValue }) =>
+          format(new Date(getValue<string>() + "T00:00:00"), "dd/MM/yyyy", { locale: es }),
       },
-      { accessorKey: "concepto", header: "Concepto" },
+      {
+        id: "concepto_display",
+        header: "Concepto",
+        cell: ({ row }) => (
+          <span>
+            {row.original.concepto}
+            {row.original.subconcepto && row.original.subconcepto !== "General" && (
+              <span className="text-gray-400"> › {row.original.subconcepto}</span>
+            )}
+          </span>
+        ),
+      },
       {
         accessorKey: "valor",
         header: "Valor",
@@ -107,10 +131,12 @@ export function IngresosTable({ ingresos, canEdit }: IngresosTableProps) {
       {
         id: "actions",
         header: "Acciones",
-        cell: ({ row }) => <RowActions ingreso={row.original} canEdit={canEdit} />,
+        cell: ({ row }) => (
+          <RowActions ingreso={row.original} conceptos={conceptos} canEdit={canEdit} />
+        ),
       },
     ],
-    [canEdit]
+    [canEdit, conceptos]
   );
 
   return (
@@ -118,7 +144,9 @@ export function IngresosTable({ ingresos, canEdit }: IngresosTableProps) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-gray-800 tracking-tight">Ingresos</h2>
-          <p className="text-sm text-gray-500 mt-0.5">{filteredIngresos.length} registro(s) este mes</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {filteredIngresos.length} registro(s) este mes
+          </p>
         </div>
         {canEdit && (
           <Button onClick={() => setModalOpen(true)} className="w-full sm:w-auto">
@@ -141,7 +169,7 @@ export function IngresosTable({ ingresos, canEdit }: IngresosTableProps) {
 
       {canEdit && (
         <EntityModal open={modalOpen} onClose={() => setModalOpen(false)} title="Nuevo ingreso">
-          <IngresoForm onSuccess={() => setModalOpen(false)} />
+          <IngresoForm conceptos={conceptos} onSuccess={() => setModalOpen(false)} />
         </EntityModal>
       )}
     </div>

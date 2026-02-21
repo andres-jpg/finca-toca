@@ -1,57 +1,52 @@
+// ===== CONCEPTOS DE GASTO =====
+export interface SubconceptoGasto {
+  id: number;
+  concepto_id: number;
+  nombre: string;
+}
+
+export interface ConceptoGasto {
+  id: number;
+  nombre: string;
+  subconceptos: SubconceptoGasto[];
+}
+
+// ===== GASTOS =====
 export interface Gasto {
   id: number;
   fecha: string;
+  subconcepto_id: number | null;
   concepto: string;
+  subconcepto: string | null;
   valor: number;
+  numero_factura: string | null;
+  pagado: boolean;
   observaciones: string | null;
 }
 
+// ===== CONCEPTOS DE INGRESO =====
+export interface SubconceptoIngreso {
+  id: number;
+  concepto_id: number;
+  nombre: string;
+}
+
+export interface ConceptoIngreso {
+  id: number;
+  nombre: string;
+  subconceptos: SubconceptoIngreso[];
+}
+
+// ===== INGRESOS =====
 export interface Ingreso {
   id: number;
   fecha: string;
+  subconcepto_id: number;
   concepto: string;
+  subconcepto: string;
   valor: number;
   observaciones: string | null;
 }
-
-export interface GastoFormData {
-  fecha: Date;
-  concepto: string;
-  valor: number;
-  observaciones?: string;
-}
-
-export interface IngresoFormData {
-  fecha: Date;
-  concepto: string;
-  valor: number;
-  observaciones?: string;
-}
-
-export const GASTO_OPTIONS = [
-  "Veterinario",
-  "Concentrado",
-  "Maquinaria",
-  "Medicamentos",
-  "Combustible",
-  "Transporte",
-  "Salario",
-  "Arriendo",
-  "Insumos de aseo",
-  "Suplementos",
-  "Praderas y forrajes",
-  "Otros",
-] as const;
-
-export const INGRESO_OPTIONS = [
-  "Leche",
-  "Venta terneros",
-  "Venta vacas",
-  "Venta toros",
-] as const;
-
-export type GastoOption = (typeof GASTO_OPTIONS)[number];
-export type IngresoOption = (typeof INGRESO_OPTIONS)[number];
 
 // ===== EXTRACCIONES DE LECHE =====
 export interface ExtraccionLeche {
@@ -67,16 +62,20 @@ export interface ExtraccionLecheFormData {
 }
 
 // ===== VACAS =====
+export type VacaOrigen = "finca" | "externa";
+export type VacaEstado = "produccion" | "secado" | "pre_jardin" | "jardin";
+
 export interface Vaca {
   id: string;
   created_at: string | null;
   vaca_id: number;
   nombre: string;
-}
-
-export interface VacaFormData {
-  vaca_id: number;
-  nombre: string;
+  origen: VacaOrigen | null;
+  estado: VacaEstado | null;
+  fecha_compra: string | null;
+  numero_registro: string | null;
+  madre_id: string | null;
+  madre_nombre: string | null;
 }
 
 // ===== ROLES DE USUARIO =====

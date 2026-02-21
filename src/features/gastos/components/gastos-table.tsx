@@ -11,11 +11,20 @@ import { DeleteConfirmationDialog } from "@/components/shared/delete-confirmatio
 import { GastoForm } from "@/features/gastos/components/gasto-form";
 import { deleteGasto } from "@/features/gastos/actions/gastos.actions";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { MonthPicker } from "@/components/shared/month-picker";
-import type { Gasto } from "@/types";
+import type { Gasto, ConceptoGasto } from "@/types";
 
-function RowActions({ gasto, canEdit }: { gasto: Gasto; canEdit: boolean }) {
+function RowActions({
+  gasto,
+  conceptos,
+  canEdit,
+}: {
+  gasto: Gasto;
+  conceptos: ConceptoGasto[];
+  canEdit: boolean;
+}) {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -56,7 +65,7 @@ function RowActions({ gasto, canEdit }: { gasto: Gasto; canEdit: boolean }) {
       </div>
 
       <EntityModal open={editOpen} onClose={() => setEditOpen(false)} title="Editar gasto">
-        <GastoForm gasto={gasto} onSuccess={() => setEditOpen(false)} />
+        <GastoForm gasto={gasto} conceptos={conceptos} onSuccess={() => setEditOpen(false)} />
       </EntityModal>
 
       <DeleteConfirmationDialog
@@ -71,17 +80,21 @@ function RowActions({ gasto, canEdit }: { gasto: Gasto; canEdit: boolean }) {
 
 interface GastosTableProps {
   gastos: Gasto[];
+  conceptos: ConceptoGasto[];
   canEdit: boolean;
 }
 
-export function GastosTable({ gastos, canEdit }: GastosTableProps) {
+export function GastosTable({ gastos, conceptos, canEdit }: GastosTableProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
 
   const filteredGastos = useMemo(() => {
     return gastos.filter((gasto) => {
       const d = new Date(gasto.fecha + "T00:00:00");
-      return d.getMonth() === selectedMonth.getMonth() && d.getFullYear() === selectedMonth.getFullYear();
+      return (
+        d.getMonth() === selectedMonth.getMonth() &&
+        d.getFullYear() === selectedMonth.getFullYear()
+      );
     });
   }, [gastos, selectedMonth]);
 
@@ -90,14 +103,41 @@ export function GastosTable({ gastos, canEdit }: GastosTableProps) {
       {
         accessorKey: "fecha",
         header: "Fecha",
-        cell: ({ getValue }) => format(new Date(getValue<string>() + "T00:00:00"), "dd/MM/yyyy", { locale: es }),
+        cell: ({ getValue }) =>
+          format(new Date(getValue<string>() + "T00:00:00"), "dd/MM/yyyy", { locale: es }),
       },
-      { accessorKey: "concepto", header: "Concepto" },
+      {
+        id: "concepto_display",
+        header: "Concepto",
+        cell: ({ row }) => (
+          <span>
+            {row.original.concepto}
+            {row.original.subconcepto && (
+              <span className="text-gray-400"> › {row.original.subconcepto}</span>
+            )}
+          </span>
+        ),
+      },
       {
         accessorKey: "valor",
         header: "Valor",
         cell: ({ getValue }) =>
           `$${getValue<number>().toLocaleString("es-CO", { minimumFractionDigits: 0 })}`,
+      },
+      {
+        accessorKey: "numero_factura",
+        header: "Factura",
+        cell: ({ getValue }) => getValue<string | null>() ?? "—",
+      },
+      {
+        accessorKey: "pagado",
+        header: "Pagado",
+        cell: ({ getValue }) =>
+          getValue<boolean>() ? (
+            <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Sí</Badge>
+          ) : (
+            <Badge variant="outline" className="text-gray-500">No</Badge>
+          ),
       },
       {
         accessorKey: "observaciones",
@@ -107,10 +147,12 @@ export function GastosTable({ gastos, canEdit }: GastosTableProps) {
       {
         id: "actions",
         header: "Acciones",
-        cell: ({ row }) => <RowActions gasto={row.original} canEdit={canEdit} />,
+        cell: ({ row }) => (
+          <RowActions gasto={row.original} conceptos={conceptos} canEdit={canEdit} />
+        ),
       },
     ],
-    [canEdit]
+    [canEdit, conceptos]
   );
 
   return (
@@ -118,7 +160,9 @@ export function GastosTable({ gastos, canEdit }: GastosTableProps) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-gray-800 tracking-tight">Gastos</h2>
-          <p className="text-sm text-gray-500 mt-0.5">{filteredGastos.length} registro(s) este mes</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {filteredGastos.length} registro(s) este mes
+          </p>
         </div>
         {canEdit && (
           <Button onClick={() => setModalOpen(true)} className="w-full sm:w-auto">
@@ -141,7 +185,7 @@ export function GastosTable({ gastos, canEdit }: GastosTableProps) {
 
       {canEdit && (
         <EntityModal open={modalOpen} onClose={() => setModalOpen(false)} title="Nuevo gasto">
-          <GastoForm onSuccess={() => setModalOpen(false)} />
+          <GastoForm conceptos={conceptos} onSuccess={() => setModalOpen(false)} />
         </EntityModal>
       )}
     </div>
