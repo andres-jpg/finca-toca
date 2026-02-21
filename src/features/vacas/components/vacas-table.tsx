@@ -32,26 +32,24 @@ function RowActions({ vaca, canEdit }: { vaca: Vaca; canEdit: boolean }) {
 
   return (
     <>
-      <div className="flex gap-2">
+      <div className="flex items-center gap-1">
         <button
           onClick={() => setEditOpen(true)}
-          className="text-gray-500 hover:text-gray-700"
+          className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+          title="Editar"
         >
-          <Pencil className="h-4 w-4" />
+          <Pencil className="h-3.5 w-3.5" />
         </button>
         <button
           onClick={() => setDeleteOpen(true)}
-          className="text-gray-500 hover:text-red-600"
+          className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+          title="Eliminar"
         >
-          <Trash2 className="h-4 w-4" />
+          <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
 
-      <EntityModal
-        open={editOpen}
-        onClose={() => setEditOpen(false)}
-        title="Editar vaca"
-      >
+      <EntityModal open={editOpen} onClose={() => setEditOpen(false)} title="Editar vaca">
         <VacaForm vaca={vaca} onSuccess={() => setEditOpen(false)} />
       </EntityModal>
 
@@ -78,12 +76,11 @@ export function VacasTable({ vacas, canEdit }: VacasTableProps) {
       {
         accessorKey: "vaca_id",
         header: "ID",
-        cell: ({ getValue }) => `#${getValue<number>()}`,
+        cell: ({ getValue }) => (
+          <span className="font-mono text-gray-500">#{getValue<number>()}</span>
+        ),
       },
-      {
-        accessorKey: "nombre",
-        header: "Nombre",
-      },
+      { accessorKey: "nombre", header: "Nombre" },
       {
         id: "actions",
         header: "Acciones",
@@ -94,13 +91,11 @@ export function VacasTable({ vacas, canEdit }: VacasTableProps) {
   );
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Vacas</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            {vacas.length} vaca(s) registrada(s)
-          </p>
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-800 tracking-tight">Vacas</h2>
+          <p className="text-sm text-gray-500 mt-0.5">{vacas.length} vaca(s) registrada(s)</p>
         </div>
         {canEdit && (
           <Button onClick={() => setModalOpen(true)} className="w-full sm:w-auto">
@@ -110,13 +105,10 @@ export function VacasTable({ vacas, canEdit }: VacasTableProps) {
         )}
       </div>
 
-      <DataTable data={vacas} columns={columns} filterPlaceholder="Buscar vaca..." />
+      <DataTable data={vacas} columns={columns} filterPlaceholder="  Buscar vaca..." />
+
       {canEdit && (
-        <EntityModal
-          open={modalOpen}
-          onClose={() => setModalOpen(false)}
-          title="Nueva vaca"
-        >
+        <EntityModal open={modalOpen} onClose={() => setModalOpen(false)} title="Nueva vaca">
           <VacaForm onSuccess={() => setModalOpen(false)} />
         </EntityModal>
       )}

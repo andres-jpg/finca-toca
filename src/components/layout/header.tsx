@@ -1,9 +1,14 @@
 "use client";
 
 import { signOut } from "@/features/auth/actions/auth.actions";
-import { Button } from "@/components/ui/button";
-import { Menu } from "lucide-react";
+import { Menu, LogOut } from "lucide-react";
 import type { UserRole } from "@/types";
+
+const roleLabels: Record<string, string> = {
+  admin: "Administrador",
+  viewer: "Solo lectura",
+  user: "Usuario",
+};
 
 interface HeaderProps {
   email: string;
@@ -12,29 +17,41 @@ interface HeaderProps {
 }
 
 export function Header({ email, role, onOpenMobileMenu }: HeaderProps) {
+
   return (
-    <header className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 bg-white border-b sticky top-0 z-30 shadow-sm">
-      <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-        <button
-          onClick={onOpenMobileMenu}
-          className="lg:hidden p-2 -ml-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
-          aria-label="Abrir menú"
-        >
-          <Menu className="h-5 w-5 text-gray-700" />
-        </button>
-        <span className="text-xs sm:text-sm text-gray-600 truncate">{email}</span>
-        {role && (
-          <span className="hidden sm:inline-block text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded flex-shrink-0">
-            {role === "admin" ? "Admin" : role === "viewer" ? "Viewer" : "Usuario"}
-          </span>
-        )}
+    <header className="h-16 flex items-center justify-between px-4 sm:px-6 bg-white border-b border-stone-200 sticky top-0 z-30 text-stone-900">
+      <button
+        onClick={onOpenMobileMenu}
+        className="lg:hidden p-2 -ml-1 hover:bg-stone-200 rounded-lg transition-colors text-stone-700"
+        aria-label="Abrir menú"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      <div className="flex items-center gap-3 ml-auto">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-stone-900 truncate max-w-[180px]">{email}</p>
+            {role && (
+              <p className="text-xs text-stone-600 leading-tight">
+                {roleLabels[role] ?? role}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="h-5 w-px bg-stone-300 shrink-0 mx-1" aria-hidden />
+
+        <form action={signOut}>
+          <button
+            type="submit"
+            className="flex items-center gap-1.5 text-xs font-medium text-stone-700 hover:text-stone-900 transition-colors px-2.5 py-2 rounded-lg hover:bg-stone-200"
+          >
+            <LogOut className="h-3.5 w-3.5 shrink-0" />
+            <span className="hidden sm:inline">Salir</span>
+          </button>
+        </form>
       </div>
-      <form action={signOut}>
-        <Button variant="outline" size="sm" type="submit" className="flex-shrink-0">
-          <span className="hidden sm:inline">Cerrar sesión</span>
-          <span className="sm:hidden">Salir</span>
-        </Button>
-      </form>
     </header>
   );
 }
