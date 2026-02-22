@@ -28,7 +28,6 @@ export function DashboardLayoutClient({
       <div className="flex-1 flex flex-col min-w-0">
         <Header
           email={email}
-          role={userRole}
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
         />
         <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
