@@ -4,6 +4,74 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { formatDate } from "@/lib/utils";
 import type { ExtraccionLeche } from "@/types";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+async function upsertIngresoLeche(
+  fecha: string,
+  supabase: SupabaseClient
+): Promise<void> {
+  // 1. Get current leche price
+  const { data: precioRow } = await supabase
+    .from("precios")
+    .select("valor")
+    .eq("tipo", "leche")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  // 2. Sum litros for the day
+  const { data: extRows } = await supabase
+    .from("extracciones_leche")
+    .select("litros")
+    .eq("fecha", fecha);
+
+  const totalLitros = (extRows ?? []).reduce((sum, r) => sum + r.litros, 0);
+
+  // 3. Find existing auto-ingreso for this day
+  const { data: existing } = await supabase
+    .from("ingresos")
+    .select("id")
+    .eq("fecha", fecha)
+    .eq("source", "leche_extraccion")
+    .maybeSingle();
+
+  // 4. If no price or no litros, delete auto-ingreso if it exists
+  if (!precioRow || totalLitros === 0) {
+    if (existing?.id) {
+      await supabase.from("ingresos").delete().eq("id", existing.id);
+    }
+    return;
+  }
+
+  const valor = Math.round(totalLitros * precioRow.valor);
+
+  // 5. Update or insert
+  if (existing?.id) {
+    await supabase.from("ingresos").update({ valor }).eq("id", existing.id);
+  } else {
+    // Lookup leche subconcepto
+    const { data: subconcepto } = await supabase
+      .from("subconceptos_ingreso")
+      .select("id")
+      .ilike("nombre", "%leche%")
+      .order("id", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (!subconcepto?.id) {
+      console.error("upsertIngresoLeche: no se encontró subconcepto 'leche' en subconceptos_ingreso");
+      return;
+    }
+
+    await supabase.from("ingresos").insert({
+      fecha,
+      subconcepto_id: subconcepto.id,
+      valor,
+      observaciones: "Auto-generado desde extracciones",
+      source: "leche_extraccion",
+    });
+  }
+}
 
 export async function getExtracciones(): Promise<ExtraccionLeche[]> {
   const supabase = await createClient();
@@ -28,7 +96,11 @@ export async function createExtraccion(formData: {
   });
 
   if (error) throw new Error(error.message);
+
+  await upsertIngresoLeche(formatDate(formData.fecha), supabase);
+
   revalidatePath("/dashboard/extracciones");
+  revalidatePath("/dashboard/ingresos");
   revalidatePath("/dashboard");
 }
 
@@ -37,6 +109,14 @@ export async function updateExtraccion(
   formData: { fecha: Date; litros: number }
 ) {
   const supabase = await createClient();
+
+  // Fetch previous date before updating
+  const { data: oldRow } = await supabase
+    .from("extracciones_leche")
+    .select("fecha")
+    .eq("id", id)
+    .single();
+
   const { error } = await supabase
     .from("extracciones_leche")
     .update({
@@ -46,19 +126,39 @@ export async function updateExtraccion(
     .eq("id", id);
 
   if (error) throw new Error(error.message);
+
+  const newFechaStr = formatDate(formData.fecha);
+  if (oldRow && oldRow.fecha !== newFechaStr) {
+    await upsertIngresoLeche(oldRow.fecha, supabase);
+  }
+  await upsertIngresoLeche(newFechaStr, supabase);
+
   revalidatePath("/dashboard/extracciones");
+  revalidatePath("/dashboard/ingresos");
   revalidatePath("/dashboard");
 }
 
 export async function deleteExtraccion(id: number) {
   const supabase = await createClient();
+
+  // Fetch date before deleting
+  const { data: row } = await supabase
+    .from("extracciones_leche")
+    .select("fecha")
+    .eq("id", id)
+    .single();
+
   const { error } = await supabase
     .from("extracciones_leche")
     .delete()
     .eq("id", id);
 
   if (error) throw new Error(error.message);
+
+  if (row?.fecha) await upsertIngresoLeche(row.fecha, supabase);
+
   revalidatePath("/dashboard/extracciones");
+  revalidatePath("/dashboard/ingresos");
   revalidatePath("/dashboard");
 }
 

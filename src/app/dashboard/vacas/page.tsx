@@ -7,6 +7,7 @@ export default async function VacasPage() {
   // Verificar permisos: solo admin y viewer pueden acceder
   await checkRoutePermission(["admin", "viewer"]);
 
+  // Traer todas las vacas (alta=true y false); el filtro se aplica en el cliente
   const vacas = await getVacas();
   const userRole = await getUserRole();
   const canEdit = canWrite(userRole);

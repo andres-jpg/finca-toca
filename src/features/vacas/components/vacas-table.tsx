@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, ArrowUpCircle } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/shared/data-table";
 import { EntityModal } from "@/components/shared/entity-modal";
@@ -98,6 +98,11 @@ interface VacasTableProps {
 
 export function VacasTable({ vacas, canEdit }: VacasTableProps) {
   const [modalOpen, setModalOpen] = useState(false);
+  const [mostrarDeBaja, setMostrarDeBaja] = useState(false);
+
+  const vacasDeAlta = useMemo(() => vacas.filter((v) => v.alta), [vacas]);
+  const vacasDeBaja = useMemo(() => vacas.filter((v) => !v.alta), [vacas]);
+  const vacasMostradas = mostrarDeBaja ? vacasDeBaja : vacasDeAlta;
 
   const columns: ColumnDef<Vaca>[] = useMemo(
     () => [
@@ -129,7 +134,10 @@ export function VacasTable({ vacas, canEdit }: VacasTableProps) {
           const val = getValue<string | null>();
           if (!val) return <span className="text-gray-400">—</span>;
           return (
-            <Badge variant="outline" className={val === "externa" ? "text-orange-600 border-orange-300" : "text-gray-600"}>
+            <Badge
+              variant="outline"
+              className={val === "externa" ? "text-orange-600 border-orange-300" : "text-gray-600"}
+            >
               {ORIGEN_LABELS[val] ?? val}
             </Badge>
           );
@@ -144,11 +152,11 @@ export function VacasTable({ vacas, canEdit }: VacasTableProps) {
         id: "actions",
         header: "Acciones",
         cell: ({ row }) => (
-          <RowActions vaca={row.original} vacas={vacas} canEdit={canEdit} />
+          <RowActions vaca={row.original} vacas={vacasDeAlta} canEdit={canEdit} />
         ),
       },
     ],
-    [canEdit, vacas]
+    [canEdit, vacasDeAlta]
   );
 
   return (
@@ -156,21 +164,40 @@ export function VacasTable({ vacas, canEdit }: VacasTableProps) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-gray-800 tracking-tight">Vacas</h2>
-          <p className="text-sm text-gray-500 mt-0.5">{vacas.length} vaca(s) registrada(s)</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {mostrarDeBaja
+              ? `${vacasDeBaja.length} vaca(s) de baja`
+              : `${vacasDeAlta.length} vaca(s) de alta`}
+          </p>
         </div>
-        {canEdit && (
-          <Button onClick={() => setModalOpen(true)} className="w-full sm:w-auto">
-            <Plus className="h-4 w-4 mr-2" />
-            Agregar Vaca
+        <div className="flex flex-wrap gap-2 sm:justify-end">
+          <Button
+            variant="outline"
+            onClick={() => setMostrarDeBaja((v) => !v)}
+            className={mostrarDeBaja ? "border-orange-400 text-orange-600 hover:bg-orange-50" : ""}
+          >
+            <ArrowUpCircle className="h-4 w-4 mr-2" />
+            {mostrarDeBaja ? "Ver de alta" : "Ver de baja"}
+            {!mostrarDeBaja && vacasDeBaja.length > 0 && (
+              <span className="ml-1.5 text-xs bg-orange-100 text-orange-600 rounded-full px-1.5 py-0.5">
+                {vacasDeBaja.length}
+              </span>
+            )}
           </Button>
-        )}
+          {canEdit && !mostrarDeBaja && (
+            <Button onClick={() => setModalOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Agregar Vaca
+            </Button>
+          )}
+        </div>
       </div>
 
-      <DataTable data={vacas} columns={columns} filterPlaceholder="  Buscar vaca..." />
+      <DataTable data={vacasMostradas} columns={columns} filterPlaceholder="Buscar vaca..." />
 
       {canEdit && (
         <EntityModal open={modalOpen} onClose={() => setModalOpen(false)} title="Nueva vaca">
-          <VacaForm vacas={vacas} onSuccess={() => setModalOpen(false)} />
+          <VacaForm vacas={vacasDeAlta} onSuccess={() => setModalOpen(false)} />
         </EntityModal>
       )}
     </div>
