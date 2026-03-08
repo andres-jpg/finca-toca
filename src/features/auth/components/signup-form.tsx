@@ -1,6 +1,6 @@
 "use client";
 
-import { useFormState } from "react-dom";
+import { useActionState } from "react";
 import { signUp } from "@/features/auth/actions/auth.actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 
 export function SignUpForm() {
-  const [state, formAction] = useFormState(signUp, null);
+  const [state, formAction] = useActionState(signUp, null);
 
   return (
     <form action={formAction} className="w-full space-y-4">

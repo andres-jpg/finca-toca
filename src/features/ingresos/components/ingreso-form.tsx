@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/shared/date-picker";
 import { toast } from "sonner";
-import type { Ingreso, ConceptoIngreso } from "@/types";
+import type { Ingreso, ConceptoIngreso, Vaca } from "@/types";
 
 interface FormValues {
   fecha: Date;
@@ -31,18 +31,26 @@ interface FormValues {
 interface IngresoFormProps {
   ingreso?: Ingreso;
   conceptos: ConceptoIngreso[];
+  vacas?: Vaca[];
   onSuccess: () => void;
 }
 
-export function IngresoForm({ ingreso, conceptos, onSuccess }: IngresoFormProps) {
+export function IngresoForm({ ingreso, conceptos, vacas = [], onSuccess }: IngresoFormProps) {
   const initialConceptoId = ingreso
     ? (conceptos.find((c) => c.nombre === ingreso.concepto)?.id ?? 0)
     : 0;
 
   const [selectedConceptoId, setSelectedConceptoId] = useState<number>(initialConceptoId);
+  const [selectedVacaId, setSelectedVacaId] = useState<string>("");
 
   const subconceptos =
     conceptos.find((c) => c.id === selectedConceptoId)?.subconceptos ?? [];
+
+  const conceptoSeleccionado = conceptos.find((c) => c.id === selectedConceptoId);
+  const isVentaVacas =
+    conceptoSeleccionado?.nombre.toLowerCase() === "venta vacas";
+
+  const selectedVaca = vacas.find((v) => v.id === selectedVacaId) ?? null;
 
   const {
     register,
@@ -69,6 +77,7 @@ export function IngresoForm({ ingreso, conceptos, onSuccess }: IngresoFormProps)
     setSelectedConceptoId(id);
     setValue("concepto_id", id);
     setValue("subconcepto_id", 0);
+    setSelectedVacaId("");
   };
 
   const onSubmit = async (data: FormValues) => {
@@ -83,7 +92,10 @@ export function IngresoForm({ ingreso, conceptos, onSuccess }: IngresoFormProps)
         await updateIngreso(ingreso.id, payload);
         toast.success("Ingreso actualizado");
       } else {
-        await createIngreso(payload);
+        await createIngreso({
+          ...payload,
+          vacaIdToSell: isVentaVacas && selectedVacaId ? selectedVacaId : undefined,
+        });
         toast.success("Ingreso creado");
       }
       onSuccess();
@@ -153,6 +165,44 @@ export function IngresoForm({ ingreso, conceptos, onSuccess }: IngresoFormProps)
           <p className="text-sm text-red-500">{errors.subconcepto_id.message}</p>
         )}
       </div>
+
+      {/* Selector de vaca — solo visible en "Venta vacas" y al crear */}
+      {isVentaVacas && !ingreso && (
+        <div className="space-y-2">
+          <Label>Vaca vendida</Label>
+          <Select value={selectedVacaId} onValueChange={setSelectedVacaId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Seleccionar vaca..." />
+            </SelectTrigger>
+            <SelectContent>
+              {vacas.map((v) => (
+                <SelectItem key={v.id} value={v.id}>
+                  #{v.vaca_id} — {v.nombre}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedVaca && (
+            <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 space-y-1 text-sm mt-1">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Nº de registro</span>
+                <span className="font-medium text-gray-800">
+                  {selectedVaca.numero_registro ?? "—"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Estado actual</span>
+                <span className="font-medium text-gray-800">
+                  {selectedVaca.estado ?? "—"}
+                </span>
+              </div>
+            </div>
+          )}
+          <p className="text-xs text-orange-600">
+            Al guardar, esta vaca quedará marcada como baja automáticamente.
+          </p>
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="valor">Valor ($)</Label>

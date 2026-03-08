@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Plus, Pencil, Trash2, CalendarDays } from "lucide-react";
+import { Plus, Pencil, Trash2, CalendarDays, Zap } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/shared/data-table";
 import { EntityModal } from "@/components/shared/entity-modal";
@@ -13,15 +13,17 @@ import { deleteIngreso } from "@/features/ingresos/actions/ingresos.actions";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { MonthPicker } from "@/components/shared/month-picker";
-import type { Ingreso, ConceptoIngreso } from "@/types";
+import type { Ingreso, ConceptoIngreso, Vaca } from "@/types";
 
 function RowActions({
   ingreso,
   conceptos,
+  vacas,
   canEdit,
 }: {
   ingreso: Ingreso;
   conceptos: ConceptoIngreso[];
+  vacas: Vaca[];
   canEdit: boolean;
 }) {
   const [editOpen, setEditOpen] = useState(false);
@@ -36,6 +38,18 @@ function RowActions({
       toast.error("Error al eliminar");
     }
   };
+
+  if (ingreso.source === "leche_extraccion") {
+    return (
+      <span
+        className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200"
+        title="Ingreso auto-generado desde extracciones de leche"
+      >
+        <Zap className="h-3 w-3" />
+        Auto
+      </span>
+    );
+  }
 
   if (!canEdit) {
     return <span className="text-xs text-gray-400">Solo lectura</span>;
@@ -64,7 +78,7 @@ function RowActions({
       </div>
 
       <EntityModal open={editOpen} onClose={() => setEditOpen(false)} title="Editar ingreso">
-        <IngresoForm ingreso={ingreso} conceptos={conceptos} onSuccess={() => setEditOpen(false)} />
+        <IngresoForm ingreso={ingreso} conceptos={conceptos} vacas={vacas} onSuccess={() => setEditOpen(false)} />
       </EntityModal>
 
       <DeleteConfirmationDialog
@@ -80,10 +94,11 @@ function RowActions({
 interface IngresosTableProps {
   ingresos: Ingreso[];
   conceptos: ConceptoIngreso[];
+  vacas: Vaca[];
   canEdit: boolean;
 }
 
-export function IngresosTable({ ingresos, conceptos, canEdit }: IngresosTableProps) {
+export function IngresosTable({ ingresos, conceptos, vacas, canEdit }: IngresosTableProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
 
@@ -132,7 +147,7 @@ export function IngresosTable({ ingresos, conceptos, canEdit }: IngresosTablePro
         id: "actions",
         header: "Acciones",
         cell: ({ row }) => (
-          <RowActions ingreso={row.original} conceptos={conceptos} canEdit={canEdit} />
+          <RowActions ingreso={row.original} conceptos={conceptos} vacas={vacas} canEdit={canEdit} />
         ),
       },
     ],
@@ -169,7 +184,7 @@ export function IngresosTable({ ingresos, conceptos, canEdit }: IngresosTablePro
 
       {canEdit && (
         <EntityModal open={modalOpen} onClose={() => setModalOpen(false)} title="Nuevo ingreso">
-          <IngresoForm conceptos={conceptos} onSuccess={() => setModalOpen(false)} />
+          <IngresoForm conceptos={conceptos} vacas={vacas} onSuccess={() => setModalOpen(false)} />
         </EntityModal>
       )}
     </div>

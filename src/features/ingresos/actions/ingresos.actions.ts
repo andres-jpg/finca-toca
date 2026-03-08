@@ -10,7 +10,7 @@ export async function getIngresos(): Promise<Ingreso[]> {
   const { data, error } = await supabase
     .from("ingresos")
     .select(
-      "id, fecha, subconcepto_id, valor, observaciones, subconceptos_ingreso(nombre, conceptos_ingreso(nombre))"
+      "id, fecha, subconcepto_id, valor, observaciones, source, subconceptos_ingreso(nombre, conceptos_ingreso(nombre))"
     )
     .order("fecha", { ascending: false });
 
@@ -24,6 +24,7 @@ export async function getIngresos(): Promise<Ingreso[]> {
     subconcepto: row.subconceptos_ingreso?.nombre ?? "",
     valor: row.valor,
     observaciones: row.observaciones,
+    source: row.source ?? null,
   }));
 }
 
@@ -52,6 +53,7 @@ export async function createIngreso(formData: {
   subconcepto_id: number;
   valor: number;
   observaciones?: string;
+  vacaIdToSell?: string;
 }) {
   const supabase = await createClient();
   const { error } = await supabase.from("ingresos").insert({
@@ -62,6 +64,16 @@ export async function createIngreso(formData: {
   });
 
   if (error) throw new Error(error.message);
+
+  if (formData.vacaIdToSell) {
+    const { error: vacaError } = await supabase
+      .from("vacas")
+      .update({ alta: false })
+      .eq("id", formData.vacaIdToSell);
+    if (vacaError) throw new Error(vacaError.message);
+    revalidatePath("/dashboard/vacas");
+  }
+
   revalidatePath("/dashboard/ingresos");
   revalidatePath("/dashboard");
 }

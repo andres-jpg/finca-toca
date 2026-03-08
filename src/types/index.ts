@@ -46,6 +46,15 @@ export interface Ingreso {
   subconcepto: string;
   valor: number;
   observaciones: string | null;
+  source: string | null;
+}
+
+// ===== PRECIOS =====
+export interface Precio {
+  id: number;
+  created_at: string;
+  valor: number;
+  tipo: string;
 }
 
 // ===== EXTRACCIONES DE LECHE =====
@@ -76,6 +85,7 @@ export interface Vaca {
   numero_registro: string | null;
   madre_id: string | null;
   madre_nombre: string | null;
+  alta: boolean;
 }
 
 // ===== ROLES DE USUARIO =====

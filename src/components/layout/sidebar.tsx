@@ -9,6 +9,7 @@ import {
   Beef,
   X,
   Leaf,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types";
@@ -43,6 +44,12 @@ const navItems = [
     label: "Vacas",
     icon: Beef,
     allowedRoles: ["admin", "viewer"] as UserRole[],
+  },
+  {
+    href: "/dashboard/configuracion",
+    label: "Configuración",
+    icon: Settings,
+    allowedRoles: ["admin"] as UserRole[],
   },
 ];
 
