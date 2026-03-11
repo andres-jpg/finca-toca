@@ -101,7 +101,7 @@ export function Sidebar({
               <Leaf className="h-4 w-4 text-white" />
             </div>
             <span className="font-semibold text-white tracking-tight ml-3">
-              Finca Toca
+              Finca Villa Blanca
             </span>
           </div>
           <button

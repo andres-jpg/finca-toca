@@ -192,3 +192,39 @@ export async function getLitrosMesActual(): Promise<number> {
   if (error) throw new Error(error.message);
   return (data ?? []).reduce((sum, row) => sum + row.litros, 0);
 }
+
+export async function getLecheMesQuincenas(): Promise<{
+  q1Litros: number;
+  q1Valor: number;
+  q2Litros: number;
+  q2Valor: number;
+}> {
+  const supabase = await createClient();
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+
+  const q1Start = formatDate(new Date(year, month, 1));
+  const q1End = formatDate(new Date(year, month, 15));
+  const q2Start = formatDate(new Date(year, month, 16));
+  const q2End = formatDate(new Date(year, month + 1, 0));
+
+  const [
+    { data: ext1 },
+    { data: ext2 },
+    { data: ing1 },
+    { data: ing2 },
+  ] = await Promise.all([
+    supabase.from("extracciones_leche").select("litros").gte("fecha", q1Start).lte("fecha", q1End),
+    supabase.from("extracciones_leche").select("litros").gte("fecha", q2Start).lte("fecha", q2End),
+    supabase.from("ingresos").select("valor").eq("source", "leche_extraccion").gte("fecha", q1Start).lte("fecha", q1End),
+    supabase.from("ingresos").select("valor").eq("source", "leche_extraccion").gte("fecha", q2Start).lte("fecha", q2End),
+  ]);
+
+  return {
+    q1Litros: (ext1 ?? []).reduce((s, r) => s + r.litros, 0),
+    q1Valor: (ing1 ?? []).reduce((s, r) => s + r.valor, 0),
+    q2Litros: (ext2 ?? []).reduce((s, r) => s + r.litros, 0),
+    q2Valor: (ing2 ?? []).reduce((s, r) => s + r.valor, 0),
+  };
+}

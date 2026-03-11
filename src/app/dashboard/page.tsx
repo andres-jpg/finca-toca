@@ -7,6 +7,7 @@ import { GastosIngresosLineChart } from "@/charts/gastos-ingresos-line-chart";
 import {
   getLitrosDiaActual,
   getLitrosMesActual,
+  getLecheMesQuincenas,
 } from "@/features/extracciones/actions/extracciones.actions";
 import { checkRoutePermission } from "@/lib/auth/check-permissions";
 
@@ -62,6 +63,7 @@ export default async function DashboardPage() {
     { data: vacasEstados },
     litrosDia,
     litrosMes,
+    quincenas,
   ] = await Promise.all([
     supabase.from("gastos").select("valor").gte("fecha", current.start).lte("fecha", current.end),
     supabase.from("gastos").select("valor").gte("fecha", last.start).lte("fecha", last.end),
@@ -78,6 +80,7 @@ export default async function DashboardPage() {
     supabase.from("vacas").select("estado"),
     getLitrosDiaActual(),
     getLitrosMesActual(),
+    getLecheMesQuincenas(),
   ]);
 
   const vacasProduccion = (vacasEstados ?? []).filter((v: any) => v.estado === "produccion").length;
@@ -181,8 +184,19 @@ export default async function DashboardPage() {
               <Milk className="h-5 w-5" style={{ color: "#0284c7" }} />
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-stone-100">
-            <span className="text-xs text-stone-400">Total acumulado del mes</span>
+          <div className="mt-3 pt-3 border-t border-stone-100 space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-stone-400">Leche Q1</span>
+              <span className="text-xs text-stone-500">
+                {quincenas.q1Litros.toFixed(1)} L · ${quincenas.q1Valor.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-stone-400">Leche Q2</span>
+              <span className="text-xs text-stone-500">
+                {quincenas.q2Litros.toFixed(1)} L · ${quincenas.q2Valor.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
+              </span>
+            </div>
           </div>
         </div>
 
