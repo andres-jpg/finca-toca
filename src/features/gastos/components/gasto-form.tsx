@@ -25,8 +25,13 @@ interface FormValues {
   concepto_id: number;
   subconcepto_id?: number | null;
   valor: number;
+  proveedor: string;
   numero_factura: string;
   pagado: boolean;
+  forma_pago?: "efectivo" | "transferencia" | null;
+  tipo_cuenta: string;
+  banco: string;
+  numero_cuenta: string;
   observaciones: string;
 }
 
@@ -59,8 +64,13 @@ export function GastoForm({ gasto, conceptos, onSuccess }: GastoFormProps) {
       concepto_id: initialConceptoId,
       subconcepto_id: gasto?.subconcepto_id ?? null,
       valor: gasto?.valor ?? 0,
+      proveedor: gasto?.proveedor ?? "",
       numero_factura: gasto?.numero_factura ?? "",
       pagado: gasto?.pagado ?? false,
+      forma_pago: gasto?.pago?.forma_pago ?? null,
+      tipo_cuenta: gasto?.pago?.tipo_cuenta ?? "",
+      banco: gasto?.pago?.banco ?? "",
+      numero_cuenta: gasto?.pago?.numero_cuenta ?? "",
       observaciones: gasto?.observaciones ?? "",
     },
   });
@@ -68,6 +78,7 @@ export function GastoForm({ gasto, conceptos, onSuccess }: GastoFormProps) {
   const fechaValue = watch("fecha");
   const subconceptoIdValue = watch("subconcepto_id");
   const pagadoValue = watch("pagado");
+  const formaPagoValue = watch("forma_pago");
 
   const handleConceptoChange = (val: string) => {
     const id = parseInt(val, 10);
@@ -82,8 +93,13 @@ export function GastoForm({ gasto, conceptos, onSuccess }: GastoFormProps) {
         fecha: data.fecha,
         subconcepto_id: data.subconcepto_id,
         valor: data.valor,
+        proveedor: data.proveedor || undefined,
         numero_factura: data.numero_factura || undefined,
         pagado: data.pagado,
+        forma_pago: data.pagado ? (data.forma_pago ?? null) : null,
+        tipo_cuenta: data.tipo_cuenta || undefined,
+        banco: data.banco || undefined,
+        numero_cuenta: data.numero_cuenta || undefined,
         observaciones: data.observaciones || undefined,
       };
       if (gasto) {
@@ -170,6 +186,16 @@ export function GastoForm({ gasto, conceptos, onSuccess }: GastoFormProps) {
       </div>
 
       <div className="space-y-2">
+        <Label htmlFor="proveedor">Proveedor</Label>
+        <Input
+          id="proveedor"
+          type="text"
+          placeholder="Nombre del proveedor (opcional)"
+          {...register("proveedor")}
+        />
+      </div>
+
+      <div className="space-y-2">
         <Label htmlFor="numero_factura">Número de factura</Label>
         <Input
           id="numero_factura"
@@ -184,13 +210,80 @@ export function GastoForm({ gasto, conceptos, onSuccess }: GastoFormProps) {
           id="pagado"
           type="checkbox"
           checked={pagadoValue}
-          onChange={(e) => setValue("pagado", e.target.checked)}
+          onChange={(e) => {
+            setValue("pagado", e.target.checked);
+            if (!e.target.checked) {
+              setValue("forma_pago", null);
+              setValue("tipo_cuenta", "");
+              setValue("banco", "");
+              setValue("numero_cuenta", "");
+            }
+          }}
           className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
         />
         <Label htmlFor="pagado" className="cursor-pointer">
           Pagado
         </Label>
       </div>
+
+      {pagadoValue && (
+        <>
+          <div className="space-y-2">
+            <Label>Forma de pago</Label>
+            <Select
+              value={formaPagoValue ?? ""}
+              onValueChange={(val) => {
+                setValue("forma_pago", val as "efectivo" | "transferencia");
+                if (val !== "transferencia") {
+                  setValue("tipo_cuenta", "");
+                  setValue("banco", "");
+                  setValue("numero_cuenta", "");
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Seleccionar forma de pago" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="efectivo">Efectivo</SelectItem>
+                <SelectItem value="transferencia">Transferencia</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {formaPagoValue === "transferencia" && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="tipo_cuenta">Tipo de cuenta</Label>
+                <Input
+                  id="tipo_cuenta"
+                  type="text"
+                  placeholder="Ej: Ahorros, Corriente"
+                  {...register("tipo_cuenta")}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="banco">Banco</Label>
+                <Input
+                  id="banco"
+                  type="text"
+                  placeholder="Nombre del banco"
+                  {...register("banco")}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="numero_cuenta">Número de cuenta</Label>
+                <Input
+                  id="numero_cuenta"
+                  type="text"
+                  placeholder="Número de cuenta bancaria"
+                  {...register("numero_cuenta")}
+                />
+              </div>
+            </>
+          )}
+        </>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="observaciones">Observaciones</Label>

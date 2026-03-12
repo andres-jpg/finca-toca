@@ -12,6 +12,13 @@ export interface ConceptoGasto {
 }
 
 // ===== GASTOS =====
+export interface Pago {
+  forma_pago: "efectivo" | "transferencia";
+  tipo_cuenta: string | null;
+  banco: string | null;
+  numero_cuenta: string | null;
+}
+
 export interface Gasto {
   id: number;
   fecha: string;
@@ -19,9 +26,11 @@ export interface Gasto {
   concepto: string;
   subconcepto: string | null;
   valor: number;
+  proveedor: string | null;
   numero_factura: string | null;
   pagado: boolean;
   observaciones: string | null;
+  pago: Pago | null;
 }
 
 // ===== CONCEPTOS DE INGRESO =====
