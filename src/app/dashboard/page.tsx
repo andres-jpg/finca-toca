@@ -1,27 +1,28 @@
 import { createClient } from "@/lib/supabase/server";
-import { TrendingDown, TrendingUp, Droplets, Milk, Beef } from "lucide-react";
+import { TrendingDown, TrendingUp, Droplets, Milk } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { GastosDonutChart } from "@/charts/gastos-donut-chart";
 import { IngresosDonutChart } from "@/charts/ingresos-donut-chart";
 import { GastosIngresosLineChart } from "@/charts/gastos-ingresos-line-chart";
-import {
-  getLitrosDiaActual,
-  getLitrosMesActual,
-  getLecheMesQuincenas,
-} from "@/features/extracciones/actions/extracciones.actions";
+import { getLitrosDiaActual } from "@/features/extracciones/actions/extracciones.actions";
 import { checkRoutePermission } from "@/lib/auth/check-permissions";
+import { PiCow } from "react-icons/pi";
+import { DashboardFilter } from "@/components/dashboard/dashboard-filter";
 
-function getCurrentMonthRange() {
-  const now = new Date();
-  const start = formatDate(new Date(now.getFullYear(), now.getMonth(), 1));
-  const end = formatDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+const MESES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
+
+function getMonthRange(year: number, month: number) {
+  const start = formatDate(new Date(year, month - 1, 1));
+  const end = formatDate(new Date(year, month, 0));
   return { start, end };
 }
 
-function getLastMonthRange() {
-  const now = new Date();
-  const start = formatDate(new Date(now.getFullYear(), now.getMonth() - 1, 1));
-  const end = formatDate(new Date(now.getFullYear(), now.getMonth(), 0));
+function getPrevMonthRange(year: number, month: number) {
+  const start = formatDate(new Date(year, month - 2, 1));
+  const end = formatDate(new Date(year, month - 1, 0));
   return { start, end };
 }
 
@@ -37,21 +38,28 @@ function calcTrend(current: number, previous: number) {
 function TrendBadge({ label, positive }: { label: string; positive: boolean }) {
   if (label === "—") return <span className="text-xs text-stone-400">Sin datos anteriores</span>;
   return (
-    <span
-      className="text-xs font-medium"
-      style={{ color: positive ? "#16a34a" : "#ef4444" }}
-    >
+    <span className="text-xs font-medium" style={{ color: positive ? "#16a34a" : "#ef4444" }}>
       {label} vs. mes anterior
     </span>
   );
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mes?: string; anio?: string }>;
+}) {
   await checkRoutePermission(["admin", "viewer"]);
 
+  const params = await searchParams;
+  const now = new Date();
+  const mes = params.mes ? Math.min(12, Math.max(1, parseInt(params.mes))) : now.getMonth() + 1;
+  const anio = params.anio ? parseInt(params.anio) : now.getFullYear();
+
+  const selected = getMonthRange(anio, mes);
+  const prev = getPrevMonthRange(anio, mes);
+
   const supabase = await createClient();
-  const current = getCurrentMonthRange();
-  const last = getLastMonthRange();
 
   const [
     { data: gastosCurr },
@@ -61,26 +69,49 @@ export default async function DashboardPage() {
     { data: allGastosRaw },
     { data: allIngresosRaw },
     { data: vacasEstados },
+    { data: extMes },
+    { data: ext1 },
+    { data: ext2 },
+    { data: ing1 },
+    { data: ing2 },
     litrosDia,
-    litrosMes,
-    quincenas,
   ] = await Promise.all([
-    supabase.from("gastos").select("valor").gte("fecha", current.start).lte("fecha", current.end),
-    supabase.from("gastos").select("valor").gte("fecha", last.start).lte("fecha", last.end),
-    supabase.from("ingresos").select("valor").gte("fecha", current.start).lte("fecha", current.end),
-    supabase.from("ingresos").select("valor").gte("fecha", last.start).lte("fecha", last.end),
+    supabase.from("gastos").select("valor").gte("fecha", selected.start).lte("fecha", selected.end),
+    supabase.from("gastos").select("valor").gte("fecha", prev.start).lte("fecha", prev.end),
+    supabase.from("ingresos").select("valor").gte("fecha", selected.start).lte("fecha", selected.end),
+    supabase.from("ingresos").select("valor").gte("fecha", prev.start).lte("fecha", prev.end),
     supabase
       .from("gastos")
       .select("fecha, valor, subconceptos_gasto(nombre, conceptos_gasto(nombre))")
+      .gte("fecha", selected.start)
+      .lte("fecha", selected.end)
       .order("fecha", { ascending: true }),
     supabase
       .from("ingresos")
       .select("fecha, valor, subconceptos_ingreso(nombre, conceptos_ingreso(nombre))")
+      .gte("fecha", selected.start)
+      .lte("fecha", selected.end)
       .order("fecha", { ascending: true }),
     supabase.from("vacas").select("estado"),
+    // Leche del mes seleccionado
+    supabase.from("extracciones_leche").select("litros").gte("fecha", selected.start).lte("fecha", selected.end),
+    // Quincena 1
+    supabase.from("extracciones_leche").select("litros")
+      .gte("fecha", formatDate(new Date(anio, mes - 1, 1)))
+      .lte("fecha", formatDate(new Date(anio, mes - 1, 15))),
+    // Quincena 2
+    supabase.from("extracciones_leche").select("litros")
+      .gte("fecha", formatDate(new Date(anio, mes - 1, 16)))
+      .lte("fecha", formatDate(new Date(anio, mes, 0))),
+    // Valor quincena 1
+    supabase.from("ingresos").select("valor").eq("source", "leche_extraccion")
+      .gte("fecha", formatDate(new Date(anio, mes - 1, 1)))
+      .lte("fecha", formatDate(new Date(anio, mes - 1, 15))),
+    // Valor quincena 2
+    supabase.from("ingresos").select("valor").eq("source", "leche_extraccion")
+      .gte("fecha", formatDate(new Date(anio, mes - 1, 16)))
+      .lte("fecha", formatDate(new Date(anio, mes, 0))),
     getLitrosDiaActual(),
-    getLitrosMesActual(),
-    getLecheMesQuincenas(),
   ]);
 
   const vacasProduccion = (vacasEstados ?? []).filter((v: any) => v.estado === "produccion").length;
@@ -106,11 +137,28 @@ export default async function DashboardPage() {
   const gastosTrend = calcTrend(totalGastos, lastGastos);
   const ingresosTrend = calcTrend(totalIngresos, lastIngresos);
 
+  const litrosMes = (extMes ?? []).reduce((s, r) => s + r.litros, 0);
+  const quincenas = {
+    q1Litros: (ext1 ?? []).reduce((s, r) => s + r.litros, 0),
+    q1Valor: (ing1 ?? []).reduce((s, r) => s + r.valor, 0),
+    q2Litros: (ext2 ?? []).reduce((s, r) => s + r.litros, 0),
+    q2Valor: (ing2 ?? []).reduce((s, r) => s + r.valor, 0),
+  };
+
+  const fechaHoy = now.toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
+  const mesLabel = `${MESES[mes - 1]} ${anio}`;
+  const isCurrentMonth = mes === now.getMonth() + 1 && anio === now.getFullYear();
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">Dashboard</h1>
-        <p className="text-sm text-stone-500 mt-0.5">Resumen del mes actual</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">Dashboard</h1>
+          <p className="text-sm text-stone-500 mt-0.5">
+            {isCurrentMonth ? "Mes actual" : mesLabel}
+          </p>
+        </div>
+        <DashboardFilter mes={mes} anio={anio} />
       </div>
 
       {/* Stat cards */}
@@ -151,7 +199,7 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Leche hoy */}
+        {/* Leche hoy — siempre fija */}
         <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
           <div className="flex items-start justify-between">
             <div className="min-w-0">
@@ -165,8 +213,9 @@ export default async function DashboardPage() {
               <Droplets className="h-5 w-5" style={{ color: "#3b82f6" }} />
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-stone-100">
+          <div className="mt-3 pt-3 border-t border-stone-100 flex items-center justify-between">
             <span className="text-xs text-stone-400">Litros extraídos hoy</span>
+            <span className="text-xs text-stone-400">{fechaHoy}</span>
           </div>
         </div>
 
@@ -200,7 +249,7 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Vacas */}
+        {/* Vacas — siempre fija */}
         <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
           <div className="flex items-start justify-between">
             <div className="min-w-0">
@@ -208,7 +257,7 @@ export default async function DashboardPage() {
               <p className="text-2xl font-bold text-stone-900 mt-1.5">{vacasProduccion + vacasSecado}</p>
             </div>
             <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ml-3" style={{ backgroundColor: "#fffbeb" }}>
-              <Beef className="h-5 w-5" style={{ color: "#d97706" }} />
+              <PiCow className="h-5 w-5" style={{ color: "#d97706" }} />
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-stone-100 flex items-center gap-3">
@@ -224,10 +273,7 @@ export default async function DashboardPage() {
         <GastosDonutChart gastos={allGastos} />
         <IngresosDonutChart ingresos={allIngresos} />
       </div>
-      <GastosIngresosLineChart
-        gastos={allGastos}
-        ingresos={allIngresos}
-      />
+      <GastosIngresosLineChart gastos={allGastos} ingresos={allIngresos} />
     </div>
   );
 }
