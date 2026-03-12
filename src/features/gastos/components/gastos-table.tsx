@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Plus, Pencil, Trash2, CalendarDays } from "lucide-react";
+import { Plus, Pencil, Trash2, CalendarDays, Eye } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/shared/data-table";
 import { EntityModal } from "@/components/shared/entity-modal";
@@ -16,6 +16,77 @@ import { toast } from "sonner";
 import { MonthPicker } from "@/components/shared/month-picker";
 import type { Gasto, ConceptoGasto } from "@/types";
 
+function Field({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{label}</p>
+      <p className="text-sm text-gray-900">{value || <span className="text-gray-400">—</span>}</p>
+    </div>
+  );
+}
+
+function GastoDetail({ gasto }: { gasto: Gasto }) {
+  const fecha = format(new Date(gasto.fecha + "T00:00:00"), "dd 'de' MMMM yyyy", { locale: es });
+  const valor = `$${gasto.valor.toLocaleString("es-CO", { minimumFractionDigits: 0 })}`;
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="Fecha" value={fecha} />
+        <Field label="Valor" value={valor} />
+        <Field
+          label="Concepto"
+          value={
+            <>
+              {gasto.concepto}
+              {gasto.subconcepto && (
+                <span className="text-gray-400"> › {gasto.subconcepto}</span>
+              )}
+            </>
+          }
+        />
+        <Field label="Proveedor" value={gasto.proveedor} />
+        <Field label="Número de factura" value={gasto.numero_factura} />
+      </div>
+
+      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pago</p>
+        {!gasto.pagado ? (
+          <Badge variant="outline" className="text-gray-500">No pagado</Badge>
+        ) : (
+          <div className="space-y-3">
+            <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Pagado</Badge>
+            {gasto.pago ? (
+              <div className="grid grid-cols-2 gap-4 pt-1">
+                <Field
+                  label="Forma de pago"
+                  value={gasto.pago.forma_pago === "efectivo" ? "Efectivo" : "Transferencia"}
+                />
+                {gasto.pago.forma_pago === "transferencia" && (
+                  <>
+                    <Field label="Tipo de cuenta" value={gasto.pago.tipo_cuenta} />
+                    <Field label="Banco" value={gasto.pago.banco} />
+                    <Field label="Número de cuenta" value={gasto.pago.numero_cuenta} />
+                  </>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400">Sin datos de forma de pago</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {gasto.observaciones && (
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Observaciones</p>
+          <p className="text-sm text-gray-700 whitespace-pre-wrap">{gasto.observaciones}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RowActions({
   gasto,
   conceptos,
@@ -25,6 +96,7 @@ function RowActions({
   conceptos: ConceptoGasto[];
   canEdit: boolean;
 }) {
+  const [viewOpen, setViewOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -38,10 +110,6 @@ function RowActions({
     }
   };
 
-  if (!canEdit) {
-    return <span className="text-xs text-gray-400">Solo lectura</span>;
-  }
-
   const gastoDate = format(new Date(gasto.fecha + "T00:00:00"), "dd/MM/yyyy", { locale: es });
   const gastoValue = `$${gasto.valor.toLocaleString("es-CO", { minimumFractionDigits: 0 })}`;
 
@@ -49,31 +117,50 @@ function RowActions({
     <>
       <div className="flex items-center gap-1">
         <button
-          onClick={() => setEditOpen(true)}
-          className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-          title="Editar"
+          onClick={() => setViewOpen(true)}
+          className="p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+          title="Ver detalle"
         >
-          <Pencil className="h-3.5 w-3.5" />
+          <Eye className="h-3.5 w-3.5" />
         </button>
-        <button
-          onClick={() => setDeleteOpen(true)}
-          className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-          title="Eliminar"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        {canEdit && (
+          <>
+            <button
+              onClick={() => setEditOpen(true)}
+              className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+              title="Editar"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setDeleteOpen(true)}
+              className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+              title="Eliminar"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </>
+        )}
       </div>
 
-      <EntityModal open={editOpen} onClose={() => setEditOpen(false)} title="Editar gasto">
-        <GastoForm gasto={gasto} conceptos={conceptos} onSuccess={() => setEditOpen(false)} />
+      <EntityModal open={viewOpen} onClose={() => setViewOpen(false)} title="Detalle del gasto">
+        <GastoDetail gasto={gasto} />
       </EntityModal>
 
-      <DeleteConfirmationDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        onConfirm={handleDelete}
-        itemName={`${gasto.concepto} del ${gastoDate} (${gastoValue})`}
-      />
+      {canEdit && (
+        <>
+          <EntityModal open={editOpen} onClose={() => setEditOpen(false)} title="Editar gasto">
+            <GastoForm gasto={gasto} conceptos={conceptos} onSuccess={() => setEditOpen(false)} />
+          </EntityModal>
+
+          <DeleteConfirmationDialog
+            open={deleteOpen}
+            onOpenChange={setDeleteOpen}
+            onConfirm={handleDelete}
+            itemName={`${gasto.concepto} del ${gastoDate} (${gastoValue})`}
+          />
+        </>
+      )}
     </>
   );
 }
@@ -119,6 +206,11 @@ export function GastosTable({ gastos, conceptos, canEdit }: GastosTableProps) {
         ),
       },
       {
+        accessorKey: "proveedor",
+        header: "Proveedor",
+        cell: ({ getValue }) => getValue<string | null>() ?? "—",
+      },
+      {
         accessorKey: "valor",
         header: "Valor",
         cell: ({ getValue }) =>
@@ -130,14 +222,18 @@ export function GastosTable({ gastos, conceptos, canEdit }: GastosTableProps) {
         cell: ({ getValue }) => getValue<string | null>() ?? "—",
       },
       {
-        accessorKey: "pagado",
+        id: "pagado_display",
         header: "Pagado",
-        cell: ({ getValue }) =>
-          getValue<boolean>() ? (
-            <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Sí</Badge>
-          ) : (
-            <Badge variant="outline" className="text-gray-500">No</Badge>
-          ),
+        cell: ({ row }) => {
+          const { pagado, pago } = row.original;
+          if (!pagado) return <Badge variant="outline" className="text-gray-500">No pagado</Badge>;
+          if (!pago) return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Pagado</Badge>;
+          if (pago.forma_pago === "transferencia") {
+            const label = pago.banco ? `Transferencia · ${pago.banco}` : "Transferencia";
+            return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">{label}</Badge>;
+          }
+          return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Efectivo</Badge>;
+        },
       },
       {
         accessorKey: "observaciones",

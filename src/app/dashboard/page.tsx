@@ -4,6 +4,7 @@ import { formatDate } from "@/lib/utils";
 import { GastosDonutChart } from "@/charts/gastos-donut-chart";
 import { IngresosDonutChart } from "@/charts/ingresos-donut-chart";
 import { GastosIngresosLineChart } from "@/charts/gastos-ingresos-line-chart";
+import { ExtraccionesLineChart } from "@/charts/extracciones-line-chart";
 import { getLitrosDiaActual } from "@/features/extracciones/actions/extracciones.actions";
 import { checkRoutePermission } from "@/lib/auth/check-permissions";
 import { PiCow } from "react-icons/pi";
@@ -89,6 +90,8 @@ export default async function DashboardPage({
     { data: ing2 },
     // Leche hoy (siempre actual)
     litrosDia,
+    // Histórico completo de extracciones para el gráfico
+    { data: allExtraccionesRaw },
   ] = await Promise.all([
     supabase.from("gastos").select("valor").gte("fecha", selected.start).lte("fecha", selected.end),
     supabase.from("gastos").select("valor").gte("fecha", prev.start).lte("fecha", prev.end),
@@ -117,6 +120,7 @@ export default async function DashboardPage({
       .gte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 16)))
       .lte("fecha", formatDate(new Date(effectiveAnio, effectiveMes, 0))),
     getLitrosDiaActual(),
+    supabase.from("extracciones_leche").select("fecha, litros").order("fecha", { ascending: true }),
   ]);
 
   const vacasProduccion = (vacasEstados ?? []).filter((v: any) => v.estado === "produccion").length;
@@ -158,6 +162,11 @@ export default async function DashboardPage({
     q2Litros: (ext2 ?? []).reduce((s, r) => s + r.litros, 0),
     q2Valor: (ing2 ?? []).reduce((s, r) => s + r.valor, 0),
   };
+
+  const allExtracciones = (allExtraccionesRaw ?? []).map((e: any) => ({
+    fecha: e.fecha as string,
+    litros: e.litros as number,
+  }));
 
   const fechaHoy = now.toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
   const mesLabel = `${MESES[effectiveMes - 1]} ${effectiveAnio}`;
@@ -280,6 +289,14 @@ export default async function DashboardPage({
           </div>
         </div>
       </div>
+
+      {/* Gráfico de extracciones */}
+      <ExtraccionesLineChart
+        extracciones={allExtracciones}
+        hasFilter={hasFilter}
+        mes={effectiveMes}
+        anio={effectiveAnio}
+      />
 
       {/* Donuts — histórico o filtrado según el filtro activo */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
