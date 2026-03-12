@@ -53,27 +53,41 @@ export default async function DashboardPage({
 
   const params = await searchParams;
   const now = new Date();
-  const mes = params.mes ? Math.min(12, Math.max(1, parseInt(params.mes))) : now.getMonth() + 1;
-  const anio = params.anio ? parseInt(params.anio) : now.getFullYear();
 
-  const selected = getMonthRange(anio, mes);
-  const prev = getPrevMonthRange(anio, mes);
+  // Determinar si el filtro está activo
+  const hasFilter = Boolean(params.mes && params.anio);
+
+  // Mes/año efectivo: si hay filtro, el seleccionado; si no, el actual
+  const effectiveMes = hasFilter
+    ? Math.min(12, Math.max(1, parseInt(params.mes!)))
+    : now.getMonth() + 1;
+  const effectiveAnio = hasFilter
+    ? parseInt(params.anio!)
+    : now.getFullYear();
+
+  const selected = getMonthRange(effectiveAnio, effectiveMes);
+  const prev = getPrevMonthRange(effectiveAnio, effectiveMes);
 
   const supabase = await createClient();
 
   const [
+    // Cards: mes efectivo y su anterior (para tendencia)
     { data: gastosCurr },
     { data: gastosLast },
     { data: ingresosCurr },
     { data: ingresosLast },
+    // Todos los registros históricos (para línea y donuts sin filtro)
     { data: allGastosRaw },
     { data: allIngresosRaw },
+    // Vacas (siempre actual)
     { data: vacasEstados },
+    // Leche: mes efectivo y quincenas
     { data: extMes },
     { data: ext1 },
     { data: ext2 },
     { data: ing1 },
     { data: ing2 },
+    // Leche hoy (siempre actual)
     litrosDia,
   ] = await Promise.all([
     supabase.from("gastos").select("valor").gte("fecha", selected.start).lte("fecha", selected.end),
@@ -83,40 +97,32 @@ export default async function DashboardPage({
     supabase
       .from("gastos")
       .select("fecha, valor, subconceptos_gasto(nombre, conceptos_gasto(nombre))")
-      .gte("fecha", selected.start)
-      .lte("fecha", selected.end)
       .order("fecha", { ascending: true }),
     supabase
       .from("ingresos")
       .select("fecha, valor, subconceptos_ingreso(nombre, conceptos_ingreso(nombre))")
-      .gte("fecha", selected.start)
-      .lte("fecha", selected.end)
       .order("fecha", { ascending: true }),
     supabase.from("vacas").select("estado"),
-    // Leche del mes seleccionado
     supabase.from("extracciones_leche").select("litros").gte("fecha", selected.start).lte("fecha", selected.end),
-    // Quincena 1
     supabase.from("extracciones_leche").select("litros")
-      .gte("fecha", formatDate(new Date(anio, mes - 1, 1)))
-      .lte("fecha", formatDate(new Date(anio, mes - 1, 15))),
-    // Quincena 2
+      .gte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 1)))
+      .lte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 15))),
     supabase.from("extracciones_leche").select("litros")
-      .gte("fecha", formatDate(new Date(anio, mes - 1, 16)))
-      .lte("fecha", formatDate(new Date(anio, mes, 0))),
-    // Valor quincena 1
+      .gte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 16)))
+      .lte("fecha", formatDate(new Date(effectiveAnio, effectiveMes, 0))),
     supabase.from("ingresos").select("valor").eq("source", "leche_extraccion")
-      .gte("fecha", formatDate(new Date(anio, mes - 1, 1)))
-      .lte("fecha", formatDate(new Date(anio, mes - 1, 15))),
-    // Valor quincena 2
+      .gte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 1)))
+      .lte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 15))),
     supabase.from("ingresos").select("valor").eq("source", "leche_extraccion")
-      .gte("fecha", formatDate(new Date(anio, mes - 1, 16)))
-      .lte("fecha", formatDate(new Date(anio, mes, 0))),
+      .gte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 16)))
+      .lte("fecha", formatDate(new Date(effectiveAnio, effectiveMes, 0))),
     getLitrosDiaActual(),
   ]);
 
   const vacasProduccion = (vacasEstados ?? []).filter((v: any) => v.estado === "produccion").length;
   const vacasSecado = (vacasEstados ?? []).filter((v: any) => v.estado === "secado").length;
 
+  // Todos los registros históricos — siempre para el gráfico de líneas
   const allGastos = (allGastosRaw ?? []).map((g: any) => ({
     fecha: g.fecha,
     concepto: g.subconceptos_gasto?.conceptos_gasto?.nombre ?? "Otros",
@@ -128,6 +134,14 @@ export default async function DashboardPage({
     concepto: i.subconceptos_ingreso?.conceptos_ingreso?.nombre ?? "Leche",
     valor: i.valor,
   }));
+
+  // Donuts: histórico si no hay filtro, filtrado por mes si hay filtro
+  const donutGastos = hasFilter
+    ? allGastos.filter((g) => g.fecha >= selected.start && g.fecha <= selected.end)
+    : allGastos;
+  const donutIngresos = hasFilter
+    ? allIngresos.filter((i) => i.fecha >= selected.start && i.fecha <= selected.end)
+    : allIngresos;
 
   const totalGastos = (gastosCurr ?? []).reduce((s: number, r: { valor: number }) => s + r.valor, 0);
   const lastGastos = (gastosLast ?? []).reduce((s: number, r: { valor: number }) => s + r.valor, 0);
@@ -146,8 +160,7 @@ export default async function DashboardPage({
   };
 
   const fechaHoy = now.toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
-  const mesLabel = `${MESES[mes - 1]} ${anio}`;
-  const isCurrentMonth = mes === now.getMonth() + 1 && anio === now.getFullYear();
+  const mesLabel = `${MESES[effectiveMes - 1]} ${effectiveAnio}`;
 
   return (
     <div className="space-y-6">
@@ -155,10 +168,10 @@ export default async function DashboardPage({
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">Dashboard</h1>
           <p className="text-sm text-stone-500 mt-0.5">
-            {isCurrentMonth ? "Mes actual" : mesLabel}
+            {hasFilter ? mesLabel : "Resumen del mes actual"}
           </p>
         </div>
-        <DashboardFilter mes={mes} anio={anio} />
+        <DashboardFilter hasFilter={hasFilter} mes={effectiveMes} anio={effectiveAnio} />
       </div>
 
       {/* Stat cards */}
@@ -268,11 +281,13 @@ export default async function DashboardPage({
         </div>
       </div>
 
-      {/* Charts */}
+      {/* Donuts — histórico o filtrado según el filtro activo */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        <GastosDonutChart gastos={allGastos} />
-        <IngresosDonutChart ingresos={allIngresos} />
+        <GastosDonutChart gastos={donutGastos} />
+        <IngresosDonutChart ingresos={donutIngresos} />
       </div>
+
+      {/* Línea — siempre histórico completo */}
       <GastosIngresosLineChart gastos={allGastos} ingresos={allIngresos} />
     </div>
   );

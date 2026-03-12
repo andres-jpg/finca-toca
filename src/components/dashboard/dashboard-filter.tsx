@@ -1,6 +1,8 @@
 "use client";
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { SlidersHorizontal, X } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -17,14 +19,27 @@ const MESES = [
 const START_YEAR = 2024;
 
 interface DashboardFilterProps {
+  hasFilter: boolean;
   mes: number;
   anio: number;
 }
 
-export function DashboardFilter({ mes, anio }: DashboardFilterProps) {
+export function DashboardFilter({ hasFilter, mes, anio }: DashboardFilterProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  function activate() {
+    const now = new Date();
+    const params = new URLSearchParams();
+    params.set("mes", String(now.getMonth() + 1));
+    params.set("anio", String(now.getFullYear()));
+    router.push(`${pathname}?${params.toString()}`);
+  }
+
+  function clear() {
+    router.push(pathname);
+  }
 
   function update(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -34,6 +49,15 @@ export function DashboardFilter({ mes, anio }: DashboardFilterProps) {
 
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: currentYear - START_YEAR + 1 }, (_, i) => START_YEAR + i);
+
+  if (!hasFilter) {
+    return (
+      <Button variant="outline" onClick={activate} className="gap-2">
+        <SlidersHorizontal className="h-4 w-4" />
+        Filtrar por mes
+      </Button>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2">
@@ -62,6 +86,10 @@ export function DashboardFilter({ mes, anio }: DashboardFilterProps) {
           ))}
         </SelectContent>
       </Select>
+
+      <Button variant="ghost" size="icon" onClick={clear} title="Ver todo">
+        <X className="h-4 w-4" />
+      </Button>
     </div>
   );
 }
