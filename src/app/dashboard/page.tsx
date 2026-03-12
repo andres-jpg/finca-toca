@@ -1,27 +1,28 @@
 import { createClient } from "@/lib/supabase/server";
-import { TrendingDown, TrendingUp, Droplets, Milk, Beef } from "lucide-react";
+import { TrendingDown, TrendingUp, Droplets, Milk } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { GastosDonutChart } from "@/charts/gastos-donut-chart";
 import { IngresosDonutChart } from "@/charts/ingresos-donut-chart";
 import { GastosIngresosLineChart } from "@/charts/gastos-ingresos-line-chart";
-import {
-  getLitrosDiaActual,
-  getLitrosMesActual,
-  getLecheMesQuincenas,
-} from "@/features/extracciones/actions/extracciones.actions";
+import { getLitrosDiaActual } from "@/features/extracciones/actions/extracciones.actions";
 import { checkRoutePermission } from "@/lib/auth/check-permissions";
+import { PiCow } from "react-icons/pi";
+import { DashboardFilter } from "@/components/dashboard/dashboard-filter";
 
-function getCurrentMonthRange() {
-  const now = new Date();
-  const start = formatDate(new Date(now.getFullYear(), now.getMonth(), 1));
-  const end = formatDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+const MESES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
+
+function getMonthRange(year: number, month: number) {
+  const start = formatDate(new Date(year, month - 1, 1));
+  const end = formatDate(new Date(year, month, 0));
   return { start, end };
 }
 
-function getLastMonthRange() {
-  const now = new Date();
-  const start = formatDate(new Date(now.getFullYear(), now.getMonth() - 1, 1));
-  const end = formatDate(new Date(now.getFullYear(), now.getMonth(), 0));
+function getPrevMonthRange(year: number, month: number) {
+  const start = formatDate(new Date(year, month - 2, 1));
+  const end = formatDate(new Date(year, month - 1, 0));
   return { start, end };
 }
 
@@ -37,38 +38,62 @@ function calcTrend(current: number, previous: number) {
 function TrendBadge({ label, positive }: { label: string; positive: boolean }) {
   if (label === "—") return <span className="text-xs text-stone-400">Sin datos anteriores</span>;
   return (
-    <span
-      className="text-xs font-medium"
-      style={{ color: positive ? "#16a34a" : "#ef4444" }}
-    >
+    <span className="text-xs font-medium" style={{ color: positive ? "#16a34a" : "#ef4444" }}>
       {label} vs. mes anterior
     </span>
   );
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mes?: string; anio?: string }>;
+}) {
   await checkRoutePermission(["admin", "viewer"]);
 
+  const params = await searchParams;
+  const now = new Date();
+
+  // Determinar si el filtro está activo
+  const hasFilter = Boolean(params.mes && params.anio);
+
+  // Mes/año efectivo: si hay filtro, el seleccionado; si no, el actual
+  const effectiveMes = hasFilter
+    ? Math.min(12, Math.max(1, parseInt(params.mes!)))
+    : now.getMonth() + 1;
+  const effectiveAnio = hasFilter
+    ? parseInt(params.anio!)
+    : now.getFullYear();
+
+  const selected = getMonthRange(effectiveAnio, effectiveMes);
+  const prev = getPrevMonthRange(effectiveAnio, effectiveMes);
+
   const supabase = await createClient();
-  const current = getCurrentMonthRange();
-  const last = getLastMonthRange();
 
   const [
+    // Cards: mes efectivo y su anterior (para tendencia)
     { data: gastosCurr },
     { data: gastosLast },
     { data: ingresosCurr },
     { data: ingresosLast },
+    // Todos los registros históricos (para línea y donuts sin filtro)
     { data: allGastosRaw },
     { data: allIngresosRaw },
+    // Vacas (siempre actual)
     { data: vacasEstados },
+    // Leche: mes efectivo y quincenas
+    { data: extMes },
+    { data: ext1 },
+    { data: ext2 },
+    { data: ing1 },
+    { data: ing2 },
+    // Leche hoy (siempre actual)
     litrosDia,
-    litrosMes,
-    quincenas,
   ] = await Promise.all([
-    supabase.from("gastos").select("valor").gte("fecha", current.start).lte("fecha", current.end),
-    supabase.from("gastos").select("valor").gte("fecha", last.start).lte("fecha", last.end),
-    supabase.from("ingresos").select("valor").gte("fecha", current.start).lte("fecha", current.end),
-    supabase.from("ingresos").select("valor").gte("fecha", last.start).lte("fecha", last.end),
+    supabase.from("gastos").select("valor").gte("fecha", selected.start).lte("fecha", selected.end),
+    supabase.from("gastos").select("valor").gte("fecha", prev.start).lte("fecha", prev.end),
+    supabase.from("ingresos").select("valor").gte("fecha", selected.start).lte("fecha", selected.end),
+    supabase.from("ingresos").select("valor").gte("fecha", prev.start).lte("fecha", prev.end),
     supabase
       .from("gastos")
       .select("fecha, valor, subconceptos_gasto(nombre, conceptos_gasto(nombre))")
@@ -78,14 +103,26 @@ export default async function DashboardPage() {
       .select("fecha, valor, subconceptos_ingreso(nombre, conceptos_ingreso(nombre))")
       .order("fecha", { ascending: true }),
     supabase.from("vacas").select("estado"),
+    supabase.from("extracciones_leche").select("litros").gte("fecha", selected.start).lte("fecha", selected.end),
+    supabase.from("extracciones_leche").select("litros")
+      .gte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 1)))
+      .lte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 15))),
+    supabase.from("extracciones_leche").select("litros")
+      .gte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 16)))
+      .lte("fecha", formatDate(new Date(effectiveAnio, effectiveMes, 0))),
+    supabase.from("ingresos").select("valor").eq("source", "leche_extraccion")
+      .gte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 1)))
+      .lte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 15))),
+    supabase.from("ingresos").select("valor").eq("source", "leche_extraccion")
+      .gte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 16)))
+      .lte("fecha", formatDate(new Date(effectiveAnio, effectiveMes, 0))),
     getLitrosDiaActual(),
-    getLitrosMesActual(),
-    getLecheMesQuincenas(),
   ]);
 
   const vacasProduccion = (vacasEstados ?? []).filter((v: any) => v.estado === "produccion").length;
   const vacasSecado = (vacasEstados ?? []).filter((v: any) => v.estado === "secado").length;
 
+  // Todos los registros históricos — siempre para el gráfico de líneas
   const allGastos = (allGastosRaw ?? []).map((g: any) => ({
     fecha: g.fecha,
     concepto: g.subconceptos_gasto?.conceptos_gasto?.nombre ?? "Otros",
@@ -98,6 +135,14 @@ export default async function DashboardPage() {
     valor: i.valor,
   }));
 
+  // Donuts: histórico si no hay filtro, filtrado por mes si hay filtro
+  const donutGastos = hasFilter
+    ? allGastos.filter((g) => g.fecha >= selected.start && g.fecha <= selected.end)
+    : allGastos;
+  const donutIngresos = hasFilter
+    ? allIngresos.filter((i) => i.fecha >= selected.start && i.fecha <= selected.end)
+    : allIngresos;
+
   const totalGastos = (gastosCurr ?? []).reduce((s: number, r: { valor: number }) => s + r.valor, 0);
   const lastGastos = (gastosLast ?? []).reduce((s: number, r: { valor: number }) => s + r.valor, 0);
   const totalIngresos = (ingresosCurr ?? []).reduce((s: number, r: { valor: number }) => s + r.valor, 0);
@@ -106,11 +151,27 @@ export default async function DashboardPage() {
   const gastosTrend = calcTrend(totalGastos, lastGastos);
   const ingresosTrend = calcTrend(totalIngresos, lastIngresos);
 
+  const litrosMes = (extMes ?? []).reduce((s, r) => s + r.litros, 0);
+  const quincenas = {
+    q1Litros: (ext1 ?? []).reduce((s, r) => s + r.litros, 0),
+    q1Valor: (ing1 ?? []).reduce((s, r) => s + r.valor, 0),
+    q2Litros: (ext2 ?? []).reduce((s, r) => s + r.litros, 0),
+    q2Valor: (ing2 ?? []).reduce((s, r) => s + r.valor, 0),
+  };
+
+  const fechaHoy = now.toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
+  const mesLabel = `${MESES[effectiveMes - 1]} ${effectiveAnio}`;
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">Dashboard</h1>
-        <p className="text-sm text-stone-500 mt-0.5">Resumen del mes actual</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">Dashboard</h1>
+          <p className="text-sm text-stone-500 mt-0.5">
+            {hasFilter ? mesLabel : "Resumen del mes actual"}
+          </p>
+        </div>
+        <DashboardFilter hasFilter={hasFilter} mes={effectiveMes} anio={effectiveAnio} />
       </div>
 
       {/* Stat cards */}
@@ -151,7 +212,7 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Leche hoy */}
+        {/* Leche hoy — siempre fija */}
         <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
           <div className="flex items-start justify-between">
             <div className="min-w-0">
@@ -165,8 +226,9 @@ export default async function DashboardPage() {
               <Droplets className="h-5 w-5" style={{ color: "#3b82f6" }} />
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-stone-100">
+          <div className="mt-3 pt-3 border-t border-stone-100 flex items-center justify-between">
             <span className="text-xs text-stone-400">Litros extraídos hoy</span>
+            <span className="text-xs text-stone-400">{fechaHoy}</span>
           </div>
         </div>
 
@@ -200,7 +262,7 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Vacas */}
+        {/* Vacas — siempre fija */}
         <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
           <div className="flex items-start justify-between">
             <div className="min-w-0">
@@ -208,7 +270,7 @@ export default async function DashboardPage() {
               <p className="text-2xl font-bold text-stone-900 mt-1.5">{vacasProduccion + vacasSecado}</p>
             </div>
             <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ml-3" style={{ backgroundColor: "#fffbeb" }}>
-              <Beef className="h-5 w-5" style={{ color: "#d97706" }} />
+              <PiCow className="h-5 w-5" style={{ color: "#d97706" }} />
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-stone-100 flex items-center gap-3">
@@ -219,15 +281,14 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Charts */}
+      {/* Donuts — histórico o filtrado según el filtro activo */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        <GastosDonutChart gastos={allGastos} />
-        <IngresosDonutChart ingresos={allIngresos} />
+        <GastosDonutChart gastos={donutGastos} />
+        <IngresosDonutChart ingresos={donutIngresos} />
       </div>
-      <GastosIngresosLineChart
-        gastos={allGastos}
-        ingresos={allIngresos}
-      />
+
+      {/* Línea — siempre histórico completo */}
+      <GastosIngresosLineChart gastos={allGastos} ingresos={allIngresos} />
     </div>
   );
 }
