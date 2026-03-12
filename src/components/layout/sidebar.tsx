@@ -6,13 +6,14 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   Droplets,
-  Beef,
   X,
   Leaf,
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types";
+import { GiBull } from "react-icons/gi";
+import { PiCow } from "react-icons/pi";
 
 const navItems = [
   {
@@ -42,7 +43,13 @@ const navItems = [
   {
     href: "/dashboard/vacas",
     label: "Vacas",
-    icon: Beef,
+    icon: PiCow,
+    allowedRoles: ["admin", "viewer"] as UserRole[],
+  },
+  {
+    href: "/dashboard/toros",
+    label: "Toros",
+    icon: GiBull,
     allowedRoles: ["admin", "viewer"] as UserRole[],
   },
   {
