@@ -88,6 +88,20 @@ export interface Vaca {
   alta: boolean;
 }
 
+// ===== TOROS =====
+export interface Toro {
+  id: string;
+  created_at: string | null;
+  toro_id: number;
+  nombre: string;
+  origen: VacaOrigen | null;
+  fecha_compra: string | null;
+  numero_registro: string | null;
+  madre_id: string | null;
+  madre_nombre: string | null;
+  alta: boolean;
+}
+
 // ===== ROLES DE USUARIO =====
 export type UserRole = "admin" | "user" | "viewer";
 

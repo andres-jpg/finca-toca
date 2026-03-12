@@ -2,8 +2,8 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { vacaSchema } from "@/features/vacas/schemas/vaca.schema";
-import { createVaca, updateVaca } from "@/features/vacas/actions/vacas.actions";
+import { toroSchema } from "@/features/toros/schemas/toro.schema";
+import { createToro, updateToro } from "@/features/toros/actions/toros.actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,37 +16,29 @@ import {
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/shared/date-picker";
 import { toast } from "sonner";
-import type { Vaca } from "@/types";
+import type { Toro, Vaca } from "@/types";
 
 const ORIGEN_LABELS: Record<string, string> = {
   finca: "Finca",
   externa: "Externa",
 };
 
-const ESTADO_LABELS: Record<string, string> = {
-  produccion: "Producción",
-  secado: "Secado",
-  pre_jardin: "Pre-jardín",
-  jardin: "Jardín",
-};
-
 interface FormValues {
-  vaca_id: number;
+  toro_id: number;
   nombre: string;
   origen: "finca" | "externa";
-  estado: "produccion" | "secado" | "pre_jardin" | "jardin";
   fecha_compra?: Date | null;
   numero_registro?: string;
   madre_id?: string | null;
 }
 
-interface VacaFormProps {
-  vaca?: Vaca;
+interface ToroFormProps {
+  toro?: Toro;
   vacas: Vaca[];
   onSuccess: () => void;
 }
 
-export function VacaForm({ vaca, vacas, onSuccess }: VacaFormProps) {
+export function ToroForm({ toro, vacas, onSuccess }: ToroFormProps) {
   const {
     register,
     handleSubmit,
@@ -54,15 +46,14 @@ export function VacaForm({ vaca, vacas, onSuccess }: VacaFormProps) {
     watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    resolver: zodResolver(vacaSchema) as any,
+    resolver: zodResolver(toroSchema) as any,
     defaultValues: {
-      vaca_id: vaca?.vaca_id ?? 0,
-      nombre: vaca?.nombre ?? "",
-      origen: vaca?.origen ?? undefined,
-      estado: vaca?.estado ?? undefined,
-      fecha_compra: vaca?.fecha_compra ? new Date(vaca.fecha_compra + "T00:00:00") : null,
-      numero_registro: vaca?.numero_registro ?? "",
-      madre_id: vaca?.madre_id ?? null,
+      toro_id: toro?.toro_id ?? 0,
+      nombre: toro?.nombre ?? "",
+      origen: toro?.origen ?? undefined,
+      fecha_compra: toro?.fecha_compra ? new Date(toro.fecha_compra + "T00:00:00") : null,
+      numero_registro: toro?.numero_registro ?? "",
+      madre_id: toro?.madre_id ?? null,
     },
   });
 
@@ -70,25 +61,22 @@ export function VacaForm({ vaca, vacas, onSuccess }: VacaFormProps) {
   const fechaCompraValue = watch("fecha_compra");
   const madreIdValue = watch("madre_id");
 
-  const vacasDisponibles = vacas.filter((v) => v.id !== vaca?.id);
-
   const onSubmit = async (data: FormValues) => {
     try {
       const payload = {
-        vaca_id: data.vaca_id,
+        toro_id: data.toro_id,
         nombre: data.nombre,
         origen: data.origen,
-        estado: data.estado,
         fecha_compra: data.origen === "externa" ? data.fecha_compra : null,
         numero_registro: data.origen === "externa" ? data.numero_registro : undefined,
         madre_id: data.madre_id || null,
       };
-      if (vaca) {
-        await updateVaca(vaca.id, payload);
-        toast.success("Vaca actualizada");
+      if (toro) {
+        await updateToro(toro.id, payload);
+        toast.success("Toro actualizado");
       } else {
-        await createVaca(payload);
-        toast.success("Vaca creada");
+        await createToro(payload);
+        toast.success("Toro creado");
       }
       onSuccess();
     } catch (error) {
@@ -100,17 +88,17 @@ export function VacaForm({ vaca, vacas, onSuccess }: VacaFormProps) {
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="vaca_id">ID de la Vaca</Label>
+          <Label htmlFor="toro_id">ID del Toro</Label>
           <Input
-            id="vaca_id"
+            id="toro_id"
             type="number"
             min="1"
             max="9999"
             placeholder="Ej: 123"
-            {...register("vaca_id", { valueAsNumber: true })}
+            {...register("toro_id", { valueAsNumber: true })}
           />
-          {errors.vaca_id && (
-            <p className="text-sm text-red-500">{errors.vaca_id.message}</p>
+          {errors.toro_id && (
+            <p className="text-sm text-red-500">{errors.toro_id.message}</p>
           )}
         </div>
 
@@ -119,7 +107,7 @@ export function VacaForm({ vaca, vacas, onSuccess }: VacaFormProps) {
           <Input
             id="nombre"
             type="text"
-            placeholder="Ej: Vanessa"
+            placeholder="Ej: Tornado"
             {...register("nombre")}
           />
           {errors.nombre && (
@@ -128,52 +116,26 @@ export function VacaForm({ vaca, vacas, onSuccess }: VacaFormProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Origen</Label>
-          <Select
-            value={origenValue ?? ""}
-            onValueChange={(val) => setValue("origen", val as "finca" | "externa")}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Seleccionar origen" />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(ORIGEN_LABELS).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {errors.origen && (
-            <p className="text-sm text-red-500">{errors.origen.message}</p>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <Label>Estado</Label>
-          <Select
-            value={watch("estado") ?? ""}
-            onValueChange={(val) =>
-              setValue("estado", val as "produccion" | "secado" | "pre_jardin" | "jardin")
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Seleccionar estado" />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(ESTADO_LABELS).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {errors.estado && (
-            <p className="text-sm text-red-500">{errors.estado.message}</p>
-          )}
-        </div>
+      <div className="space-y-2">
+        <Label>Origen</Label>
+        <Select
+          value={origenValue ?? ""}
+          onValueChange={(val) => setValue("origen", val as "finca" | "externa")}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Seleccionar origen" />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(ORIGEN_LABELS).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {errors.origen && (
+          <p className="text-sm text-red-500">{errors.origen.message}</p>
+        )}
       </div>
 
       {origenValue === "externa" && (
@@ -200,7 +162,7 @@ export function VacaForm({ vaca, vacas, onSuccess }: VacaFormProps) {
 
       {origenValue === "finca" && (
       <div className="space-y-2">
-        <Label>Madre</Label>
+        <Label>Madre (vaca)</Label>
         <Select
           value={madreIdValue ?? "none"}
           onValueChange={(val) => setValue("madre_id", val === "none" ? null : val)}
@@ -210,7 +172,7 @@ export function VacaForm({ vaca, vacas, onSuccess }: VacaFormProps) {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="none">Sin madre registrada</SelectItem>
-            {vacasDisponibles.map((v) => (
+            {vacas.map((v) => (
               <SelectItem key={v.id} value={v.id}>
                 #{v.vaca_id} — {v.nombre}
               </SelectItem>
@@ -222,7 +184,7 @@ export function VacaForm({ vaca, vacas, onSuccess }: VacaFormProps) {
 
       <div className="flex gap-2 pt-4">
         <Button type="submit" className="flex-1" disabled={isSubmitting}>
-          {isSubmitting ? "Guardando..." : vaca ? "Actualizar" : "Crear"}
+          {isSubmitting ? "Guardando..." : toro ? "Actualizar" : "Crear"}
         </Button>
       </div>
     </form>
