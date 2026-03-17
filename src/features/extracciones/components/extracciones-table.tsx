@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { MonthPicker } from "@/components/shared/month-picker";
 import type { ExtraccionLeche } from "@/types";
 
-function RowActions({ extraccion, canEdit }: { extraccion: ExtraccionLeche; canEdit: boolean }) {
+function RowActions({ extraccion }: { extraccion: ExtraccionLeche }) {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -28,10 +28,6 @@ function RowActions({ extraccion, canEdit }: { extraccion: ExtraccionLeche; canE
       toast.error("Error al eliminar");
     }
   };
-
-  if (!canEdit) {
-    return <span className="text-xs text-gray-400">Solo lectura</span>;
-  }
 
   const extraccionDate = format(new Date(extraccion.fecha + "T00:00:00"), "dd/MM/yyyy", { locale: es });
 
@@ -84,8 +80,8 @@ export function ExtraccionesTable({ extracciones, canEdit }: ExtraccionesTablePr
     });
   }, [extracciones, selectedMonth]);
 
-  const columns: ColumnDef<ExtraccionLeche>[] = useMemo(
-    () => [
+  const columns: ColumnDef<ExtraccionLeche>[] = useMemo(() => {
+    const base: ColumnDef<ExtraccionLeche>[] = [
       {
         accessorKey: "fecha",
         header: "Fecha",
@@ -96,14 +92,18 @@ export function ExtraccionesTable({ extracciones, canEdit }: ExtraccionesTablePr
         header: "Litros",
         cell: ({ getValue }) => `${getValue<number>().toFixed(1)} L`,
       },
-      {
+    ];
+
+    if (canEdit) {
+      base.push({
         id: "actions",
         header: "Acciones",
-        cell: ({ row }) => <RowActions extraccion={row.original} canEdit={canEdit} />,
-      },
-    ],
-    [canEdit]
-  );
+        cell: ({ row }) => <RowActions extraccion={row.original} />,
+      });
+    }
+
+    return base;
+  }, [canEdit]);
 
   return (
     <div className="space-y-5">

@@ -23,7 +23,7 @@ Package manager is **pnpm**. There are no test commands configured.
 ```
 src/
 ├── app/                    # Next.js App Router pages
-│   ├── dashboard/          # Protected routes (gastos, ingresos, extracciones, vacas)
+│   ├── dashboard/          # Protected routes (gastos, ingresos, extracciones, vacas, toros)
 │   └── (auth)/             # login, signup
 ├── features/               # Feature modules — one per domain entity
 │   └── [feature]/
@@ -33,12 +33,17 @@ src/
 ├── components/
 │   ├── layout/             # Sidebar, header, dashboard shell
 │   ├── shared/             # data-table, entity-modal, date-picker, etc.
+│   ├── dashboard/          # Dashboard-specific components (DashboardFilter)
 │   └── ui/                 # shadcn/ui primitives
 ├── lib/
 │   ├── supabase/server.ts  # Server-side Supabase client (cookie-based)
 │   ├── supabase/client.ts  # Client-side Supabase client
 │   └── auth/               # getUserRole, checkRoutePermission, canWrite
 ├── charts/                 # Recharts visualizations
+│   ├── gastos-ingresos-line-chart.tsx
+│   ├── gastos-donut-chart.tsx
+│   ├── ingresos-donut-chart.tsx
+│   └── extracciones-line-chart.tsx
 └── types/index.ts          # Shared TypeScript interfaces
 ```
 
@@ -58,15 +63,34 @@ Roles (`"admin"` | `"user"` | `"viewer"`) come from the `roles` table in Supabas
 
 **Data tables** use the shared `components/shared/data-table.tsx` wrapper around TanStack React Table v8 with built-in column filtering, sorting, and pagination.
 
+**Read-only detail modals**: Tables that need a view-only mode use an inline detail component (not the form) rendered inside `EntityModal`. The eye icon (`Eye` from lucide-react) triggers it and is visible for all roles including `viewer`.
+
+**Supabase one-to-one joins**: When a table has a `UNIQUE` FK (e.g. `pagos.gasto_id`), PostgREST may return the embedded resource as an object rather than an array. Always handle both cases: `Array.isArray(row.rel) ? row.rel[0] : row.rel ?? null`.
+
 ### Database Tables
 
 | Table | Key columns |
 |---|---|
 | `extracciones_leche` | `id`, `fecha`, `litros` |
-| `gastos` | `id`, `fecha`, `concepto`, `valor`, `observaciones` |
-| `ingresos` | `id`, `fecha`, `concepto`, `valor`, `observaciones` |
-| `vacas` | `id` (UUID), `vaca_id` (number), `nombre` |
+| `gastos` | `id`, `fecha`, `subconcepto_id` (FK), `valor`, `proveedor`, `numero_factura`, `pagado`, `observaciones` |
+| `pagos` | `id`, `gasto_id` (UNIQUE FK→gastos), `forma_pago` (efectivo\|transferencia), `tipo_cuenta`, `banco`, `numero_cuenta` |
+| `ingresos` | `id`, `fecha`, `subconcepto_id` (FK), `valor`, `observaciones`, `source` |
+| `precios` | `id`, `created_at`, `valor`, `tipo` |
+| `conceptos_gasto` + `subconceptos_gasto` | hierarchy for gastos categories |
+| `conceptos_ingreso` + `subconceptos_ingreso` | hierarchy for ingresos categories |
+| `vacas` | `id` (UUID), `vaca_id` (int), `nombre`, `origen`, `estado`, `fecha_compra`, `numero_registro`, `madre_id` (self-ref FK), `alta` |
+| `toros` | `id` (UUID), `toro_id` (int), `nombre`, `origen`, `fecha_compra`, `numero_registro`, `madre_id` (FK→vacas), `alta` |
 | `roles` | `user_id`, `rol` |
+
+### Dashboard
+
+The dashboard page (`app/dashboard/page.tsx`) accepts `searchParams` with optional `mes` and `anio` query params for filtering. All cards, charts, and donuts respond to this filter.
+
+- **Cards**: Gastos del mes, Ingresos del mes, Leche hoy, Leche del mes, Vacas
+- **Charts** (top to bottom):
+  1. `ExtraccionesLineChart` — blue line; monthly history when no filter, daily breakdown when filtered
+  2. `GastosDonutChart` + `IngresosDonutChart` — side by side
+  3. `GastosIngresosLineChart` — full historical, always unfiltered
 
 ### Authentication Flow
 
