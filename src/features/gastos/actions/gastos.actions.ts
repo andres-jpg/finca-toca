@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_cache } from "next/cache";
 import { formatDate } from "@/lib/utils";
 import type { Gasto, ConceptoGasto } from "@/types";
 
@@ -31,25 +31,29 @@ export async function getGastos(): Promise<Gasto[]> {
   }));
 }
 
-export async function getConceptosGasto(): Promise<ConceptoGasto[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("conceptos_gasto")
-    .select("id, nombre, subconceptos_gasto(id, concepto_id, nombre)")
-    .order("nombre");
+export const getConceptosGasto = unstable_cache(
+  async (): Promise<ConceptoGasto[]> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("conceptos_gasto")
+      .select("id, nombre, subconceptos_gasto(id, concepto_id, nombre)")
+      .order("nombre");
 
-  if (error) throw new Error(error.message);
+    if (error) throw new Error(error.message);
 
-  return (data ?? []).map((c: any) => ({
-    id: c.id,
-    nombre: c.nombre,
-    subconceptos: (c.subconceptos_gasto ?? []).map((s: any) => ({
-      id: s.id,
-      concepto_id: s.concepto_id,
-      nombre: s.nombre,
-    })),
-  }));
-}
+    return (data ?? []).map((c: any) => ({
+      id: c.id,
+      nombre: c.nombre,
+      subconceptos: (c.subconceptos_gasto ?? []).map((s: any) => ({
+        id: s.id,
+        concepto_id: s.concepto_id,
+        nombre: s.nombre,
+      })),
+    }));
+  },
+  ["conceptos-gasto"],
+  { revalidate: 3600, tags: ["conceptos-gasto"] }
+);
 
 export async function createGasto(formData: {
   fecha: Date;
