@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { formatDate } from "@/lib/utils";
-import type { Vaca } from "@/types";
+import type { Vaca, VacaEstado, VacaOrigen } from "@/types";
 
 export async function getVacas(): Promise<Vaca[]> {
   const supabase = await createClient();
@@ -32,8 +32,8 @@ export async function getVacas(): Promise<Vaca[]> {
 export async function createVaca(formData: {
   vaca_id: number;
   nombre: string;
-  origen: "finca" | "externa";
-  estado: "produccion" | "secado" | "pre_jardin" | "jardin";
+  origen: VacaOrigen;
+  estado: VacaEstado;
   fecha_compra?: Date | null;
   numero_registro?: string;
   madre_id?: string | null;
@@ -58,8 +58,8 @@ export async function updateVaca(
   formData: {
     vaca_id: number;
     nombre: string;
-    origen: "finca" | "externa";
-    estado: "produccion" | "secado" | "pre_jardin" | "jardin";
+    origen: VacaOrigen;
+    estado: VacaEstado;
     fecha_compra?: Date | null;
     numero_registro?: string;
     madre_id?: string | null;

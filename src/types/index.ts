@@ -81,7 +81,7 @@ export interface ExtraccionLecheFormData {
 
 // ===== VACAS =====
 export type VacaOrigen = "finca" | "externa";
-export type VacaEstado = "produccion" | "secado" | "pre_jardin" | "jardin";
+export type VacaEstado = "produccion" | "secado" | "pre_jardin" | "jardin" | "transicion";
 
 export interface Vaca {
   id: string;

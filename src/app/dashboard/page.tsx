@@ -71,40 +71,46 @@ export default async function DashboardPage({
 
   const supabase = await createClient();
 
+  // Queries de donuts con join a conceptos — filtradas en DB si hay filtro activo
+  const gastosDonutQuery = supabase
+    .from("gastos")
+    .select("valor, subconceptos_gasto(nombre, conceptos_gasto(nombre))");
+  const ingresosDonutQuery = supabase
+    .from("ingresos")
+    .select("valor, subconceptos_ingreso(nombre, conceptos_ingreso(nombre))");
+
   const [
-    // Cards: mes efectivo y su anterior (para tendencia)
     { data: gastosCurr },
     { data: gastosLast },
     { data: ingresosCurr },
     { data: ingresosLast },
-    // Todos los registros históricos (para línea y donuts sin filtro)
-    { data: allGastosRaw },
-    { data: allIngresosRaw },
-    // Vacas (siempre actual)
+    // Line chart: solo fecha+valor sin joins (más ligero)
+    { data: gastosLineRaw },
+    { data: ingresosLineRaw },
+    // Donuts: con join a conceptos, rango filtrado en DB cuando hay filtro
+    { data: gastosDonutRaw },
+    { data: ingresosDonutRaw },
     { data: vacasEstados },
-    // Leche: mes efectivo y quincenas
     { data: extMes },
     { data: ext1 },
     { data: ext2 },
     { data: ing1 },
     { data: ing2 },
-    // Leche hoy (siempre actual)
     litrosDia,
-    // Histórico completo de extracciones para el gráfico
     { data: allExtraccionesRaw },
   ] = await Promise.all([
     supabase.from("gastos").select("valor").gte("fecha", selected.start).lte("fecha", selected.end),
     supabase.from("gastos").select("valor").gte("fecha", prev.start).lte("fecha", prev.end),
     supabase.from("ingresos").select("valor").gte("fecha", selected.start).lte("fecha", selected.end),
     supabase.from("ingresos").select("valor").gte("fecha", prev.start).lte("fecha", prev.end),
-    supabase
-      .from("gastos")
-      .select("fecha, valor, subconceptos_gasto(nombre, conceptos_gasto(nombre))")
-      .order("fecha", { ascending: true }),
-    supabase
-      .from("ingresos")
-      .select("fecha, valor, subconceptos_ingreso(nombre, conceptos_ingreso(nombre))")
-      .order("fecha", { ascending: true }),
+    supabase.from("gastos").select("fecha, valor").order("fecha", { ascending: true }),
+    supabase.from("ingresos").select("fecha, valor").order("fecha", { ascending: true }),
+    hasFilter
+      ? gastosDonutQuery.gte("fecha", selected.start).lte("fecha", selected.end)
+      : gastosDonutQuery,
+    hasFilter
+      ? ingresosDonutQuery.gte("fecha", selected.start).lte("fecha", selected.end)
+      : ingresosDonutQuery,
     supabase.from("vacas").select("estado"),
     supabase.from("extracciones_leche").select("litros").gte("fecha", selected.start).lte("fecha", selected.end),
     supabase.from("extracciones_leche").select("litros")
@@ -126,26 +132,25 @@ export default async function DashboardPage({
   const vacasProduccion = (vacasEstados ?? []).filter((v: any) => v.estado === "produccion").length;
   const vacasSecado = (vacasEstados ?? []).filter((v: any) => v.estado === "secado").length;
 
-  // Todos los registros históricos — siempre para el gráfico de líneas
-  const allGastos = (allGastosRaw ?? []).map((g: any) => ({
-    fecha: g.fecha,
+  // Datos para gráfico de líneas: solo fecha + valor (sin concepto)
+  const allGastos = (gastosLineRaw ?? []).map((g: any) => ({
+    fecha: g.fecha as string,
+    valor: g.valor as number,
+  }));
+  const allIngresos = (ingresosLineRaw ?? []).map((i: any) => ({
+    fecha: i.fecha as string,
+    valor: i.valor as number,
+  }));
+
+  // Datos para donuts: concepto + valor (ya filtrados por DB si hay filtro)
+  const donutGastos = (gastosDonutRaw ?? []).map((g: any) => ({
     concepto: g.subconceptos_gasto?.conceptos_gasto?.nombre ?? "Otros",
-    valor: g.valor,
+    valor: g.valor as number,
   }));
-
-  const allIngresos = (allIngresosRaw ?? []).map((i: any) => ({
-    fecha: i.fecha,
-    concepto: i.subconceptos_ingreso?.conceptos_ingreso?.nombre ?? "Leche",
-    valor: i.valor,
+  const donutIngresos = (ingresosDonutRaw ?? []).map((i: any) => ({
+    concepto: i.subconceptos_ingreso?.conceptos_ingreso?.nombre ?? "Otros",
+    valor: i.valor as number,
   }));
-
-  // Donuts: histórico si no hay filtro, filtrado por mes si hay filtro
-  const donutGastos = hasFilter
-    ? allGastos.filter((g) => g.fecha >= selected.start && g.fecha <= selected.end)
-    : allGastos;
-  const donutIngresos = hasFilter
-    ? allIngresos.filter((i) => i.fecha >= selected.start && i.fecha <= selected.end)
-    : allIngresos;
 
   const totalGastos = (gastosCurr ?? []).reduce((s: number, r: { valor: number }) => s + r.valor, 0);
   const lastGastos = (gastosLast ?? []).reduce((s: number, r: { valor: number }) => s + r.valor, 0);
