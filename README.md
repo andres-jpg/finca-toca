@@ -1,36 +1,81 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Finca Toca - Sistema de Gestión Agropecuaria
 
-## Getting Started
+Finca Toca es una plataforma integral diseñada para la gestión eficiente de actividades agropecuarias, con un enfoque principal en el control de ganado vacuno, producción lechera y administración financiera.
 
-First, run the development server:
+## 🚀 Resumen del Proyecto
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Este sistema permite a los administradores de fincas llevar un registro detallado de:
+- **Inventario Ganadero:** Control individual de vacas y toros (estados de producción, salud y genealogía).
+- **Producción Lechera:** Registro diario de extracciones y cálculo de rendimientos promedio por animal.
+- **Gestión Financiera:** Seguimiento exhaustivo de ingresos y gastos operativos.
+- **Análisis de Datos:** Dashboards interactivos con métricas clave para la toma de decisiones.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🛠️ Tecnologías Utilizadas
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Core
+- **Framework:** [Next.js 15 (App Router)](https://nextjs.org/)
+- **Lenguaje:** [TypeScript](https://www.typescriptlang.org/)
+- **Base de Datos & Auth:** [Supabase](https://supabase.com/)
+- **Estilos:** [Tailwind CSS 4](https://tailwindcss.com/)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Librerías & Dependencias Clave
+- **UI Components:** [Radix UI](https://www.radix-ui.com/) y [Shadcn/UI](https://ui.shadcn.com/)
+- **Formularios:** [React Hook Form](https://react-hook-form.com/) con validación [Zod](https://zod.dev/)
+- **Gráficos:** [Recharts](https://recharts.org/)
+- **Tablas:** [TanStack Table (React Table)](https://tanstack.com/table)
+- **Iconografía:** [Lucide React](https://lucide.dev/)
+- **Notificaciones:** [Sonner](https://sonner.emilkowal.ski/)
 
-## Learn More
+## 📦 Módulos del Sistema
 
-To learn more about Next.js, take a look at the following resources:
+El proyecto está organizado en una arquitectura basada en características (`features`):
+- **Auth:** Sistema de autenticación y manejo de sesiones.
+- **Vacas / Toros:** Gestión de inventario animal.
+- **Extracciones:** Control de producción de leche.
+- **Gastos / Ingresos:** Contabilidad operativa.
+- **Precios:** Histórico y configuración de precios de mercado.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## ⚙️ Configuración y Arranque
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Requisitos Previos
+- Node.js (v20 o superior)
+- Una instancia de Supabase configurada.
 
-## Deploy on Vercel
+### Instalación
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Clonar el repositorio:
+   ```bash
+   git clone https://github.com/tu-usuario/finca-toca.git
+   cd finca-toca
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+2. Instalar dependencias:
+   ```bash
+   npm install
+   # o si prefieres pnpm
+   pnpm install
+   ```
+
+3. Configurar variables de entorno:
+   Crea un archivo `.env.local` en la raíz con las siguientes claves de Supabase:
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=tu_url_de_supabase
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_anon_key
+   ```
+
+4. Ejecutar el servidor de desarrollo:
+   ```bash
+   npm run dev
+   ```
+   Accede a [http://localhost:3000](http://localhost:3000) para ver la aplicación.
+
+## 📊 Arquitectura del Proyecto
+
+- `src/app`: Rutas y lógica de servidor de Next.js.
+- `src/features`: Lógica de negocio segmentada por dominio (actions, components, schemas).
+- `src/components/ui`: Componentes de interfaz base y reutilizables.
+- `src/lib/supabase`: Configuración del cliente y servidor de base de datos.
+- `src/types`: Definiciones globales de TypeScript.
+
+---
+Desarrollado para optimizar la productividad en el campo.
