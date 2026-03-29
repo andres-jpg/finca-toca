@@ -72,6 +72,7 @@ export interface ExtraccionLeche {
   created_at: string;
   fecha: string;
   litros: number;
+  vacas_en_produccion: number | null;
 }
 
 export interface ExtraccionLecheFormData {
