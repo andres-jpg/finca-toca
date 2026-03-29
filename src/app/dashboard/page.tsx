@@ -111,7 +111,7 @@ export default async function DashboardPage({
     hasFilter
       ? ingresosDonutQuery.gte("fecha", selected.start).lte("fecha", selected.end)
       : ingresosDonutQuery,
-    supabase.from("vacas").select("estado"),
+    supabase.from("vacas").select("estado").eq("alta", true),
     supabase.from("extracciones_leche").select("litros").gte("fecha", selected.start).lte("fecha", selected.end),
     supabase.from("extracciones_leche").select("litros")
       .gte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 1)))
@@ -129,8 +129,12 @@ export default async function DashboardPage({
     supabase.from("extracciones_leche").select("fecha, litros").order("fecha", { ascending: true }),
   ]);
 
+  const vacasTotal = (vacasEstados ?? []).length;
   const vacasProduccion = (vacasEstados ?? []).filter((v: any) => v.estado === "produccion").length;
   const vacasSecado = (vacasEstados ?? []).filter((v: any) => v.estado === "secado").length;
+  const vacasTransicion = (vacasEstados ?? []).filter((v: any) => v.estado === "transicion").length;
+  const vacasPreJardin = (vacasEstados ?? []).filter((v: any) => v.estado === "pre_jardin").length;
+  const vacasJardin = (vacasEstados ?? []).filter((v: any) => v.estado === "jardin").length;
 
   // Datos para gráfico de líneas: solo fecha + valor (sin concepto)
   const allGastos = (gastosLineRaw ?? []).map((g: any) => ({
@@ -281,16 +285,38 @@ export default async function DashboardPage({
           <div className="flex items-start justify-between">
             <div className="min-w-0">
               <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Vacas</p>
-              <p className="text-2xl font-bold text-stone-900 mt-1.5">{vacasProduccion + vacasSecado}</p>
+              <p className="text-2xl font-bold text-stone-900 mt-1.5">{vacasTotal}</p>
             </div>
             <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ml-3" style={{ backgroundColor: "#fffbeb" }}>
               <PiCow className="h-5 w-5" style={{ color: "#d97706" }} />
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-stone-100 flex items-center gap-3">
-            <span className="text-xs font-medium" style={{ color: "#16a34a" }}>{vacasProduccion} producción</span>
-            <span className="text-stone-200">|</span>
-            <span className="text-xs font-medium" style={{ color: "#d97706" }}>{vacasSecado} secado</span>
+          <div className="mt-3 pt-3 border-t border-stone-100 grid grid-cols-3 gap-x-3 gap-y-2">
+            <div className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "#16a34a" }} />
+              <span className="text-xs font-semibold" style={{ color: "#16a34a" }}>{vacasProduccion}</span>
+              <span className="text-xs" style={{ color: "#16a34a" }}>prod.</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "#d97706" }} />
+              <span className="text-xs font-semibold" style={{ color: "#d97706" }}>{vacasSecado}</span>
+              <span className="text-xs" style={{ color: "#d97706" }}>secado</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "#0ea5e9" }} />
+              <span className="text-xs font-semibold" style={{ color: "#0ea5e9" }}>{vacasTransicion}</span>
+              <span className="text-xs" style={{ color: "#0ea5e9" }}>trans.</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "#a855f7" }} />
+              <span className="text-xs font-semibold" style={{ color: "#a855f7" }}>{vacasPreJardin}</span>
+              <span className="text-xs" style={{ color: "#a855f7" }}>prejardín</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "#ec4899" }} />
+              <span className="text-xs font-semibold" style={{ color: "#ec4899" }}>{vacasJardin}</span>
+              <span className="text-xs" style={{ color: "#ec4899" }}>jardín</span>
+            </div>
           </div>
         </div>
       </div>
