@@ -90,9 +90,16 @@ export async function createExtraccion(formData: {
 }) {
   const supabase = await createClient();
 
+  const { data: vacasRows } = await supabase
+    .from("vacas")
+    .select("id")
+    .eq("estado", "produccion")
+    .eq("alta", true);
+
   const { error } = await supabase.from("extracciones_leche").insert({
     fecha: formatDate(formData.fecha),
     litros: formData.litros,
+    vacas_en_produccion: vacasRows?.length ?? null,
   });
 
   if (error) throw new Error(error.message);
@@ -117,11 +124,18 @@ export async function updateExtraccion(
     .eq("id", id)
     .single();
 
+  const { data: vacasRows } = await supabase
+    .from("vacas")
+    .select("id")
+    .eq("estado", "produccion")
+    .eq("alta", true);
+
   const { error } = await supabase
     .from("extracciones_leche")
     .update({
       fecha: formatDate(formData.fecha),
       litros: formData.litros,
+      vacas_en_produccion: vacasRows?.length ?? null,
     })
     .eq("id", id);
 

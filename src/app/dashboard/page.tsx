@@ -112,7 +112,7 @@ export default async function DashboardPage({
       ? ingresosDonutQuery.gte("fecha", selected.start).lte("fecha", selected.end)
       : ingresosDonutQuery,
     supabase.from("vacas").select("estado").eq("alta", true),
-    supabase.from("extracciones_leche").select("litros").gte("fecha", selected.start).lte("fecha", selected.end),
+    supabase.from("extracciones_leche").select("litros, vacas_en_produccion").gte("fecha", selected.start).lte("fecha", selected.end),
     supabase.from("extracciones_leche").select("litros")
       .gte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 1)))
       .lte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 15))),
@@ -164,7 +164,12 @@ export default async function DashboardPage({
   const gastosTrend = calcTrend(totalGastos, lastGastos);
   const ingresosTrend = calcTrend(totalIngresos, lastIngresos);
 
-  const litrosMes = (extMes ?? []).reduce((s, r) => s + r.litros, 0);
+  const litrosMes = (extMes ?? []).reduce((s: number, r: any) => s + r.litros, 0);
+  const litrosPorVacaHoy = vacasProduccion > 0 ? litrosDia / vacasProduccion : 0;
+  const extMesConVacas = (extMes ?? []).filter((r: any) => r.vacas_en_produccion != null && r.vacas_en_produccion > 0);
+  const litrosPorVacaMes = extMesConVacas.length > 0
+    ? extMesConVacas.reduce((s: number, r: any) => s + r.litros / r.vacas_en_produccion, 0) / extMesConVacas.length
+    : vacasProduccion > 0 ? litrosMes / vacasProduccion : 0;
   const quincenas = {
     q1Litros: (ext1 ?? []).reduce((s, r) => s + r.litros, 0),
     q1Valor: (ing1 ?? []).reduce((s, r) => s + r.valor, 0),
@@ -244,9 +249,15 @@ export default async function DashboardPage({
               <Droplets className="h-5 w-5" style={{ color: "#3b82f6" }} />
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-stone-100 flex items-center justify-between">
-            <span className="text-xs text-stone-400">Litros extraídos hoy</span>
-            <span className="text-xs text-stone-400">{fechaHoy}</span>
+          <div className="mt-3 pt-3 border-t border-stone-100 space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-stone-400">Litros extraídos hoy</span>
+              <span className="text-xs text-stone-400">{fechaHoy}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-stone-400">Promedio por vaca</span>
+              <span className="text-xs text-stone-500">{litrosPorVacaHoy.toFixed(1)} L/vaca</span>
+            </div>
           </div>
         </div>
 
@@ -276,6 +287,10 @@ export default async function DashboardPage({
               <span className="text-xs text-stone-500">
                 {quincenas.q2Litros.toFixed(1)} L · ${quincenas.q2Valor.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
               </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-stone-400">Promedio por vaca</span>
+              <span className="text-xs text-stone-500">{litrosPorVacaMes.toFixed(1)} L/vaca</span>
             </div>
           </div>
         </div>
