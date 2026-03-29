@@ -28,13 +28,14 @@ const ESTADO_LABELS: Record<string, string> = {
   secado: "Secado",
   pre_jardin: "Pre-jardín",
   jardin: "Jardín",
+  transicion: "Transición",
 };
 
 interface FormValues {
   vaca_id: number;
   nombre: string;
   origen: "finca" | "externa";
-  estado: "produccion" | "secado" | "pre_jardin" | "jardin";
+  estado: "produccion" | "secado" | "pre_jardin" | "jardin" | "transicion";
   fecha_compra?: Date | null;
   numero_registro?: string;
   madre_id?: string | null;
@@ -156,7 +157,10 @@ export function VacaForm({ vaca, vacas, onSuccess }: VacaFormProps) {
           <Select
             value={watch("estado") ?? ""}
             onValueChange={(val) =>
-              setValue("estado", val as "produccion" | "secado" | "pre_jardin" | "jardin")
+              setValue(
+                "estado",
+                val as "produccion" | "secado" | "pre_jardin" | "jardin" | "transicion"
+              )
             }
           >
             <SelectTrigger>
