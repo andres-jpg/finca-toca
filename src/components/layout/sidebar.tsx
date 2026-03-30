@@ -96,18 +96,18 @@ export function Sidebar({
 
       <aside
         className={cn(
-          "fixed lg:static inset-y-0 left-0 z-50 w-64 min-h-screen bg-gray-900 flex flex-col transition-transform duration-300 ease-in-out",
+          "fixed lg:static inset-y-0 left-0 z-50 w-52 h-full bg-gray-900 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out",
           "lg:translate-x-0",
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         {/* Brand */}
-        <div className="h-16 flex items-center justify-between pl-8 pr-5 border-b border-gray-700">
+        <div className="h-16 flex items-center justify-between px-4 border-b border-gray-700">
           <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-green-600 flex items-center justify-center shadow-sm ml-3">
+            <div className="h-8 w-8 rounded-lg bg-green-600 flex items-center justify-center shadow-sm shrink-0">
               <Leaf className="h-4 w-4 text-white" />
             </div>
-            <span className="font-semibold text-white tracking-tight ml-3">
+            <span className="font-semibold text-white tracking-tight truncate">
               Finca Villa Blanca
             </span>
           </div>
@@ -121,7 +121,7 @@ export function Sidebar({
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-6 space-y-1">
+        <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
           {allowedItems.map(({ href, label, icon: Icon }) => {
             const isActive =
               href === "/dashboard"
