@@ -13,17 +13,19 @@ import { deleteIngreso } from "@/features/ingresos/actions/ingresos.actions";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { MonthPicker } from "@/components/shared/month-picker";
-import type { Ingreso, ConceptoIngreso, Vaca } from "@/types";
+import type { Ingreso, ConceptoIngreso, Vaca, Toro } from "@/types";
 
 function RowActions({
   ingreso,
   conceptos,
   vacas,
+  toros,
   canEdit,
 }: {
   ingreso: Ingreso;
   conceptos: ConceptoIngreso[];
   vacas: Vaca[];
+  toros: Toro[];
   canEdit: boolean;
 }) {
   const [editOpen, setEditOpen] = useState(false);
@@ -78,7 +80,7 @@ function RowActions({
       </div>
 
       <EntityModal open={editOpen} onClose={() => setEditOpen(false)} title="Editar ingreso">
-        <IngresoForm ingreso={ingreso} conceptos={conceptos} vacas={vacas} onSuccess={() => setEditOpen(false)} />
+        <IngresoForm ingreso={ingreso} conceptos={conceptos} vacas={vacas} toros={toros} onSuccess={() => setEditOpen(false)} />
       </EntityModal>
 
       <DeleteConfirmationDialog
@@ -95,10 +97,11 @@ interface IngresosTableProps {
   ingresos: Ingreso[];
   conceptos: ConceptoIngreso[];
   vacas: Vaca[];
+  toros: Toro[];
   canEdit: boolean;
 }
 
-export function IngresosTable({ ingresos, conceptos, vacas, canEdit }: IngresosTableProps) {
+export function IngresosTable({ ingresos, conceptos, vacas, toros, canEdit }: IngresosTableProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
 
@@ -147,7 +150,7 @@ export function IngresosTable({ ingresos, conceptos, vacas, canEdit }: IngresosT
         id: "actions",
         header: "Acciones",
         cell: ({ row }) => (
-          <RowActions ingreso={row.original} conceptos={conceptos} vacas={vacas} canEdit={canEdit} />
+          <RowActions ingreso={row.original} conceptos={conceptos} vacas={vacas} toros={toros} canEdit={canEdit} />
         ),
       },
     ],
@@ -184,7 +187,7 @@ export function IngresosTable({ ingresos, conceptos, vacas, canEdit }: IngresosT
 
       {canEdit && (
         <EntityModal open={modalOpen} onClose={() => setModalOpen(false)} title="Nuevo ingreso">
-          <IngresoForm conceptos={conceptos} vacas={vacas} onSuccess={() => setModalOpen(false)} />
+          <IngresoForm conceptos={conceptos} vacas={vacas} toros={toros} onSuccess={() => setModalOpen(false)} />
         </EntityModal>
       )}
     </div>

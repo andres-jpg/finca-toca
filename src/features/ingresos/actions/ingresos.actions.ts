@@ -54,6 +54,7 @@ export async function createIngreso(formData: {
   valor: number;
   observaciones?: string;
   vacaIdToSell?: string;
+  toroIdToSell?: string;
 }) {
   const supabase = await createClient();
   const { error } = await supabase.from("ingresos").insert({
@@ -72,6 +73,15 @@ export async function createIngreso(formData: {
       .eq("id", formData.vacaIdToSell);
     if (vacaError) throw new Error(vacaError.message);
     revalidatePath("/dashboard/vacas");
+  }
+
+  if (formData.toroIdToSell) {
+    const { error: toroError } = await supabase
+      .from("toros")
+      .update({ alta: false })
+      .eq("id", formData.toroIdToSell);
+    if (toroError) throw new Error(toroError.message);
+    revalidatePath("/dashboard/toros");
   }
 
   revalidatePath("/dashboard/ingresos");

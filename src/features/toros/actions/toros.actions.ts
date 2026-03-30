@@ -28,6 +28,30 @@ export async function getToros(): Promise<Toro[]> {
   }));
 }
 
+export async function getTorosDeAlta(): Promise<Toro[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("toros")
+    .select("id, created_at, toro_id, nombre, origen, fecha_compra, numero_registro, madre_id, alta, madre:madre_id(nombre)")
+    .eq("alta", true)
+    .order("toro_id", { ascending: true });
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    created_at: row.created_at,
+    toro_id: row.toro_id,
+    nombre: row.nombre,
+    origen: row.origen,
+    fecha_compra: row.fecha_compra,
+    numero_registro: row.numero_registro,
+    madre_id: row.madre_id,
+    madre_nombre: row.madre?.nombre ?? null,
+    alta: row.alta,
+  }));
+}
+
 export async function createToro(formData: {
   toro_id: number;
   nombre: string;

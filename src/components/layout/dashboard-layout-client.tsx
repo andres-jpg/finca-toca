@@ -25,7 +25,7 @@ export function DashboardLayoutClient({
       <div
         className={cn(
           "shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out",
-          desktopCollapsed ? "w-0" : "w-0 lg:w-64"
+          desktopCollapsed ? "w-0" : "w-0 lg:w-52"
         )}
       >
         <Sidebar
