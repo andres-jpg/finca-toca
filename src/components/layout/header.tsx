@@ -2,14 +2,14 @@
 
 import { signOut } from "@/features/auth/actions/auth.actions";
 import { Menu, LogOut } from "lucide-react";
-import type { UserRole } from "@/types";
 
 interface HeaderProps {
   email: string;
   onOpenMobileMenu?: () => void;
+  onToggleDesktopSidebar?: () => void;
 }
 
-export function Header({ email, onOpenMobileMenu }: HeaderProps) {
+export function Header({ email, onOpenMobileMenu, onToggleDesktopSidebar }: HeaderProps) {
 
   return (
     <header className="h-16 flex items-center justify-between px-4 sm:px-6 bg-white border-b border-stone-200 sticky top-0 z-30 text-stone-900">
@@ -17,6 +17,13 @@ export function Header({ email, onOpenMobileMenu }: HeaderProps) {
         onClick={onOpenMobileMenu}
         className="lg:hidden p-2 -ml-1 hover:bg-stone-200 rounded-lg transition-colors text-stone-700"
         aria-label="Abrir menú"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+      <button
+        onClick={onToggleDesktopSidebar}
+        className="hidden lg:flex p-2 -ml-1 hover:bg-stone-200 rounded-lg transition-colors text-stone-700"
+        aria-label="Colapsar menú"
       >
         <Menu className="h-5 w-5" />
       </button>
