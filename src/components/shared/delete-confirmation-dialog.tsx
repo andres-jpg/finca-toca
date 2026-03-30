@@ -18,6 +18,7 @@ interface DeleteConfirmationDialogProps {
   title?: string;
   description?: string;
   itemName?: string;
+  confirmLabel?: string;
 }
 
 export function DeleteConfirmationDialog({
@@ -27,6 +28,7 @@ export function DeleteConfirmationDialog({
   title = "¿Estás seguro?",
   description,
   itemName,
+  confirmLabel = "Eliminar",
 }: DeleteConfirmationDialogProps) {
   const defaultDescription = itemName
     ? `Esta acción eliminará "${itemName}" permanentemente. Esta acción no se puede deshacer.`
@@ -44,7 +46,7 @@ export function DeleteConfirmationDialog({
         <AlertDialogFooter>
           <AlertDialogCancel>Cancelar</AlertDialogCancel>
           <AlertDialogAction onClick={onConfirm}>
-            Eliminar
+            {confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
