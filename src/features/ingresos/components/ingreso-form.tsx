@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/shared/date-picker";
 import { toast } from "sonner";
-import type { Ingreso, ConceptoIngreso, Vaca } from "@/types";
+import type { Ingreso, ConceptoIngreso, Vaca, Toro } from "@/types";
 
 interface FormValues {
   fecha: Date;
@@ -32,16 +32,18 @@ interface IngresoFormProps {
   ingreso?: Ingreso;
   conceptos: ConceptoIngreso[];
   vacas?: Vaca[];
+  toros?: Toro[];
   onSuccess: () => void;
 }
 
-export function IngresoForm({ ingreso, conceptos, vacas = [], onSuccess }: IngresoFormProps) {
+export function IngresoForm({ ingreso, conceptos, vacas = [], toros = [], onSuccess }: IngresoFormProps) {
   const initialConceptoId = ingreso
     ? (conceptos.find((c) => c.nombre === ingreso.concepto)?.id ?? 0)
     : 0;
 
   const [selectedConceptoId, setSelectedConceptoId] = useState<number>(initialConceptoId);
   const [selectedVacaId, setSelectedVacaId] = useState<string>("");
+  const [selectedToroId, setSelectedToroId] = useState<string>("");
 
   const subconceptos =
     conceptos.find((c) => c.id === selectedConceptoId)?.subconceptos ?? [];
@@ -49,8 +51,11 @@ export function IngresoForm({ ingreso, conceptos, vacas = [], onSuccess }: Ingre
   const conceptoSeleccionado = conceptos.find((c) => c.id === selectedConceptoId);
   const isVentaVacas =
     conceptoSeleccionado?.nombre.toLowerCase() === "venta vacas";
+  const isVentaToros =
+    conceptoSeleccionado?.nombre.toLowerCase() === "venta toros";
 
   const selectedVaca = vacas.find((v) => v.id === selectedVacaId) ?? null;
+  const selectedToro = toros.find((t) => t.id === selectedToroId) ?? null;
 
   const {
     register,
@@ -78,6 +83,7 @@ export function IngresoForm({ ingreso, conceptos, vacas = [], onSuccess }: Ingre
     setValue("concepto_id", id);
     setValue("subconcepto_id", 0);
     setSelectedVacaId("");
+    setSelectedToroId("");
   };
 
   const onSubmit = async (data: FormValues) => {
@@ -95,6 +101,7 @@ export function IngresoForm({ ingreso, conceptos, vacas = [], onSuccess }: Ingre
         await createIngreso({
           ...payload,
           vacaIdToSell: isVentaVacas && selectedVacaId ? selectedVacaId : undefined,
+          toroIdToSell: isVentaToros && selectedToroId ? selectedToroId : undefined,
         });
         toast.success("Ingreso creado");
       }
@@ -200,6 +207,44 @@ export function IngresoForm({ ingreso, conceptos, vacas = [], onSuccess }: Ingre
           )}
           <p className="text-xs text-orange-600">
             Al guardar, esta vaca quedará marcada como baja automáticamente.
+          </p>
+        </div>
+      )}
+
+      {/* Selector de toro — solo visible en "Venta toros" y al crear */}
+      {isVentaToros && !ingreso && (
+        <div className="space-y-2">
+          <Label>Toro vendido</Label>
+          <Select value={selectedToroId} onValueChange={setSelectedToroId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Seleccionar toro..." />
+            </SelectTrigger>
+            <SelectContent>
+              {toros.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  #{t.toro_id} — {t.nombre}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedToro && (
+            <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 space-y-1 text-sm mt-1">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Nº de registro</span>
+                <span className="font-medium text-gray-800">
+                  {selectedToro.numero_registro ?? "—"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Origen</span>
+                <span className="font-medium text-gray-800">
+                  {selectedToro.origen ?? "—"}
+                </span>
+              </div>
+            </div>
+          )}
+          <p className="text-xs text-orange-600">
+            Al guardar, este toro quedará marcado como baja automáticamente.
           </p>
         </div>
       )}
