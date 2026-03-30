@@ -1,8 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { TrendingDown, TrendingUp, Droplets, Milk } from "lucide-react";
 import { formatDate } from "@/lib/utils";
-import { GastosDonutChart } from "@/charts/gastos-donut-chart";
-import { IngresosDonutChart } from "@/charts/ingresos-donut-chart";
+import { ConceptosDonutChart } from "@/charts/conceptos-donut-chart";
 import { GastosIngresosLineChart } from "@/charts/gastos-ingresos-line-chart";
 import { ExtraccionesLineChart } from "@/charts/extracciones-line-chart";
 import { getLitrosDiaActual } from "@/features/extracciones/actions/extracciones.actions";
@@ -344,11 +343,8 @@ export default async function DashboardPage({
         anio={effectiveAnio}
       />
 
-      {/* Donuts — histórico o filtrado según el filtro activo */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        <GastosDonutChart gastos={donutGastos} />
-        <IngresosDonutChart ingresos={donutIngresos} />
-      </div>
+      {/* Donut combinado — histórico o filtrado según el filtro activo */}
+      <ConceptosDonutChart gastos={donutGastos} ingresos={donutIngresos} />
 
       {/* Línea — siempre histórico completo */}
       <GastosIngresosLineChart gastos={allGastos} ingresos={allIngresos} />
