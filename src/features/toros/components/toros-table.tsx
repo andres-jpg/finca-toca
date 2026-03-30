@@ -7,7 +7,7 @@ import { DataTable } from "@/components/shared/data-table";
 import { EntityModal } from "@/components/shared/entity-modal";
 import { DeleteConfirmationDialog } from "@/components/shared/delete-confirmation-dialog";
 import { ToroForm } from "@/features/toros/components/toro-form";
-import { deleteToro } from "@/features/toros/actions/toros.actions";
+import { venderToro } from "@/features/toros/actions/toros.actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -32,11 +32,11 @@ function RowActions({
 
   const handleDelete = async () => {
     try {
-      await deleteToro(toro.id);
-      toast.success("Toro eliminado");
+      await venderToro(toro.id);
+      toast.success("Toro dado de baja");
       setDeleteOpen(false);
     } catch {
-      toast.error("Error al eliminar");
+      toast.error("Error al dar de baja");
     }
   };
 
@@ -54,13 +54,15 @@ function RowActions({
         >
           <Pencil className="h-3.5 w-3.5" />
         </button>
-        <button
-          onClick={() => setDeleteOpen(true)}
-          className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-          title="Eliminar"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        {toro.alta && (
+          <button
+            onClick={() => setDeleteOpen(true)}
+            className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+            title="Dar de baja"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
       <EntityModal open={editOpen} onClose={() => setEditOpen(false)} title="Editar toro">
@@ -71,7 +73,9 @@ function RowActions({
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         onConfirm={handleDelete}
-        itemName={`${toro.nombre} (#${toro.toro_id})`}
+        title="¿Dar de baja este toro?"
+        description={`"${toro.nombre} (#${toro.toro_id})" pasará a la lista de bajas. Podrás consultarlo desde "Ver de baja".`}
+        confirmLabel="Dar de baja"
       />
     </>
   );
