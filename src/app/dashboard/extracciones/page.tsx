@@ -6,7 +6,7 @@ import { canWrite } from "@/lib/auth/check-permissions";
 export default async function ExtraccionesPage() {
   const extracciones = await getExtracciones();
   const userRole = await getUserRole();
-  const canEdit = userRole === "admin";
+  const canEdit = canWrite(userRole);
 
   return (
     <div className="max-w-5xl mx-auto">
