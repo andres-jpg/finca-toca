@@ -197,7 +197,7 @@ export function VacasTable({ vacas, canEdit }: VacasTableProps) {
         </div>
       </div>
 
-      <DataTable data={vacasMostradas} columns={columns} filterPlaceholder="Buscar vaca..." />
+      <DataTable data={vacasMostradas} columns={columns} filterPlaceholder="  Buscar vaca..." />
 
       {canEdit && (
         <EntityModal open={modalOpen} onClose={() => setModalOpen(false)} title="Nueva vaca">

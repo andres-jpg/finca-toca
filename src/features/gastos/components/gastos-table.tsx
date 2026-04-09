@@ -277,7 +277,7 @@ export function GastosTable({ gastos, conceptos, canEdit }: GastosTableProps) {
         <MonthPicker value={selectedMonth} onChange={setSelectedMonth} />
       </div>
 
-      <DataTable data={filteredGastos} columns={columns} filterPlaceholder="Buscar por concepto, proveedor, factura..." />
+      <DataTable data={filteredGastos} columns={columns} filterPlaceholder="  Buscar por concepto, proveedor, factura..." />
 
       {canEdit && (
         <EntityModal open={modalOpen} onClose={() => setModalOpen(false)} title="Nuevo gasto">
