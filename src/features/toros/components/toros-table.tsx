@@ -171,7 +171,7 @@ export function TorosTable({ toros, vacas, canEdit }: TorosTableProps) {
         </div>
       </div>
 
-      <DataTable data={torosMostrados} columns={columns} filterPlaceholder="Buscar toro..." />
+      <DataTable data={torosMostrados} columns={columns} filterPlaceholder="  Buscar toro..." />
 
       {canEdit && (
         <EntityModal open={modalOpen} onClose={() => setModalOpen(false)} title="Nuevo toro">

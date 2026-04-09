@@ -8,9 +8,5 @@ export default async function GastosPage() {
   const [gastos, conceptos] = await Promise.all([getGastos(), getConceptosGasto()]);
   const canEdit = canWrite(userRole);
 
-  return (
-    <div className="max-w-5xl mx-auto">
-      <GastosTable gastos={gastos} conceptos={conceptos} canEdit={canEdit} />
-    </div>
-  );
+  return <GastosTable gastos={gastos} conceptos={conceptos} canEdit={canEdit} />;
 }

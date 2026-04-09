@@ -6,6 +6,10 @@ This file provides guidance to coding agents when working with code in this repo
 
 **Finca Toca** is a farm management dashboard for tracking cattle operations, milk extraction, expenses, and income. Built with Next.js 16 (App Router), React 19, TypeScript, Supabase (PostgreSQL + Auth), TailwindCSS v4, and shadcn/ui.
 
+## Workflow Rules
+
+**NUNCA hagas commits, subas ramas (push) ni crees pull requests a menos que el usuario lo pida explícitamente.** Esto aplica incluso después de completar una tarea. Espera siempre una instrucción directa como "haz commit", "sube los cambios" o "crea una PR" antes de ejecutar cualquier acción git que afecte el repositorio remoto o el historial local.
+
 ## Commands
 
 ```bash

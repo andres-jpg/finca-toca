@@ -8,9 +8,5 @@ export default async function ExtraccionesPage() {
   const userRole = await getUserRole();
   const canEdit = canWrite(userRole);
 
-  return (
-    <div className="max-w-5xl mx-auto">
-      <ExtraccionesTable extracciones={extracciones} canEdit={canEdit} />
-    </div>
-  );
+  return <ExtraccionesTable extracciones={extracciones} canEdit={canEdit} />;
 }

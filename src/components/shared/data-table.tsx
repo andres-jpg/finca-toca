@@ -32,7 +32,7 @@ interface DataTableProps<TData> {
 export function DataTable<TData>({
   data,
   columns,
-  filterPlaceholder = "Buscar...",
+  filterPlaceholder = "  Buscar...",
 }: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);

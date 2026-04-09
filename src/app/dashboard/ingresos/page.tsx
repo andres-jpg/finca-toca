@@ -15,9 +15,5 @@ export default async function IngresosPage() {
   ]);
   const canEdit = canWrite(userRole);
 
-  return (
-    <div className="max-w-5xl mx-auto">
-      <IngresosTable ingresos={ingresos} conceptos={conceptos} vacas={vacas} toros={toros} canEdit={canEdit} />
-    </div>
-  );
+  return <IngresosTable ingresos={ingresos} conceptos={conceptos} vacas={vacas} toros={toros} canEdit={canEdit} />;
 }
