@@ -169,12 +169,17 @@ export default async function DashboardPage({
   const litrosPorVacaMes = extMesConVacas.length > 0
     ? extMesConVacas.reduce((s: number, r: any) => s + r.litros / r.vacas_en_produccion, 0) / extMesConVacas.length
     : vacasProduccion > 0 ? litrosMes / vacasProduccion : 0;
+  const APORTACION_PCT = 0.0075;
   const quincenas = {
     q1Litros: (ext1 ?? []).reduce((s, r) => s + r.litros, 0),
     q1Valor: (ing1 ?? []).reduce((s, r) => s + r.valor, 0),
     q2Litros: (ext2 ?? []).reduce((s, r) => s + r.litros, 0),
     q2Valor: (ing2 ?? []).reduce((s, r) => s + r.valor, 0),
   };
+  const q1Aportacion = quincenas.q1Valor * APORTACION_PCT;
+  const q2Aportacion = quincenas.q2Valor * APORTACION_PCT;
+  const totalAportacion = q1Aportacion + q2Aportacion;
+  const totalIngresosNeto = totalIngresos - totalAportacion;
 
   const allExtracciones = (allExtraccionesRaw ?? []).map((e: any) => ({
     fecha: e.fecha as string,
@@ -222,7 +227,10 @@ export default async function DashboardPage({
             <div className="min-w-0">
               <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Ingresos del mes</p>
               <p className="text-2xl font-bold mt-1.5 truncate" style={{ color: "#16a34a" }}>
-                ${totalIngresos.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
+                ${totalIngresosNeto.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
+              </p>
+              <p className="text-xs text-stone-400 mt-0.5">
+                Bruto ${totalIngresos.toLocaleString("es-CO", { minimumFractionDigits: 0 })} · Apor. ${totalAportacion.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
               </p>
             </div>
             <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ml-3" style={{ backgroundColor: "#f0fdf4" }}>
@@ -274,20 +282,38 @@ export default async function DashboardPage({
               <Milk className="h-5 w-5" style={{ color: "#0284c7" }} />
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-stone-100 space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-stone-400">Leche Q1</span>
-              <span className="text-xs text-stone-500">
-                {quincenas.q1Litros.toFixed(1)} L · ${quincenas.q1Valor.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
-              </span>
+          <div className="mt-3 pt-3 border-t border-stone-100 space-y-1.5">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-stone-400">Leche Q1</span>
+                <span className="text-xs text-stone-500">
+                  {quincenas.q1Litros.toFixed(1)} L · ${quincenas.q1Valor.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
+                </span>
+              </div>
+              {quincenas.q1Valor > 0 && (
+                <div className="flex items-center justify-end">
+                  <span className="text-xs" style={{ color: "#ef4444" }}>
+                    Aportación −${q1Aportacion.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
+                  </span>
+                </div>
+              )}
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-stone-400">Leche Q2</span>
-              <span className="text-xs text-stone-500">
-                {quincenas.q2Litros.toFixed(1)} L · ${quincenas.q2Valor.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
-              </span>
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-stone-400">Leche Q2</span>
+                <span className="text-xs text-stone-500">
+                  {quincenas.q2Litros.toFixed(1)} L · ${quincenas.q2Valor.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
+                </span>
+              </div>
+              {quincenas.q2Valor > 0 && (
+                <div className="flex items-center justify-end">
+                  <span className="text-xs" style={{ color: "#ef4444" }}>
+                    Aportación −${q2Aportacion.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
+                  </span>
+                </div>
+              )}
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between pt-0.5">
               <span className="text-xs text-stone-400">Promedio por vaca</span>
               <span className="text-xs text-stone-500">{litrosPorVacaMes.toFixed(1)} L/vaca</span>
             </div>
