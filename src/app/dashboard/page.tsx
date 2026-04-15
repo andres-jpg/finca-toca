@@ -293,7 +293,7 @@ export default async function DashboardPage({
               {quincenas.q1Valor > 0 && (
                 <div className="flex items-center justify-end">
                   <span className="text-xs" style={{ color: "#ef4444" }}>
-                    Aportación −${q1Aportacion.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
+                    Des. Fedegan −${q1Aportacion.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
                   </span>
                 </div>
               )}
