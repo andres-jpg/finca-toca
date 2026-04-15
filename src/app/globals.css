@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Safelist: clases usadas dinámicamente o que Turbopack no detecta correctamente */
+@source inline("xl:grid-cols-5 w-52 lg:w-52");
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
