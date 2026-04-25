@@ -125,7 +125,7 @@ export default async function DashboardPage({
       .gte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 16)))
       .lte("fecha", formatDate(new Date(effectiveAnio, effectiveMes, 0))),
     getLitrosDiaActual(),
-    supabase.from("extracciones_leche").select("fecha, litros").order("fecha", { ascending: true }),
+    supabase.from("extracciones_leche").select("fecha, litros, vacas_en_produccion").order("fecha", { ascending: true }),
   ]);
 
   const vacasTotal = (vacasEstados ?? []).length;
@@ -184,6 +184,7 @@ export default async function DashboardPage({
   const allExtracciones = (allExtraccionesRaw ?? []).map((e: any) => ({
     fecha: e.fecha as string,
     litros: e.litros as number,
+    vacasEnProduccion: (e.vacas_en_produccion as number | null) ?? null,
   }));
 
   const fechaHoy = now.toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
@@ -308,7 +309,7 @@ export default async function DashboardPage({
               {quincenas.q2Valor > 0 && (
                 <div className="flex items-center justify-end">
                   <span className="text-xs" style={{ color: "#ef4444" }}>
-                    Aportación −${q2Aportacion.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
+                    Des. Fedegan −${q2Aportacion.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
                   </span>
                 </div>
               )}

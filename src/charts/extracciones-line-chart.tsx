@@ -14,8 +14,14 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+interface ExtraccionData {
+  fecha: string;
+  litros: number;
+  vacasEnProduccion: number | null;
+}
+
 interface ExtraccionesLineChartProps {
-  extracciones: { fecha: string; litros: number }[];
+  extracciones: ExtraccionData[];
   hasFilter: boolean;
   mes: number;
   anio: number;
@@ -23,7 +29,7 @@ interface ExtraccionesLineChartProps {
 
 const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
-function buildMonthlyData(extracciones: { fecha: string; litros: number }[]) {
+function buildMonthlyData(extracciones: ExtraccionData[]) {
   const map = new Map<string, number>();
   extracciones.forEach(({ fecha, litros }) => {
     const key = fecha.slice(0, 7); // YYYY-MM
@@ -33,29 +39,88 @@ function buildMonthlyData(extracciones: { fecha: string; litros: number }[]) {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, litros]) => {
       const [year, month] = key.split("-");
-      return { label: `${MESES[parseInt(month, 10) - 1]} ${year}`, litros };
+      return { label: `${MESES[parseInt(month, 10) - 1]} ${year}`, litros, vacasEnProduccion: null as number | null };
     });
 }
 
 function buildDailyData(
-  extracciones: { fecha: string; litros: number }[],
+  extracciones: ExtraccionData[],
   mes: number,
   anio: number
 ) {
   const pad = (n: number) => String(n).padStart(2, "0");
   const prefix = `${anio}-${pad(mes)}`;
-  const map = new Map<number, number>();
+
+  const litrosMap = new Map<number, number>();
+  const vacasMap = new Map<number, number[]>();
+
   extracciones
     .filter(({ fecha }) => fecha.startsWith(prefix))
-    .forEach(({ fecha, litros }) => {
+    .forEach(({ fecha, litros, vacasEnProduccion }) => {
       const day = parseInt(fecha.slice(8, 10), 10);
-      map.set(day, (map.get(day) ?? 0) + litros);
+      litrosMap.set(day, (litrosMap.get(day) ?? 0) + litros);
+      if (vacasEnProduccion != null && vacasEnProduccion > 0) {
+        const arr = vacasMap.get(day) ?? [];
+        arr.push(vacasEnProduccion);
+        vacasMap.set(day, arr);
+      }
     });
+
   const daysInMonth = new Date(anio, mes, 0).getDate();
-  return Array.from({ length: daysInMonth }, (_, i) => ({
-    label: String(i + 1),
-    litros: map.get(i + 1) ?? 0,
-  }));
+  return Array.from({ length: daysInMonth }, (_, i) => {
+    const day = i + 1;
+    const litros = litrosMap.get(day) ?? 0;
+    const vacasArr = vacasMap.get(day) ?? [];
+    const vacasEnProduccion = vacasArr.length > 0
+      ? Math.round(vacasArr.reduce((a, b) => a + b, 0) / vacasArr.length)
+      : null;
+    return { label: String(day), litros, vacasEnProduccion };
+  });
+}
+
+interface TooltipPayloadEntry {
+  value: number;
+  payload: { litros: number; vacasEnProduccion: number | null };
+}
+
+function DailyTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: TooltipPayloadEntry[];
+  label?: string;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+
+  const { litros, vacasEnProduccion } = payload[0].payload;
+  const mediaPorVaca =
+    vacasEnProduccion != null && vacasEnProduccion > 0
+      ? litros / vacasEnProduccion
+      : null;
+
+  return (
+    <div
+      style={{
+        backgroundColor: "white",
+        border: "1px solid #e5e7eb",
+        borderRadius: "8px",
+        padding: "8px 12px",
+        fontSize: 12,
+        lineHeight: "1.6",
+      }}
+    >
+      <p style={{ fontWeight: 600, marginBottom: 4, color: "#111827" }}>{label}</p>
+      <p style={{ color: "#3b82f6" }}>Litros: {litros.toFixed(1)} L</p>
+      {vacasEnProduccion != null && (
+        <p style={{ color: "#6b7280" }}>Vacas en prod.: {vacasEnProduccion}</p>
+      )}
+      {mediaPorVaca != null && (
+        <p style={{ color: "#6b7280" }}>Media/vaca: {mediaPorVaca.toFixed(1)} L</p>
+      )}
+    </div>
+  );
 }
 
 export function ExtraccionesLineChart({
@@ -83,6 +148,20 @@ export function ExtraccionesLineChart({
 
   const hasData = chartData.some((d) => d.litros > 0);
 
+  const defaultTooltip = (
+    <Tooltip
+      formatter={(value: unknown) => [`${Number(value).toFixed(1)} L`, "Litros"]}
+      contentStyle={{
+        backgroundColor: "white",
+        border: "1px solid #e5e7eb",
+        borderRadius: "8px",
+        padding: "8px 12px",
+      }}
+    />
+  );
+
+  const dailyTooltip = <Tooltip content={<DailyTooltip />} />;
+
   const commonAxis = {
     xAxis: (
       <XAxis
@@ -100,17 +179,7 @@ export function ExtraccionesLineChart({
         width={40}
       />
     ),
-    tooltip: (
-      <Tooltip
-        formatter={(value: unknown) => [`${Number(value).toFixed(1)} L`, "Litros"]}
-        contentStyle={{
-          backgroundColor: "white",
-          border: "1px solid #e5e7eb",
-          borderRadius: "8px",
-          padding: "8px 12px",
-        }}
-      />
-    ),
+    tooltip: hasFilter ? dailyTooltip : defaultTooltip,
     grid: <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />,
   };
 
