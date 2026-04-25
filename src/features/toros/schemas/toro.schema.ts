@@ -11,9 +11,12 @@ export const toroSchema = z.object({
     .min(1, "El nombre es obligatorio")
     .max(100, "Máximo 100 caracteres"),
   origen: z.enum(["finca", "externa"]),
+  estado: z.enum(["jardin", "reproductor"]).optional().nullable(),
   fecha_compra: z.date().optional().nullable(),
+  fecha_nacimiento: z.date().optional().nullable(),
   numero_registro: z.string().optional(),
   madre_id: z.string().uuid().optional().nullable(),
+  padre_id: z.string().uuid().optional().nullable(),
 });
 
 export type ToroFormValues = z.infer<typeof toroSchema>;

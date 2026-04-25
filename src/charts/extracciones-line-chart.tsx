@@ -132,10 +132,17 @@ export function ExtraccionesLineChart({
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 1024);
+    let timeout: ReturnType<typeof setTimeout>;
+    const check = () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => setIsMobile(window.innerWidth < 1024), 100);
+    };
     check();
     window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
+    return () => {
+      window.removeEventListener("resize", check);
+      clearTimeout(timeout);
+    };
   }, []);
 
   const chartData = hasFilter

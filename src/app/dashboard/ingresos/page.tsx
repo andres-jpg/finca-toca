@@ -5,9 +5,8 @@ import { getVacasDeAlta } from "@/features/vacas/actions/vacas.actions";
 import { getTorosDeAlta } from "@/features/toros/actions/toros.actions";
 
 export default async function IngresosPage() {
-  const userRole = await checkRoutePermission(["admin", "viewer"]);
-
-  const [ingresos, conceptos, vacas, toros] = await Promise.all([
+  const [userRole, ingresos, conceptos, vacas, toros] = await Promise.all([
+    checkRoutePermission(["admin", "viewer"]),
     getIngresos(),
     getConceptosIngreso(),
     getVacasDeAlta(),

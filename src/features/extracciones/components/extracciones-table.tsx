@@ -74,10 +74,10 @@ export function ExtraccionesTable({ extracciones, canEdit }: ExtraccionesTablePr
   const [selectedMonth, setSelectedMonth] = useState(new Date());
 
   const filteredExtracciones = useMemo(() => {
-    return extracciones.filter((e) => {
-      const d = new Date(e.fecha + "T00:00:00");
-      return d.getMonth() === selectedMonth.getMonth() && d.getFullYear() === selectedMonth.getFullYear();
-    });
+    const year = selectedMonth.getFullYear();
+    const month = String(selectedMonth.getMonth() + 1).padStart(2, "0");
+    const prefix = `${year}-${month}`;
+    return extracciones.filter((e) => e.fecha.startsWith(prefix));
   }, [extracciones, selectedMonth]);
 
   const columns: ColumnDef<ExtraccionLeche>[] = useMemo(() => {

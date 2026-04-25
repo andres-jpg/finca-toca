@@ -92,24 +92,79 @@ export interface Vaca {
   origen: VacaOrigen | null;
   estado: VacaEstado | null;
   fecha_compra: string | null;
+  fecha_nacimiento: string | null;
   numero_registro: string | null;
   madre_id: string | null;
   madre_nombre: string | null;
+  padre_id: string | null;
+  padre_nombre: string | null;
   alta: boolean;
 }
 
 // ===== TOROS =====
+export type ToroEstado = "jardin" | "reproductor";
+
 export interface Toro {
   id: string;
   created_at: string | null;
   toro_id: number;
   nombre: string;
   origen: VacaOrigen | null;
+  estado: ToroEstado | null;
   fecha_compra: string | null;
+  fecha_nacimiento: string | null;
   numero_registro: string | null;
   madre_id: string | null;
   madre_nombre: string | null;
+  padre_id: string | null;
+  padre_nombre: string | null;
   alta: boolean;
+}
+
+// ===== EVENTOS ANIMAL =====
+export type TipoEvento =
+  | "vacunacion"
+  | "vitaminacion"
+  | "medicamento"
+  | "enfermedad"
+  | "celo"
+  | "inseminacion"
+  | "palpacion"
+  | "confirmacion_prenez"
+  | "parto"
+  | "observacion";
+
+export interface EventoAnimal {
+  id: string;
+  created_at: string;
+  animal_id: string;
+  animal_tipo: "vaca" | "toro";
+  tipo_evento: TipoEvento;
+  fecha: string;
+  descripcion: string | null;
+  responsable: string | null;
+}
+
+// ===== FICHAS (detalle) =====
+export interface CriaAnimal {
+  id: string;
+  tipo: "vaca" | "toro";
+  animal_id: number;
+  nombre: string;
+  estado: string | null;
+  alta: boolean;
+}
+
+export interface VacaDetalle extends Vaca {
+  padre: { id: string; toro_id: number; nombre: string } | null;
+  madre: { id: string; vaca_id: number; nombre: string } | null;
+  crias: CriaAnimal[];
+}
+
+export interface ToroDetalle extends Toro {
+  padre: { id: string; toro_id: number; nombre: string } | null;
+  madre: { id: string; vaca_id: number; nombre: string } | null;
+  crias: CriaAnimal[];
 }
 
 // ===== ROLES DE USUARIO =====

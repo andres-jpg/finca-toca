@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Plus, Pencil, Trash2, ArrowUpCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Plus, Pencil, Trash2, ArrowUpCircle, Eye } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/shared/data-table";
 import { EntityModal } from "@/components/shared/entity-modal";
@@ -11,7 +12,7 @@ import { venderVaca } from "@/features/vacas/actions/vacas.actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import type { Vaca } from "@/types";
+import type { Vaca, Toro } from "@/types";
 
 const ESTADO_LABELS: Record<string, string> = {
   produccion: "Producción",
@@ -35,12 +36,15 @@ const ORIGEN_LABELS: Record<string, string> = {
 function RowActions({
   vaca,
   vacas,
+  toros,
   canEdit,
 }: {
   vaca: Vaca;
   vacas: Vaca[];
+  toros: Toro[];
   canEdit: boolean;
 }) {
+  const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -54,34 +58,43 @@ function RowActions({
     }
   };
 
-  if (!canEdit) {
-    return <span className="text-xs text-gray-400">Solo lectura</span>;
-  }
-
   return (
     <>
       <div className="flex items-center gap-1">
         <button
-          onClick={() => setEditOpen(true)}
-          className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-          title="Editar"
+          onClick={() => router.push(`/dashboard/vacas/${vaca.id}`)}
+          className="p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+          title="Ver ficha"
         >
-          <Pencil className="h-3.5 w-3.5" />
+          <Eye className="h-3.5 w-3.5" />
         </button>
-        {vaca.alta && (
-          <button
-            onClick={() => setDeleteOpen(true)}
-            className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-            title="Dar de baja"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+        {canEdit && (
+          <>
+            <button
+              onClick={() => setEditOpen(true)}
+              className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+              title="Editar"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            {vaca.alta && (
+              <button
+                onClick={() => setDeleteOpen(true)}
+                className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                title="Dar de baja"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </>
         )}
       </div>
 
-      <EntityModal open={editOpen} onClose={() => setEditOpen(false)} title="Editar vaca">
-        <VacaForm vaca={vaca} vacas={vacas} onSuccess={() => setEditOpen(false)} />
-      </EntityModal>
+      {canEdit && (
+        <EntityModal open={editOpen} onClose={() => setEditOpen(false)} title="Editar vaca">
+          <VacaForm vaca={vaca} vacas={vacas} toros={toros} onSuccess={() => setEditOpen(false)} />
+        </EntityModal>
+      )}
 
       <DeleteConfirmationDialog
         open={deleteOpen}
@@ -97,10 +110,12 @@ function RowActions({
 
 interface VacasTableProps {
   vacas: Vaca[];
+  toros: Toro[];
   canEdit: boolean;
 }
 
-export function VacasTable({ vacas, canEdit }: VacasTableProps) {
+export function VacasTable({ vacas, toros, canEdit }: VacasTableProps) {
+  const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [mostrarDeBaja, setMostrarDeBaja] = useState(false);
 
@@ -156,11 +171,11 @@ export function VacasTable({ vacas, canEdit }: VacasTableProps) {
         id: "actions",
         header: "Acciones",
         cell: ({ row }) => (
-          <RowActions vaca={row.original} vacas={vacasDeAlta} canEdit={canEdit} />
+          <RowActions vaca={row.original} vacas={vacasDeAlta} toros={toros} canEdit={canEdit} />
         ),
       },
     ],
-    [canEdit, vacasDeAlta]
+    [canEdit, vacasDeAlta, toros]
   );
 
   return (
@@ -201,7 +216,7 @@ export function VacasTable({ vacas, canEdit }: VacasTableProps) {
 
       {canEdit && (
         <EntityModal open={modalOpen} onClose={() => setModalOpen(false)} title="Nueva vaca">
-          <VacaForm vacas={vacasDeAlta} onSuccess={() => setModalOpen(false)} />
+          <VacaForm vacas={vacasDeAlta} toros={toros} onSuccess={() => setModalOpen(false)} />
         </EntityModal>
       )}
     </div>

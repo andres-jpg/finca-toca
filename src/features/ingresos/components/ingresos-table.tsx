@@ -106,13 +106,10 @@ export function IngresosTable({ ingresos, conceptos, vacas, toros, canEdit }: In
   const [selectedMonth, setSelectedMonth] = useState(new Date());
 
   const filteredIngresos = useMemo(() => {
-    return ingresos.filter((ingreso) => {
-      const d = new Date(ingreso.fecha + "T00:00:00");
-      return (
-        d.getMonth() === selectedMonth.getMonth() &&
-        d.getFullYear() === selectedMonth.getFullYear()
-      );
-    });
+    const year = selectedMonth.getFullYear();
+    const month = String(selectedMonth.getMonth() + 1).padStart(2, "0");
+    const prefix = `${year}-${month}`;
+    return ingresos.filter((ingreso) => ingreso.fecha.startsWith(prefix));
   }, [ingresos, selectedMonth]);
 
   const columns: ColumnDef<Ingreso>[] = useMemo(

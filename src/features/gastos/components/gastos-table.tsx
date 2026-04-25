@@ -176,13 +176,10 @@ export function GastosTable({ gastos, conceptos, canEdit }: GastosTableProps) {
   const [selectedMonth, setSelectedMonth] = useState(new Date());
 
   const filteredGastos = useMemo(() => {
-    return gastos.filter((gasto) => {
-      const d = new Date(gasto.fecha + "T00:00:00");
-      return (
-        d.getMonth() === selectedMonth.getMonth() &&
-        d.getFullYear() === selectedMonth.getFullYear()
-      );
-    });
+    const year = selectedMonth.getFullYear();
+    const month = String(selectedMonth.getMonth() + 1).padStart(2, "0");
+    const prefix = `${year}-${month}`;
+    return gastos.filter((gasto) => gasto.fecha.startsWith(prefix));
   }, [gastos, selectedMonth]);
 
   const columns: ColumnDef<Gasto>[] = useMemo(

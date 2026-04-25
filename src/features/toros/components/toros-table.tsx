@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Plus, Pencil, Trash2, ArrowUpCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Plus, Pencil, Trash2, ArrowUpCircle, Eye } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/shared/data-table";
 import { EntityModal } from "@/components/shared/entity-modal";
@@ -18,15 +19,28 @@ const ORIGEN_LABELS: Record<string, string> = {
   externa: "Externa",
 };
 
+const ESTADO_LABELS: Record<string, string> = {
+  jardin: "Jardín",
+  reproductor: "Reproductor",
+};
+
+const ESTADO_COLORS: Record<string, string> = {
+  jardin: "bg-purple-100 text-purple-700 hover:bg-purple-100",
+  reproductor: "bg-green-100 text-green-700 hover:bg-green-100",
+};
+
 function RowActions({
   toro,
   vacas,
+  toros,
   canEdit,
 }: {
   toro: Toro;
   vacas: Vaca[];
+  toros: Toro[];
   canEdit: boolean;
 }) {
+  const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -40,34 +54,43 @@ function RowActions({
     }
   };
 
-  if (!canEdit) {
-    return <span className="text-xs text-gray-400">Solo lectura</span>;
-  }
-
   return (
     <>
       <div className="flex items-center gap-1">
         <button
-          onClick={() => setEditOpen(true)}
-          className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-          title="Editar"
+          onClick={() => router.push(`/dashboard/toros/${toro.id}`)}
+          className="p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+          title="Ver ficha"
         >
-          <Pencil className="h-3.5 w-3.5" />
+          <Eye className="h-3.5 w-3.5" />
         </button>
-        {toro.alta && (
-          <button
-            onClick={() => setDeleteOpen(true)}
-            className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-            title="Dar de baja"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+        {canEdit && (
+          <>
+            <button
+              onClick={() => setEditOpen(true)}
+              className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+              title="Editar"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            {toro.alta && (
+              <button
+                onClick={() => setDeleteOpen(true)}
+                className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                title="Dar de baja"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </>
         )}
       </div>
 
-      <EntityModal open={editOpen} onClose={() => setEditOpen(false)} title="Editar toro">
-        <ToroForm toro={toro} vacas={vacas} onSuccess={() => setEditOpen(false)} />
-      </EntityModal>
+      {canEdit && (
+        <EntityModal open={editOpen} onClose={() => setEditOpen(false)} title="Editar toro">
+          <ToroForm toro={toro} vacas={vacas} toros={toros} onSuccess={() => setEditOpen(false)} />
+        </EntityModal>
+      )}
 
       <DeleteConfirmationDialog
         open={deleteOpen}
@@ -106,6 +129,19 @@ export function TorosTable({ toros, vacas, canEdit }: TorosTableProps) {
       },
       { accessorKey: "nombre", header: "Nombre" },
       {
+        accessorKey: "estado",
+        header: "Estado",
+        cell: ({ getValue }) => {
+          const val = getValue<string | null>();
+          if (!val) return <span className="text-gray-400">—</span>;
+          return (
+            <Badge className={ESTADO_COLORS[val] ?? ""}>
+              {ESTADO_LABELS[val] ?? val}
+            </Badge>
+          );
+        },
+      },
+      {
         accessorKey: "origen",
         header: "Origen",
         cell: ({ getValue }) => {
@@ -130,11 +166,11 @@ export function TorosTable({ toros, vacas, canEdit }: TorosTableProps) {
         id: "actions",
         header: "Acciones",
         cell: ({ row }) => (
-          <RowActions toro={row.original} vacas={vacas} canEdit={canEdit} />
+          <RowActions toro={row.original} vacas={vacas} toros={torosDeAlta} canEdit={canEdit} />
         ),
       },
     ],
-    [canEdit, vacas]
+    [canEdit, vacas, torosDeAlta]
   );
 
   return (
@@ -175,7 +211,7 @@ export function TorosTable({ toros, vacas, canEdit }: TorosTableProps) {
 
       {canEdit && (
         <EntityModal open={modalOpen} onClose={() => setModalOpen(false)} title="Nuevo toro">
-          <ToroForm vacas={vacas} onSuccess={() => setModalOpen(false)} />
+          <ToroForm vacas={vacas} toros={torosDeAlta} onSuccess={() => setModalOpen(false)} />
         </EntityModal>
       )}
     </div>

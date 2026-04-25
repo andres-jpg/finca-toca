@@ -44,13 +44,17 @@ export function GastosIngresosLineChart({ gastos, ingresos }: GastosIngresosLine
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout>;
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
+      clearTimeout(timeout);
+      timeout = setTimeout(() => setIsMobile(window.innerWidth < 1024), 100);
     };
-
     checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    window.addEventListener("resize", checkMobile);
+    return () => {
+      window.removeEventListener("resize", checkMobile);
+      clearTimeout(timeout);
+    };
   }, []);
 
   const monthMap = new Map<string, { Gastos: number; Ingresos: number }>();

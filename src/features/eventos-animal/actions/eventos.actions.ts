@@ -1,0 +1,49 @@
+"use server";
+
+import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
+import { formatDate } from "@/lib/utils";
+import type { EventoAnimal } from "@/types";
+
+export async function getEventosAnimal(
+  animalId: string,
+  animalTipo: "vaca" | "toro"
+): Promise<EventoAnimal[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("eventos_animal")
+    .select("*")
+    .eq("animal_id", animalId)
+    .eq("animal_tipo", animalTipo)
+    .order("fecha", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function createEventoAnimal(formData: {
+  animal_id: string;
+  animal_tipo: "vaca" | "toro";
+  tipo_evento: string;
+  fecha: Date;
+  descripcion?: string;
+  responsable?: string;
+}) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("eventos_animal").insert({
+    animal_id: formData.animal_id,
+    animal_tipo: formData.animal_tipo,
+    tipo_evento: formData.tipo_evento,
+    fecha: formatDate(formData.fecha),
+    descripcion: formData.descripcion || null,
+    responsable: formData.responsable || null,
+  });
+
+  if (error) throw new Error(error.message);
+
+  const path =
+    formData.animal_tipo === "vaca"
+      ? `/dashboard/vacas/${formData.animal_id}`
+      : `/dashboard/toros/${formData.animal_id}`;
+  revalidatePath(path);
+}

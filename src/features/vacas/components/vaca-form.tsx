@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/shared/date-picker";
 import { toast } from "sonner";
-import type { Vaca } from "@/types";
+import type { Vaca, Toro } from "@/types";
 
 const ORIGEN_LABELS: Record<string, string> = {
   finca: "Finca",
@@ -37,17 +37,20 @@ interface FormValues {
   origen: "finca" | "externa";
   estado: "produccion" | "secado" | "pre_jardin" | "jardin" | "transicion";
   fecha_compra?: Date | null;
+  fecha_nacimiento?: Date | null;
   numero_registro?: string;
   madre_id?: string | null;
+  padre_id?: string | null;
 }
 
 interface VacaFormProps {
   vaca?: Vaca;
   vacas: Vaca[];
+  toros: Toro[];
   onSuccess: () => void;
 }
 
-export function VacaForm({ vaca, vacas, onSuccess }: VacaFormProps) {
+export function VacaForm({ vaca, vacas, toros, onSuccess }: VacaFormProps) {
   const {
     register,
     handleSubmit,
@@ -62,14 +65,18 @@ export function VacaForm({ vaca, vacas, onSuccess }: VacaFormProps) {
       origen: vaca?.origen ?? undefined,
       estado: vaca?.estado ?? undefined,
       fecha_compra: vaca?.fecha_compra ? new Date(vaca.fecha_compra + "T00:00:00") : null,
+      fecha_nacimiento: vaca?.fecha_nacimiento ? new Date(vaca.fecha_nacimiento + "T00:00:00") : null,
       numero_registro: vaca?.numero_registro ?? "",
       madre_id: vaca?.madre_id ?? null,
+      padre_id: vaca?.padre_id ?? null,
     },
   });
 
   const origenValue = watch("origen");
   const fechaCompraValue = watch("fecha_compra");
+  const fechaNacimientoValue = watch("fecha_nacimiento");
   const madreIdValue = watch("madre_id");
+  const padreIdValue = watch("padre_id");
 
   const vacasDisponibles = vacas.filter((v) => v.id !== vaca?.id);
 
@@ -81,8 +88,10 @@ export function VacaForm({ vaca, vacas, onSuccess }: VacaFormProps) {
         origen: data.origen,
         estado: data.estado,
         fecha_compra: data.origen === "externa" ? data.fecha_compra : null,
+        fecha_nacimiento: data.fecha_nacimiento || null,
         numero_registro: data.origen === "externa" ? data.numero_registro : undefined,
         madre_id: data.madre_id || null,
+        padre_id: data.padre_id || null,
       };
       if (vaca) {
         await updateVaca(vaca.id, payload);
@@ -180,6 +189,15 @@ export function VacaForm({ vaca, vacas, onSuccess }: VacaFormProps) {
         </div>
       </div>
 
+      <div className="space-y-2">
+        <Label>Fecha de nacimiento</Label>
+        <DatePicker
+          value={fechaNacimientoValue ?? undefined}
+          onChange={(date) => setValue("fecha_nacimiento", date)}
+          placeholder="Seleccionar fecha de nacimiento"
+        />
+      </div>
+
       {origenValue === "externa" && (
         <>
           <div className="space-y-2">
@@ -203,25 +221,47 @@ export function VacaForm({ vaca, vacas, onSuccess }: VacaFormProps) {
       )}
 
       {origenValue === "finca" && (
-      <div className="space-y-2">
-        <Label>Madre</Label>
-        <Select
-          value={madreIdValue ?? "none"}
-          onValueChange={(val) => setValue("madre_id", val === "none" ? null : val)}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Sin madre registrada" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">Sin madre registrada</SelectItem>
-            {vacasDisponibles.map((v) => (
-              <SelectItem key={v.id} value={v.id}>
-                #{v.vaca_id} — {v.nombre}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+        <>
+          <div className="space-y-2">
+            <Label>Madre</Label>
+            <Select
+              value={madreIdValue ?? "none"}
+              onValueChange={(val) => setValue("madre_id", val === "none" ? null : val)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Sin madre registrada" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sin madre registrada</SelectItem>
+                {vacasDisponibles.map((v) => (
+                  <SelectItem key={v.id} value={v.id}>
+                    #{v.vaca_id} — {v.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Padre (toro)</Label>
+            <Select
+              value={padreIdValue ?? "none"}
+              onValueChange={(val) => setValue("padre_id", val === "none" ? null : val)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Sin padre registrado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sin padre registrado</SelectItem>
+                {toros.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    #{t.toro_id} — {t.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </>
       )}
 
       <div className="flex gap-2 pt-4">
