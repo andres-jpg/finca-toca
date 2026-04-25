@@ -26,29 +26,28 @@ Package manager is **pnpm**. There are no test commands configured.
 
 ```
 src/
-├── app/                    # Next.js App Router pages
-│   ├── dashboard/          # Protected routes (gastos, ingresos, extracciones, vacas, toros)
-│   └── (auth)/             # login, signup
-├── features/               # Feature modules — one per domain entity
+├── app/                        # Next.js App Router pages
+│   ├── dashboard/              # Protected routes + detail pages (/vacas/[id], /toros/[id])
+│   └── (auth)/                 # login, signup
+├── features/                   # Feature modules — one per domain entity
 │   └── [feature]/
-│       ├── actions/        # Server Actions (data mutations + queries)
-│       ├── components/     # Feature-specific UI
-│       └── schemas/        # Zod validation schemas
+│       ├── actions/            # Server Actions (data mutations + queries)
+│       ├── components/         # Feature-specific UI
+│       └── schemas/            # Zod validation schemas
 ├── components/
-│   ├── layout/             # Sidebar, header, dashboard shell
-│   ├── shared/             # data-table, entity-modal, date-picker, etc.
-│   ├── dashboard/          # Dashboard-specific components (DashboardFilter)
-│   └── ui/                 # shadcn/ui primitives
+│   ├── layout/                 # Sidebar, header, dashboard shell
+│   ├── shared/                 # data-table, entity-modal, date-picker, etc.
+│   ├── dashboard/              # Dashboard-specific components (DashboardFilter)
+│   └── ui/                     # shadcn/ui primitives
 ├── lib/
-│   ├── supabase/server.ts  # Server-side Supabase client (cookie-based)
-│   ├── supabase/client.ts  # Client-side Supabase client
-│   └── auth/               # getUserRole, checkRoutePermission, canWrite
-├── charts/                 # Recharts visualizations
+│   ├── supabase/server.ts      # Server-side Supabase client (cookie-based)
+│   ├── supabase/client.ts      # Client-side Supabase client
+│   └── auth/                   # getUserRole, checkRoutePermission, canWrite
+├── charts/                     # Recharts visualizations
 │   ├── gastos-ingresos-line-chart.tsx
-│   ├── gastos-donut-chart.tsx
-│   ├── ingresos-donut-chart.tsx
+│   ├── conceptos-donut-chart.tsx
 │   └── extracciones-line-chart.tsx
-└── types/index.ts          # Shared TypeScript interfaces
+└── types/index.ts              # Shared TypeScript interfaces
 ```
 
 ### Key Patterns
@@ -71,6 +70,18 @@ Roles (`"admin"` | `"user"` | `"viewer"`) come from the `roles` table in Supabas
 
 **Supabase one-to-one joins**: When a table has a `UNIQUE` FK (e.g. `pagos.gasto_id`), PostgREST may return the embedded resource as an object rather than an array. Always handle both cases: `Array.isArray(row.rel) ? row.rel[0] : row.rel ?? null`.
 
+**Fichas de animales**: `vacas` y `toros` tienen páginas de detalle (`/dashboard/vacas/[id]`, `/dashboard/toros/[id]`) con:
+- información básica
+- genealogía (madre/padre con enlaces cruzados)
+- crías (mezcla de vacas/toros, incluyendo estado y alta/baja)
+- historial de eventos
+
+**Eventos por animal**: El módulo `features/eventos-animal` centraliza:
+- `getEventosAnimal()` y `createEventoAnimal()`
+- validación Zod de tipos de evento
+- formulario (`EventForm`) y timeline visual (`EventsTimeline`)
+- revalidación de la ruta de ficha del animal al crear eventos
+
 **Zod schemas**: `z.enum()` and `z.number()` in this project's Zod version do NOT accept `required_error`/`invalid_type_error` — use `message` instead.
 
 ### Database Tables
@@ -84,19 +95,25 @@ Roles (`"admin"` | `"user"` | `"viewer"`) come from the `roles` table in Supabas
 | `precios` | `id`, `created_at`, `valor`, `tipo` |
 | `conceptos_gasto` + `subconceptos_gasto` | hierarchy for gastos categories |
 | `conceptos_ingreso` + `subconceptos_ingreso` | hierarchy for ingresos categories |
-| `vacas` | `id` (UUID), `vaca_id` (int), `nombre`, `origen` (finca\|externa), `estado` (produccion\|secado\|pre_jardin\|jardin), `fecha_compra`, `numero_registro`, `madre_id` (self-ref FK), `alta` |
-| `toros` | `id` (UUID), `toro_id` (int), `nombre`, `origen` (finca\|externa), `fecha_compra`, `numero_registro`, `madre_id` (FK→vacas), `alta` |
+| `vacas` | `id` (UUID), `vaca_id` (int), `nombre`, `origen` (finca\|externa), `estado` (produccion\|secado\|pre_jardin\|jardin\|transicion), `fecha_compra`, `fecha_nacimiento`, `numero_registro`, `madre_id` (FK→vacas), `padre_id` (FK→toros), `alta` |
+| `toros` | `id` (UUID), `toro_id` (int), `nombre`, `origen` (finca\|externa), `estado` (jardin\|reproductor), `fecha_compra`, `fecha_nacimiento`, `numero_registro`, `madre_id` (FK→vacas), `padre_id` (FK→toros), `alta` |
+| `eventos_animal` | `id`, `animal_id` (UUID), `animal_tipo` (vaca\|toro), `tipo_evento`, `fecha`, `descripcion`, `responsable`, `created_at` |
 | `roles` | `user_id`, `rol` |
 
 ### Dashboard
 
-The dashboard page (`app/dashboard/page.tsx`) accepts `searchParams` with optional `mes` and `anio` query params for filtering. All cards, charts, and donuts respond to this filter.
+The dashboard page (`app/dashboard/page.tsx`) accepts `searchParams` with optional `mes` and `anio` query params for filtering. Uses "effective month/year" (filtered or current) and compares against previous month for trend badges.
 
-- **Cards**: Gastos del mes, Ingresos del mes, Leche hoy, Leche del mes, Vacas
+- **Cards**:
+  1. Gastos del mes + tendencia vs mes anterior
+  2. Ingresos del mes (neto) + desglose bruto/aportación + tendencia
+  3. Leche hoy + promedio por vaca en producción
+  4. Leche del mes + corte por quincenas (Q1/Q2) + descuento Fedegan (0.75%) + promedio por vaca
+  5. Vacas (alta) + distribución por estado (`produccion`, `secado`, `transicion`, `pre_jardin`, `jardin`)
 - **Charts** (top to bottom):
-  1. `ExtraccionesLineChart` — blue line; monthly history when no filter, daily breakdown when filtered
-  2. `GastosDonutChart` + `IngresosDonutChart` — side by side
-  3. `GastosIngresosLineChart` — full historical, always unfiltered
+  1. `ExtraccionesLineChart` — histórico mensual sin filtro o desglose diario con filtro activo
+  2. `ConceptosDonutChart` — combinado gastos/ingresos por concepto (filtrado por DB si hay filtro)
+  3. `GastosIngresosLineChart` — histórico completo, siempre sin filtrar
 
 ### Authentication Flow
 
