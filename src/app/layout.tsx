@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   title: "Finca Toca",
   description: "Panel de gestión de finca",
   icons: {
-    icon: "/favicon.ico",
+    icon: "/icon.png",
   },
 };
 
