@@ -5,7 +5,6 @@ import { es } from "date-fns/locale";
 import {
   Syringe,
   Pill,
-  HeartPulse,
   AlertCircle,
   Flame,
   FlaskConical,
@@ -13,30 +12,34 @@ import {
   CheckCircle2,
   Baby,
   FileText,
+  Pencil,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { EventoAnimal, TipoEvento } from "@/types";
 
 const TIPO_CONFIG: Record<
   TipoEvento,
   { label: string; icon: React.ElementType; color: string; bg: string }
 > = {
-  vacunacion:         { label: "Vacunación",           icon: Syringe,       color: "text-blue-600",   bg: "bg-blue-50 border-blue-200" },
-  vitaminacion:       { label: "Vitaminación",         icon: Pill,          color: "text-teal-600",   bg: "bg-teal-50 border-teal-200" },
-  medicamento:        { label: "Medicamento",          icon: Pill,          color: "text-indigo-600", bg: "bg-indigo-50 border-indigo-200" },
-  enfermedad:         { label: "Enfermedad",           icon: AlertCircle,   color: "text-red-600",    bg: "bg-red-50 border-red-200" },
-  celo:               { label: "Celo",                 icon: Flame,         color: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
-  inseminacion:       { label: "Inseminación",         icon: FlaskConical,  color: "text-pink-600",   bg: "bg-pink-50 border-pink-200" },
-  palpacion:          { label: "Palpación",            icon: Stethoscope,   color: "text-purple-600", bg: "bg-purple-50 border-purple-200" },
-  confirmacion_prenez:{ label: "Confirmación preñez",  icon: CheckCircle2,  color: "text-green-600",  bg: "bg-green-50 border-green-200" },
-  parto:              { label: "Parto",                icon: Baby,          color: "text-rose-600",   bg: "bg-rose-50 border-rose-200" },
-  observacion:        { label: "Observación",          icon: FileText,      color: "text-gray-600",   bg: "bg-gray-50 border-gray-200" },
+  vacunacion:          { label: "Vacunación",           icon: Syringe,       color: "text-blue-600",   bg: "bg-blue-50 border-blue-200" },
+  vitaminacion:        { label: "Vitaminación",         icon: Pill,          color: "text-teal-600",   bg: "bg-teal-50 border-teal-200" },
+  medicamento:         { label: "Medicamento",          icon: Pill,          color: "text-indigo-600", bg: "bg-indigo-50 border-indigo-200" },
+  enfermedad:          { label: "Enfermedad",           icon: AlertCircle,   color: "text-red-600",    bg: "bg-red-50 border-red-200" },
+  celo:                { label: "Celo",                 icon: Flame,         color: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
+  inseminacion:        { label: "Inseminación",         icon: FlaskConical,  color: "text-pink-600",   bg: "bg-pink-50 border-pink-200" },
+  palpacion:           { label: "Palpación",            icon: Stethoscope,   color: "text-purple-600", bg: "bg-purple-50 border-purple-200" },
+  confirmacion_prenez: { label: "Confirmación preñez",  icon: CheckCircle2,  color: "text-green-600",  bg: "bg-green-50 border-green-200" },
+  parto:               { label: "Parto",                icon: Baby,          color: "text-rose-600",   bg: "bg-rose-50 border-rose-200" },
+  observacion:         { label: "Observación",          icon: FileText,      color: "text-gray-600",   bg: "bg-gray-50 border-gray-200" },
 };
 
 interface EventsTimelineProps {
   eventos: EventoAnimal[];
+  canEdit?: boolean;
+  onEdit?: (evento: EventoAnimal) => void;
 }
 
-export function EventsTimeline({ eventos }: EventsTimelineProps) {
+export function EventsTimeline({ eventos, canEdit, onEdit }: EventsTimelineProps) {
   if (eventos.length === 0) {
     return (
       <p className="text-sm text-gray-400 py-4 text-center">
@@ -74,6 +77,17 @@ export function EventsTimeline({ eventos }: EventsTimelineProps) {
                 <p className="mt-0.5 text-xs text-gray-500">Responsable: {evento.responsable}</p>
               )}
             </div>
+            {canEdit && onEdit && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="shrink-0 h-7 w-7 text-gray-400 hover:text-gray-700"
+                onClick={() => onEdit(evento)}
+                type="button"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            )}
           </div>
         );
       })}

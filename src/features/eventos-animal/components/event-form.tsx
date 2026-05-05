@@ -3,7 +3,10 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { eventoSchema } from "@/features/eventos-animal/schemas/evento.schema";
-import { createEventoAnimal } from "@/features/eventos-animal/actions/eventos.actions";
+import {
+  createEventoAnimal,
+  updateEventoAnimal,
+} from "@/features/eventos-animal/actions/eventos.actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/shared/date-picker";
 import { toast } from "sonner";
-import type { TipoEvento } from "@/types";
+import type { EventoAnimal, TipoEvento } from "@/types";
 
 const TIPO_LABELS: Record<TipoEvento, string> = {
   vacunacion: "Vacunación",
@@ -35,6 +38,7 @@ const TIPO_LABELS: Record<TipoEvento, string> = {
 interface EventFormProps {
   animalId: string;
   animalTipo: "vaca" | "toro";
+  evento?: EventoAnimal;
   onSuccess: () => void;
 }
 
@@ -47,7 +51,9 @@ interface FormValues {
   responsable?: string;
 }
 
-export function EventForm({ animalId, animalTipo, onSuccess }: EventFormProps) {
+export function EventForm({ animalId, animalTipo, evento, onSuccess }: EventFormProps) {
+  const isEditing = !!evento;
+
   const {
     register,
     handleSubmit,
@@ -59,10 +65,10 @@ export function EventForm({ animalId, animalTipo, onSuccess }: EventFormProps) {
     defaultValues: {
       animal_id: animalId,
       animal_tipo: animalTipo,
-      tipo_evento: undefined,
-      fecha: undefined,
-      descripcion: "",
-      responsable: "",
+      tipo_evento: evento?.tipo_evento ?? undefined,
+      fecha: evento?.fecha ? new Date(evento.fecha + "T00:00:00") : undefined,
+      descripcion: evento?.descripcion ?? "",
+      responsable: evento?.responsable ?? "",
     },
   });
 
@@ -71,15 +77,27 @@ export function EventForm({ animalId, animalTipo, onSuccess }: EventFormProps) {
 
   const onSubmit = async (data: FormValues) => {
     try {
-      await createEventoAnimal({
-        animal_id: data.animal_id,
-        animal_tipo: data.animal_tipo,
-        tipo_evento: data.tipo_evento,
-        fecha: data.fecha,
-        descripcion: data.descripcion,
-        responsable: data.responsable,
-      });
-      toast.success("Evento registrado");
+      if (isEditing) {
+        await updateEventoAnimal(evento.id, {
+          animal_id: data.animal_id,
+          animal_tipo: data.animal_tipo,
+          tipo_evento: data.tipo_evento,
+          fecha: data.fecha,
+          descripcion: data.descripcion,
+          responsable: data.responsable,
+        });
+        toast.success("Evento actualizado");
+      } else {
+        await createEventoAnimal({
+          animal_id: data.animal_id,
+          animal_tipo: data.animal_tipo,
+          tipo_evento: data.tipo_evento,
+          fecha: data.fecha,
+          descripcion: data.descripcion,
+          responsable: data.responsable,
+        });
+        toast.success("Evento registrado");
+      }
       onSuccess();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Error inesperado");
@@ -144,7 +162,7 @@ export function EventForm({ animalId, animalTipo, onSuccess }: EventFormProps) {
 
       <div className="flex gap-2 pt-4">
         <Button type="submit" className="flex-1" disabled={isSubmitting}>
-          {isSubmitting ? "Guardando..." : "Registrar evento"}
+          {isSubmitting ? "Guardando..." : isEditing ? "Actualizar evento" : "Registrar evento"}
         </Button>
       </div>
     </form>
