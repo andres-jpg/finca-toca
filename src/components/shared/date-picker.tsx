@@ -13,9 +13,18 @@ interface DatePickerProps {
   value?: Date;
   onChange: (date: Date) => void;
   placeholder?: string;
+  /** Año de inicio para el dropdown de años. Por defecto 30 años atrás. */
+  fromYear?: number;
 }
 
-export function DatePicker({ value, onChange, placeholder = "Seleccionar fecha" }: DatePickerProps) {
+const CURRENT_YEAR = new Date().getFullYear();
+
+export function DatePicker({
+  value,
+  onChange,
+  placeholder = "Seleccionar fecha",
+  fromYear = CURRENT_YEAR - 30,
+}: DatePickerProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -40,6 +49,9 @@ export function DatePicker({ value, onChange, placeholder = "Seleccionar fecha" 
             }
           }}
           locale={es}
+          captionLayout="dropdown"
+          startMonth={new Date(fromYear, 0)}
+          endMonth={new Date(CURRENT_YEAR, 11)}
           initialFocus
         />
       </PopoverContent>

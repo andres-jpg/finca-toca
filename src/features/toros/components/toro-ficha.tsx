@@ -50,6 +50,7 @@ interface ToroFichaProps {
 export function ToroFicha({ toro, eventos, vacas, toros, canEdit }: ToroFichaProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
+  const [editEvento, setEditEvento] = useState<EventoAnimal | null>(null);
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -144,7 +145,11 @@ export function ToroFicha({ toro, eventos, vacas, toros, canEdit }: ToroFichaPro
             </Button>
           )}
         </div>
-        <EventsTimeline eventos={eventos} />
+        <EventsTimeline
+          eventos={eventos}
+          canEdit={canEdit}
+          onEdit={(evento) => setEditEvento(evento)}
+        />
       </section>
 
       {/* Modales */}
@@ -165,6 +170,21 @@ export function ToroFicha({ toro, eventos, vacas, toros, canEdit }: ToroFichaPro
               animalTipo="toro"
               onSuccess={() => setEventOpen(false)}
             />
+          </EntityModal>
+
+          <EntityModal
+            open={!!editEvento}
+            onClose={() => setEditEvento(null)}
+            title="Editar evento"
+          >
+            {editEvento && (
+              <EventForm
+                animalId={toro.id}
+                animalTipo="toro"
+                evento={editEvento}
+                onSuccess={() => setEditEvento(null)}
+              />
+            )}
           </EntityModal>
         </>
       )}

@@ -47,3 +47,34 @@ export async function createEventoAnimal(formData: {
       : `/dashboard/toros/${formData.animal_id}`;
   revalidatePath(path);
 }
+
+export async function updateEventoAnimal(
+  id: string,
+  formData: {
+    animal_id: string;
+    animal_tipo: "vaca" | "toro";
+    tipo_evento: string;
+    fecha: Date;
+    descripcion?: string;
+    responsable?: string;
+  }
+) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("eventos_animal")
+    .update({
+      tipo_evento: formData.tipo_evento,
+      fecha: formatDate(formData.fecha),
+      descripcion: formData.descripcion || null,
+      responsable: formData.responsable || null,
+    })
+    .eq("id", id);
+
+  if (error) throw new Error(error.message);
+
+  const path =
+    formData.animal_tipo === "vaca"
+      ? `/dashboard/vacas/${formData.animal_id}`
+      : `/dashboard/toros/${formData.animal_id}`;
+  revalidatePath(path);
+}
