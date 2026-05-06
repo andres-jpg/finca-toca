@@ -5,8 +5,36 @@ import { revalidatePath } from "next/cache";
 import { formatDate } from "@/lib/utils";
 import type { Vaca, VacaDetalle, VacaEstado, VacaOrigen, CriaAnimal } from "@/types";
 
+async function consumirPajillaParaPadre(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  toroRefId: string
+): Promise<string> {
+  const { data: lotes, error } = await supabase
+    .from("pajillas")
+    .select("id, toro_nombre, cantidad_disponible")
+    .eq("toro_ref_id", toroRefId)
+    .gt("cantidad_disponible", 0)
+    .order("fecha_compra", { ascending: true })
+    .limit(1);
+
+  if (error) throw new Error(error.message);
+  if (!lotes || lotes.length === 0)
+    throw new Error("No hay pajillas disponibles para este toro");
+
+  const lote = lotes[0];
+  const { error: updateError } = await supabase
+    .from("pajillas")
+    .update({ cantidad_disponible: lote.cantidad_disponible - 1 })
+    .eq("id", lote.id);
+
+  if (updateError) throw new Error(updateError.message);
+
+  revalidatePath("/dashboard/inventario");
+  return lote.toro_nombre as string;
+}
+
 const SELECT_FIELDS =
-  "id, created_at, vaca_id, nombre, origen, estado, fecha_compra, fecha_nacimiento, numero_registro, madre_id, padre_id, alta, madre:madre_id(nombre), padre:padre_id(nombre)";
+  "id, created_at, vaca_id, nombre, origen, estado, fecha_compra, fecha_nacimiento, numero_registro, madre_id, padre_id, padre_pajilla_nombre, alta, madre:madre_id(nombre), padre:padre_id(nombre)";
 
 function mapRow(row: any): Vaca {
   const madreRaw = Array.isArray(row.madre) ? row.madre[0] : row.madre;
@@ -25,6 +53,7 @@ function mapRow(row: any): Vaca {
     madre_nombre: madreRaw?.nombre ?? null,
     padre_id: row.padre_id,
     padre_nombre: padreRaw?.nombre ?? null,
+    padre_pajilla_nombre: row.padre_pajilla_nombre ?? null,
     alta: row.alta,
   };
 }
@@ -116,8 +145,18 @@ export async function createVaca(formData: {
   numero_registro?: string;
   madre_id?: string | null;
   padre_id?: string | null;
+  padre_pajilla_toro_ref_id?: string | null;
 }) {
   const supabase = await createClient();
+
+  let padrePajillaNombre: string | null = null;
+  let padreId: string | null = formData.padre_id || null;
+
+  if (formData.padre_pajilla_toro_ref_id) {
+    padrePajillaNombre = await consumirPajillaParaPadre(supabase, formData.padre_pajilla_toro_ref_id);
+    padreId = null;
+  }
+
   const { error } = await supabase.from("vacas").insert({
     vaca_id: formData.vaca_id,
     nombre: formData.nombre,
@@ -127,7 +166,8 @@ export async function createVaca(formData: {
     fecha_nacimiento: formData.fecha_nacimiento ? formatDate(formData.fecha_nacimiento) : null,
     numero_registro: formData.numero_registro || null,
     madre_id: formData.madre_id || null,
-    padre_id: formData.padre_id || null,
+    padre_id: padreId,
+    padre_pajilla_nombre: padrePajillaNombre,
   });
 
   if (error) throw new Error(error.message);
@@ -146,9 +186,23 @@ export async function updateVaca(
     numero_registro?: string;
     madre_id?: string | null;
     padre_id?: string | null;
+    padre_pajilla_toro_ref_id?: string | null;
+    padre_pajilla_nombre_keep?: string | null;
   }
 ) {
   const supabase = await createClient();
+
+  let padrePajillaNombre: string | null = null;
+  let padreId: string | null = formData.padre_id || null;
+
+  if (formData.padre_pajilla_toro_ref_id) {
+    padrePajillaNombre = await consumirPajillaParaPadre(supabase, formData.padre_pajilla_toro_ref_id);
+    padreId = null;
+  } else if (formData.padre_pajilla_nombre_keep) {
+    padrePajillaNombre = formData.padre_pajilla_nombre_keep;
+    padreId = null;
+  }
+
   const { error } = await supabase
     .from("vacas")
     .update({
@@ -160,7 +214,8 @@ export async function updateVaca(
       fecha_nacimiento: formData.fecha_nacimiento ? formatDate(formData.fecha_nacimiento) : null,
       numero_registro: formData.numero_registro || null,
       madre_id: formData.madre_id || null,
-      padre_id: formData.padre_id || null,
+      padre_id: padreId,
+      padre_pajilla_nombre: padrePajillaNombre,
     })
     .eq("id", id);
 
