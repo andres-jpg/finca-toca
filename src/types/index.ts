@@ -98,6 +98,7 @@ export interface Vaca {
   madre_nombre: string | null;
   padre_id: string | null;
   padre_nombre: string | null;
+  padre_pajilla_nombre: string | null;
   alta: boolean;
 }
 
@@ -165,6 +166,25 @@ export interface ToroDetalle extends Toro {
   padre: { id: string; toro_id: number; nombre: string } | null;
   madre: { id: string; vaca_id: number; nombre: string } | null;
   crias: CriaAnimal[];
+}
+
+// ===== INVENTARIO: PAJILLAS =====
+export interface Pajilla {
+  id: string;
+  created_at: string;
+  toro_nombre: string;
+  toro_ref_id: string;
+  fecha_compra: string;
+  cantidad: number;
+  cantidad_disponible: number;
+  observaciones: string | null;
+}
+
+export interface PajillaPorToro {
+  toro_nombre: string;
+  toro_ref_id: string;
+  total_disponible: number;
+  total_inicial: number;
 }
 
 // ===== ROLES DE USUARIO =====
