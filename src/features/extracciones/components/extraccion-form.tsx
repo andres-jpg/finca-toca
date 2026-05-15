@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { extraccionSchema } from "@/features/extracciones/schemas/extraccion.schema";
@@ -11,11 +12,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/shared/date-picker";
+import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import type { ExtraccionLeche } from "@/types";
 
 interface FormValues {
-  fecha: Date;
+  fecha: string;
   litros: number;
 }
 
@@ -28,23 +30,22 @@ export function ExtraccionForm({
   extraccion,
   onSuccess,
 }: ExtraccionFormProps) {
+  const [datePickerValue, setDatePickerValue] = useState<Date>(
+    extraccion?.fecha ? new Date(extraccion.fecha + "T00:00:00") : new Date()
+  );
+
   const {
     register,
     handleSubmit,
     setValue,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(extraccionSchema) as any,
     defaultValues: {
-      fecha: extraccion?.fecha
-        ? new Date(extraccion.fecha + "T00:00:00")
-        : new Date(),
+      fecha: extraccion?.fecha ?? formatDate(new Date()),
       litros: extraccion?.litros ?? 0,
     },
   });
-
-  const fechaValue = watch("fecha");
 
   const onSubmit = async (data: FormValues) => {
     try {
@@ -68,8 +69,11 @@ export function ExtraccionForm({
       <div className="space-y-2">
         <Label>Fecha</Label>
         <DatePicker
-          value={fechaValue}
-          onChange={(date) => setValue("fecha", date)}
+          value={datePickerValue}
+          onChange={(date) => {
+            setDatePickerValue(date);
+            setValue("fecha", formatDate(date));
+          }}
         />
         {errors.fecha && (
           <p className="text-sm text-red-500">{errors.fecha.message}</p>

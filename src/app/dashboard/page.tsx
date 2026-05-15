@@ -6,6 +6,8 @@ import { GastosIngresosLineChart } from "@/charts/gastos-ingresos-line-chart";
 import { ExtraccionesLineChart } from "@/charts/extracciones-line-chart";
 import { getLitrosDiaActual } from "@/features/extracciones/actions/extracciones.actions";
 import { checkRoutePermission } from "@/lib/auth/check-permissions";
+import { getUserRole } from "@/lib/auth/get-user-role";
+import { redirect } from "next/navigation";
 import { PiCow } from "react-icons/pi";
 import { DashboardFilter } from "@/components/dashboard/dashboard-filter";
 
@@ -49,6 +51,9 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ mes?: string; anio?: string }>;
 }) {
+  const role = await getUserRole();
+  if (role === "cooperativa_admin") redirect("/dashboard/cooperativa");
+  if (role === "cooperativa_user") redirect("/dashboard/recolecciones");
   await checkRoutePermission(["admin", "viewer"]);
 
   const params = await searchParams;

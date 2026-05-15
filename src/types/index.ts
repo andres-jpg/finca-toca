@@ -168,10 +168,39 @@ export interface ToroDetalle extends Toro {
 }
 
 // ===== ROLES DE USUARIO =====
-export type UserRole = "admin" | "user" | "viewer";
+export type UserRole = "admin" | "user" | "viewer" | "cooperativa_admin" | "cooperativa_user";
 
 export interface UserWithRole {
   id: string;
   email: string;
   role: UserRole;
+}
+
+// ===== COOPERATIVA =====
+export interface FincaCooperativa {
+  id: number;
+  nombre: string;
+  precio_litro: number;
+  activa: boolean;
+  created_at: string;
+  ruta_nombre: string | null;
+}
+
+export interface RutaCooperativa {
+  id: number;
+  nombre: string;
+  created_at: string;
+  fincas: FincaCooperativa[];
+}
+
+export interface Recoleccion {
+  id: number;
+  finca_id: number;
+  finca_nombre: string;
+  ruta_nombre: string | null;
+  fecha: string;
+  litros: number;
+  precio_litro: number;
+  valor_total: number;
+  created_at: string;
 }
