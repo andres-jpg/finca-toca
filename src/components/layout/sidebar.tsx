@@ -12,6 +12,7 @@ import {
   Building2,
   MapPin,
   ClipboardList,
+  Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types";
@@ -53,6 +54,12 @@ const navItems = [
     href: "/dashboard/toros",
     label: "Toros",
     icon: GiBull,
+    allowedRoles: ["admin", "viewer"] as UserRole[],
+  },
+  {
+    href: "/dashboard/inventario",
+    label: "Inventario",
+    icon: Package,
     allowedRoles: ["admin", "viewer"] as UserRole[],
   },
   {

@@ -12,7 +12,7 @@ import { venderVaca } from "@/features/vacas/actions/vacas.actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import type { Vaca, Toro } from "@/types";
+import type { Vaca, Toro, PajillaPorToro } from "@/types";
 
 const ESTADO_LABELS: Record<string, string> = {
   produccion: "Producción",
@@ -37,11 +37,13 @@ function RowActions({
   vaca,
   vacas,
   toros,
+  pajillasPorToro,
   canEdit,
 }: {
   vaca: Vaca;
   vacas: Vaca[];
   toros: Toro[];
+  pajillasPorToro: PajillaPorToro[];
   canEdit: boolean;
 }) {
   const router = useRouter();
@@ -92,7 +94,7 @@ function RowActions({
 
       {canEdit && (
         <EntityModal open={editOpen} onClose={() => setEditOpen(false)} title="Editar vaca">
-          <VacaForm vaca={vaca} vacas={vacas} toros={toros} onSuccess={() => setEditOpen(false)} />
+          <VacaForm vaca={vaca} vacas={vacas} toros={toros} pajillasPorToro={pajillasPorToro} onSuccess={() => setEditOpen(false)} />
         </EntityModal>
       )}
 
@@ -111,10 +113,11 @@ function RowActions({
 interface VacasTableProps {
   vacas: Vaca[];
   toros: Toro[];
+  pajillasPorToro: PajillaPorToro[];
   canEdit: boolean;
 }
 
-export function VacasTable({ vacas, toros, canEdit }: VacasTableProps) {
+export function VacasTable({ vacas, toros, pajillasPorToro, canEdit }: VacasTableProps) {
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [mostrarDeBaja, setMostrarDeBaja] = useState(false);
@@ -171,7 +174,7 @@ export function VacasTable({ vacas, toros, canEdit }: VacasTableProps) {
         id: "actions",
         header: "Acciones",
         cell: ({ row }) => (
-          <RowActions vaca={row.original} vacas={vacasDeAlta} toros={toros} canEdit={canEdit} />
+          <RowActions vaca={row.original} vacas={vacasDeAlta} toros={toros} pajillasPorToro={pajillasPorToro} canEdit={canEdit} />
         ),
       },
     ],
@@ -216,7 +219,7 @@ export function VacasTable({ vacas, toros, canEdit }: VacasTableProps) {
 
       {canEdit && (
         <EntityModal open={modalOpen} onClose={() => setModalOpen(false)} title="Nueva vaca">
-          <VacaForm vacas={vacasDeAlta} toros={toros} onSuccess={() => setModalOpen(false)} />
+          <VacaForm vacas={vacasDeAlta} toros={toros} pajillasPorToro={pajillasPorToro} onSuccess={() => setModalOpen(false)} />
         </EntityModal>
       )}
     </div>

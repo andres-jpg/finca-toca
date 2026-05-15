@@ -13,7 +13,7 @@ import { VacaGenealogy } from "@/features/vacas/components/vaca-genealogy";
 import { VacaOffspring } from "@/features/vacas/components/vaca-offspring";
 import { EventsTimeline } from "@/features/eventos-animal/components/events-timeline";
 import { EventForm } from "@/features/eventos-animal/components/event-form";
-import type { VacaDetalle, EventoAnimal, Vaca, Toro } from "@/types";
+import type { VacaDetalle, EventoAnimal, Vaca, Toro, PajillaPorToro } from "@/types";
 
 const ESTADO_LABELS: Record<string, string> = {
   produccion: "Producción",
@@ -50,10 +50,11 @@ interface VacaFichaProps {
   eventos: EventoAnimal[];
   vacas: Vaca[];
   toros: Toro[];
+  pajillasPorToro: PajillaPorToro[];
   canEdit: boolean;
 }
 
-export function VacaFicha({ vaca, eventos, vacas, toros, canEdit }: VacaFichaProps) {
+export function VacaFicha({ vaca, eventos, vacas, toros, pajillasPorToro, canEdit }: VacaFichaProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
   const [editEvento, setEditEvento] = useState<EventoAnimal | null>(null);
@@ -166,6 +167,7 @@ export function VacaFicha({ vaca, eventos, vacas, toros, canEdit }: VacaFichaPro
               vaca={vaca}
               vacas={vacas.filter((v) => v.id !== vaca.id)}
               toros={toros}
+              pajillasPorToro={pajillasPorToro}
               onSuccess={() => setEditOpen(false)}
             />
           </EntityModal>

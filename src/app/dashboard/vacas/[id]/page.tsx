@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
-import { getVacaById } from "@/features/vacas/actions/vacas.actions";
-import { getVacasDeAlta } from "@/features/vacas/actions/vacas.actions";
+import { getVacaById, getVacasDeAlta } from "@/features/vacas/actions/vacas.actions";
 import { getTorosDeAlta } from "@/features/toros/actions/toros.actions";
 import { getEventosAnimal } from "@/features/eventos-animal/actions/eventos.actions";
+import { getPajillasPorToro } from "@/features/inventario/pajillas/actions/pajillas.actions";
 import { VacaFicha } from "@/features/vacas/components/vaca-ficha";
 import { canWrite, checkRoutePermission } from "@/lib/auth/check-permissions";
 
@@ -13,12 +13,13 @@ export default async function VacaFichaPage({
 }) {
   const { id } = await params;
 
-  const [userRole, vaca, eventos, vacas, toros] = await Promise.all([
+  const [userRole, vaca, eventos, vacas, toros, pajillasPorToro] = await Promise.all([
     checkRoutePermission(["admin", "viewer"]),
     getVacaById(id),
     getEventosAnimal(id, "vaca"),
     getVacasDeAlta(),
     getTorosDeAlta(),
+    getPajillasPorToro(),
   ]);
 
   if (!vaca) notFound();
@@ -31,6 +32,7 @@ export default async function VacaFichaPage({
       eventos={eventos}
       vacas={vacas}
       toros={toros}
+      pajillasPorToro={pajillasPorToro}
       canEdit={canEdit}
     />
   );

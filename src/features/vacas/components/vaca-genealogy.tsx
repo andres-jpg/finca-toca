@@ -26,6 +26,13 @@ export function VacaGenealogy({ vaca }: VacaGenealogyProps) {
           >
             #{vaca.padre.toro_id} — {vaca.padre.nombre}
           </Link>
+        ) : vaca.padre_pajilla_nombre ? (
+          <div>
+            <span className="text-sm font-medium text-gray-800">{vaca.padre_pajilla_nombre}</span>
+            <span className="ml-2 text-xs text-purple-600 bg-purple-50 border border-purple-200 rounded px-1.5 py-0.5">
+              pajilla
+            </span>
+          </div>
         ) : (
           <span className="text-sm text-gray-400">No registrado</span>
         )}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { vacaSchema } from "@/features/vacas/schemas/vaca.schema";
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/shared/date-picker";
 import { toast } from "sonner";
-import type { Vaca, Toro } from "@/types";
+import type { Vaca, Toro, PajillaPorToro } from "@/types";
 
 const ORIGEN_LABELS: Record<string, string> = {
   finca: "Finca",
@@ -30,6 +31,8 @@ const ESTADO_LABELS: Record<string, string> = {
   jardin: "Jardín",
   transicion: "Transición",
 };
+
+type PadreTipo = "none" | "toro" | "pajilla";
 
 interface FormValues {
   vaca_id: number;
@@ -47,10 +50,23 @@ interface VacaFormProps {
   vaca?: Vaca;
   vacas: Vaca[];
   toros: Toro[];
+  pajillasPorToro: PajillaPorToro[];
   onSuccess: () => void;
 }
 
-export function VacaForm({ vaca, vacas, toros, onSuccess }: VacaFormProps) {
+export function VacaForm({ vaca, vacas, toros, pajillasPorToro, onSuccess }: VacaFormProps) {
+  const getInitialPadreTipo = (): PadreTipo => {
+    if (!vaca) return "none";
+    if (vaca.padre_id) return "toro";
+    if (vaca.padre_pajilla_nombre) return "pajilla";
+    return "none";
+  };
+
+  const [padreTipo, setPadreTipo] = useState<PadreTipo>(getInitialPadreTipo);
+  const [selectedPajillaToro, setSelectedPajillaToro] = useState<string>("");
+
+  const pajillasDisponibles = pajillasPorToro.filter((p) => p.total_disponible > 0);
+
   const {
     register,
     handleSubmit,
@@ -80,9 +96,15 @@ export function VacaForm({ vaca, vacas, toros, onSuccess }: VacaFormProps) {
 
   const vacasDisponibles = vacas.filter((v) => v.id !== vaca?.id);
 
+  const handlePadreTipoChange = (tipo: PadreTipo) => {
+    setPadreTipo(tipo);
+    setValue("padre_id", null);
+    setSelectedPajillaToro("");
+  };
+
   const onSubmit = async (data: FormValues) => {
     try {
-      const payload = {
+      const base = {
         vaca_id: data.vaca_id,
         nombre: data.nombre,
         origen: data.origen,
@@ -91,13 +113,24 @@ export function VacaForm({ vaca, vacas, toros, onSuccess }: VacaFormProps) {
         fecha_nacimiento: data.fecha_nacimiento || null,
         numero_registro: data.origen === "externa" ? data.numero_registro : undefined,
         madre_id: data.madre_id || null,
-        padre_id: data.padre_id || null,
+        padre_id: padreTipo === "toro" ? (data.padre_id || null) : null,
+        padre_pajilla_toro_ref_id:
+          padreTipo === "pajilla" && selectedPajillaToro ? selectedPajillaToro : null,
+        padre_pajilla_nombre_keep:
+          padreTipo === "pajilla" && !selectedPajillaToro
+            ? (vaca?.padre_pajilla_nombre ?? null)
+            : null,
       };
+
       if (vaca) {
-        await updateVaca(vaca.id, payload);
+        await updateVaca(vaca.id, base);
         toast.success("Vaca actualizada");
       } else {
-        await createVaca(payload);
+        if (padreTipo === "pajilla" && !selectedPajillaToro) {
+          toast.error("Selecciona una pajilla para el padre");
+          return;
+        }
+        await createVaca(base);
         toast.success("Vaca creada");
       }
       onSuccess();
@@ -222,6 +255,7 @@ export function VacaForm({ vaca, vacas, toros, onSuccess }: VacaFormProps) {
 
       {origenValue === "finca" && (
         <>
+          {/* Madre */}
           <div className="space-y-2">
             <Label>Madre</Label>
             <Select
@@ -242,25 +276,102 @@ export function VacaForm({ vaca, vacas, toros, onSuccess }: VacaFormProps) {
             </Select>
           </div>
 
+          {/* Tipo de padre */}
           <div className="space-y-2">
-            <Label>Padre (toro)</Label>
-            <Select
-              value={padreIdValue ?? "none"}
-              onValueChange={(val) => setValue("padre_id", val === "none" ? null : val)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Sin padre registrado" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Sin padre registrado</SelectItem>
-                {toros.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    #{t.toro_id} — {t.nombre}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Padre</Label>
+            <div className="flex gap-2">
+              {(["none", "toro", "pajilla"] as PadreTipo[]).map((tipo) => (
+                <button
+                  key={tipo}
+                  type="button"
+                  onClick={() => handlePadreTipoChange(tipo)}
+                  className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                    padreTipo === tipo
+                      ? "bg-gray-900 text-white border-gray-900"
+                      : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                  }`}
+                >
+                  {tipo === "none" && "Sin padre"}
+                  {tipo === "toro" && "Toro de finca"}
+                  {tipo === "pajilla" && "Pajilla"}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {/* Toro de finca */}
+          {padreTipo === "toro" && (
+            <div className="space-y-2">
+              <Select
+                value={padreIdValue ?? "none"}
+                onValueChange={(val) => setValue("padre_id", val === "none" ? null : val)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar toro" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin toro seleccionado</SelectItem>
+                  {toros.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      #{t.toro_id} — {t.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Pajilla */}
+          {padreTipo === "pajilla" && (
+            <div className="space-y-2">
+              {vaca?.padre_pajilla_nombre && !selectedPajillaToro && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+                  <p className="text-xs text-blue-600 font-medium">Padre actual por pajilla</p>
+                  <p className="text-sm text-blue-800 font-semibold">{vaca.padre_pajilla_nombre}</p>
+                  <p className="text-xs text-blue-500 mt-0.5">
+                    Selecciona otra pajilla abajo para cambiarlo (descontará del inventario)
+                  </p>
+                </div>
+              )}
+              {pajillasDisponibles.length === 0 ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                  <p className="text-sm text-amber-700">
+                    No hay pajillas disponibles en el inventario.
+                  </p>
+                </div>
+              ) : (
+                <Select
+                  value={selectedPajillaToro || "none"}
+                  onValueChange={(val) =>
+                    setSelectedPajillaToro(val === "none" ? "" : val)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={
+                        vaca?.padre_pajilla_nombre
+                          ? "Cambiar pajilla (opcional)..."
+                          : "Seleccionar toro de la pajilla"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      {vaca?.padre_pajilla_nombre ? "Mantener actual" : "Sin selección"}
+                    </SelectItem>
+                    {pajillasDisponibles.map((p) => (
+                      <SelectItem key={p.toro_ref_id} value={p.toro_ref_id}>
+                        {p.toro_nombre}{" "}
+                        <span className="text-gray-400">
+                          ({p.toro_ref_id}) — {p.total_disponible} disponibles
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          )}
         </>
       )}
 
