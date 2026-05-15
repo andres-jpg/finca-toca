@@ -85,7 +85,7 @@ export async function getExtracciones(): Promise<ExtraccionLeche[]> {
 }
 
 export async function createExtraccion(formData: {
-  fecha: Date;
+  fecha: string;
   litros: number;
 }) {
   const supabase = await createClient();
@@ -97,14 +97,14 @@ export async function createExtraccion(formData: {
     .eq("alta", true);
 
   const { error } = await supabase.from("extracciones_leche").insert({
-    fecha: formatDate(formData.fecha),
+    fecha: formData.fecha,
     litros: formData.litros,
     vacas_en_produccion: vacasRows?.length ?? null,
   });
 
   if (error) throw new Error(error.message);
 
-  await upsertIngresoLeche(formatDate(formData.fecha), supabase);
+  await upsertIngresoLeche(formData.fecha, supabase);
 
   revalidatePath("/dashboard/extracciones");
   revalidatePath("/dashboard/ingresos");
@@ -113,7 +113,7 @@ export async function createExtraccion(formData: {
 
 export async function updateExtraccion(
   id: number,
-  formData: { fecha: Date; litros: number }
+  formData: { fecha: string; litros: number }
 ) {
   const supabase = await createClient();
 
@@ -133,7 +133,7 @@ export async function updateExtraccion(
   const { error } = await supabase
     .from("extracciones_leche")
     .update({
-      fecha: formatDate(formData.fecha),
+      fecha: formData.fecha,
       litros: formData.litros,
       vacas_en_produccion: vacasRows?.length ?? null,
     })
@@ -141,11 +141,10 @@ export async function updateExtraccion(
 
   if (error) throw new Error(error.message);
 
-  const newFechaStr = formatDate(formData.fecha);
-  if (oldRow && oldRow.fecha !== newFechaStr) {
+  if (oldRow && oldRow.fecha !== formData.fecha) {
     await upsertIngresoLeche(oldRow.fecha, supabase);
   }
-  await upsertIngresoLeche(newFechaStr, supabase);
+  await upsertIngresoLeche(formData.fecha, supabase);
 
   revalidatePath("/dashboard/extracciones");
   revalidatePath("/dashboard/ingresos");

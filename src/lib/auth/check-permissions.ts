@@ -15,21 +15,24 @@ export async function checkRoutePermission(
   const role = await getUserRole();
 
   if (!role || !allowedRoles.includes(role)) {
-    redirect("/dashboard/extracciones");
+    const fallback =
+      role === "cooperativa_admin"
+        ? "/dashboard/cooperativa"
+        : role === "cooperativa_user"
+        ? "/dashboard/recolecciones"
+        : "/dashboard/extracciones";
+    redirect(fallback);
   }
 
   return role;
 }
 
-/**
- * Verifica si el usuario puede realizar acciones de escritura (crear, editar, eliminar).
- * Los viewers solo pueden ver, no pueden modificar.
- *
- * @param role - Rol del usuario
- * @returns true si puede escribir, false si solo puede ver
- */
 export function canWrite(role: UserRole | null): boolean {
-  return role === "admin" || role === "user";
+  return role === "admin" || role === "user" || role === "cooperativa_admin" || role === "cooperativa_user";
+}
+
+export function canDelete(role: UserRole | null): boolean {
+  return role === "admin" || role === "user" || role === "cooperativa_admin";
 }
 
 /**

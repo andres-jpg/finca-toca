@@ -9,11 +9,14 @@ import {
   X,
   Leaf,
   Settings,
+  Building2,
+  MapPin,
+  ClipboardList,
   Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types";
-import { GiBull } from "react-icons/gi";
+import { GiBull, GiCheeseWedge } from "react-icons/gi";
 import { PiCow } from "react-icons/pi";
 
 const navItems = [
@@ -65,6 +68,30 @@ const navItems = [
     icon: Settings,
     allowedRoles: ["admin"] as UserRole[],
   },
+  {
+    href: "/dashboard/cooperativa",
+    label: "Dashboard Coop.",
+    icon: LayoutDashboard,
+    allowedRoles: ["admin", "cooperativa_admin"] as UserRole[],
+  },
+  {
+    href: "/dashboard/fincas-cooperativa",
+    label: "Fincas",
+    icon: Building2,
+    allowedRoles: ["admin", "cooperativa_admin"] as UserRole[],
+  },
+  {
+    href: "/dashboard/rutas-cooperativa",
+    label: "Rutas",
+    icon: MapPin,
+    allowedRoles: ["admin", "cooperativa_admin"] as UserRole[],
+  },
+  {
+    href: "/dashboard/recolecciones",
+    label: "Recolecciones",
+    icon: ClipboardList,
+    allowedRoles: ["admin", "cooperativa_admin", "cooperativa_user"] as UserRole[],
+  },
 ];
 
 interface SidebarProps {
@@ -77,6 +104,8 @@ const roleConfig: Record<UserRole, { label: string; classes: string }> = {
   admin: { label: "Administrador", classes: "bg-yellow-500/20 text-yellow-300" },
   viewer: { label: "Solo lectura", classes: "bg-gray-700 text-gray-300" },
   user: { label: "Usuario", classes: "bg-blue-500/20 text-blue-300" },
+  cooperativa_admin: { label: "Coop. Admin", classes: "bg-teal-500/20 text-teal-300" },
+  cooperativa_user: { label: "Coop. Usuario", classes: "bg-cyan-500/20 text-cyan-300" },
 };
 
 export function Sidebar({
@@ -111,12 +140,25 @@ export function Sidebar({
         {/* Brand */}
         <div className="h-16 flex items-center justify-between px-4 border-b border-gray-700">
           <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-green-600 flex items-center justify-center shadow-sm shrink-0">
-              <Leaf className="h-4 w-4 text-white" />
-            </div>
-            <span className="font-semibold text-white tracking-tight truncate">
-              Finca Villa Blanca
-            </span>
+            {role === "cooperativa_admin" || role === "cooperativa_user" ? (
+              <>
+                <div className="h-8 w-8 rounded-lg bg-teal-600 flex items-center justify-center shadow-sm shrink-0">
+                  <GiCheeseWedge className="h-4 w-4 text-white" />
+                </div>
+                <span className="font-semibold text-white tracking-tight truncate">
+                  Toca Lácteos
+                </span>
+              </>
+            ) : (
+              <>
+                <div className="h-8 w-8 rounded-lg bg-green-600 flex items-center justify-center shadow-sm shrink-0">
+                  <Leaf className="h-4 w-4 text-white" />
+                </div>
+                <span className="font-semibold text-white tracking-tight truncate">
+                  Finca Villa Blanca
+                </span>
+              </>
+            )}
           </div>
           <button
             onClick={onCloseMobileMenu}

@@ -1,9 +1,7 @@
 import { z } from "zod";
 
 export const extraccionSchema = z.object({
-  fecha: z.date().refine((val) => !isNaN(val.getTime()), {
-    message: "La fecha es obligatoria",
-  }),
+  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "La fecha es obligatoria"),
   litros: z
     .number()
     .positive("Los litros deben ser mayores a 0")
