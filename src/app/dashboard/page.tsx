@@ -1,9 +1,17 @@
 import { createClient } from "@/lib/supabase/server";
 import { TrendingDown, TrendingUp, Droplets, Milk } from "lucide-react";
 import { formatDate } from "@/lib/utils";
-import { ConceptosDonutChart } from "@/charts/conceptos-donut-chart";
-import { GastosIngresosLineChart } from "@/charts/gastos-ingresos-line-chart";
-import { ExtraccionesLineChart } from "@/charts/extracciones-line-chart";
+import dynamic from "next/dynamic";
+
+const ConceptosDonutChart = dynamic(() =>
+  import("@/charts/conceptos-donut-chart").then((m) => m.ConceptosDonutChart)
+);
+const GastosIngresosLineChart = dynamic(() =>
+  import("@/charts/gastos-ingresos-line-chart").then((m) => m.GastosIngresosLineChart)
+);
+const ExtraccionesLineChart = dynamic(() =>
+  import("@/charts/extracciones-line-chart").then((m) => m.ExtraccionesLineChart)
+);
 import { getLitrosDiaActual } from "@/features/extracciones/actions/extracciones.actions";
 import { checkRoutePermission } from "@/lib/auth/check-permissions";
 import { getUserRole } from "@/lib/auth/get-user-role";
@@ -236,7 +244,7 @@ export default async function DashboardPage({
                 ${totalIngresosNeto.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
               </p>
               <p className="text-xs text-stone-400 mt-0.5">
-                Bruto ${totalIngresos.toLocaleString("es-CO", { minimumFractionDigits: 0 })} · Apor. ${totalAportacion.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
+                Bruto ${totalIngresos.toLocaleString("es-CO", { minimumFractionDigits: 0 })} · <span style={{ color: "#ef4444" }}>Des. Fedegan −${totalAportacion.toLocaleString("es-CO", { minimumFractionDigits: 0 })}</span>
               </p>
             </div>
             <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ml-3" style={{ backgroundColor: "#f0fdf4" }}>

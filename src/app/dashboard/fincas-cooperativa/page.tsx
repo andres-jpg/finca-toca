@@ -5,7 +5,7 @@ import { FincasTable } from "@/features/fincas-cooperativa/components/fincas-tab
 
 export default async function FincasCooperativaPage() {
   const [userRole, fincas, rutas] = await Promise.all([
-    checkRoutePermission(["admin", "cooperativa_admin"]),
+    checkRoutePermission(["cooperativa_admin"]),
     getFincas(),
     getRutas(),
   ]);

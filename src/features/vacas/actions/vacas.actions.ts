@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { formatDate } from "@/lib/utils";
+import { requireRole } from "@/lib/auth/check-permissions";
 import type { Vaca, VacaDetalle, VacaEstado, VacaOrigen, CriaAnimal } from "@/types";
 
 async function consumirPajillaParaPadre(
@@ -147,6 +148,7 @@ export async function createVaca(formData: {
   padre_id?: string | null;
   padre_pajilla_toro_ref_id?: string | null;
 }) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
 
   let padrePajillaNombre: string | null = null;
@@ -190,6 +192,7 @@ export async function updateVaca(
     padre_pajilla_nombre_keep?: string | null;
   }
 ) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
 
   let padrePajillaNombre: string | null = null;
@@ -225,6 +228,7 @@ export async function updateVaca(
 }
 
 export async function venderVaca(id: string) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
   const { error } = await supabase
     .from("vacas")
@@ -236,6 +240,7 @@ export async function venderVaca(id: string) {
 }
 
 export async function deleteVaca(id: string) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
   const { error } = await supabase.from("vacas").delete().eq("id", id);
 

@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { formatDate } from "@/lib/utils";
+import { requireRole } from "@/lib/auth/check-permissions";
 import type { EventoAnimal } from "@/types";
 
 export async function getEventosAnimal(
@@ -29,6 +30,7 @@ export async function createEventoAnimal(formData: {
   descripcion?: string;
   responsable?: string;
 }) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
   const { error } = await supabase.from("eventos_animal").insert({
     animal_id: formData.animal_id,
@@ -59,6 +61,7 @@ export async function updateEventoAnimal(
     responsable?: string;
   }
 ) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
   const { error } = await supabase
     .from("eventos_animal")

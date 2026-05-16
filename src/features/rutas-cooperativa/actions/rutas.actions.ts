@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { requireRole } from "@/lib/auth/check-permissions";
 import type { RutaCooperativa, FincaCooperativa } from "@/types";
 
 export async function getRutas(): Promise<RutaCooperativa[]> {
@@ -31,6 +32,7 @@ export async function createRuta(formData: {
   nombre: string;
   finca_ids: number[];
 }) {
+  await requireRole(["cooperativa_admin"]);
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("rutas_cooperativa")
@@ -60,6 +62,7 @@ export async function updateRuta(
   id: number,
   formData: { nombre: string; finca_ids: number[] }
 ) {
+  await requireRole(["cooperativa_admin"]);
   const supabase = await createClient();
 
   const { error: updateError } = await supabase
@@ -91,6 +94,7 @@ export async function updateRuta(
 }
 
 export async function deleteRuta(id: number) {
+  await requireRole(["cooperativa_admin"]);
   const supabase = await createClient();
   const { error } = await supabase.from("rutas_cooperativa").delete().eq("id", id);
   if (error) throw new Error(error.message);

@@ -38,19 +38,19 @@ export async function proxy(request: NextRequest) {
   );
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const url = request.nextUrl.clone();
 
-  // Redirect dashboard routes to login if no session
-  if (!session && url.pathname.startsWith("/dashboard")) {
+  // Redirect dashboard routes to login if not authenticated
+  if (!user && url.pathname.startsWith("/dashboard")) {
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
   // Redirect login/signup to dashboard if already authenticated
-  if (session && (url.pathname === "/login" || url.pathname === "/signup")) {
+  if (user && (url.pathname === "/login" || url.pathname === "/signup")) {
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }

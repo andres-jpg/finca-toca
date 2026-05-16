@@ -12,7 +12,9 @@ import {
   Building2,
   MapPin,
   ClipboardList,
+
   Package,
+  FileSpreadsheet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types";
@@ -72,25 +74,31 @@ const navItems = [
     href: "/dashboard/cooperativa",
     label: "Dashboard Coop.",
     icon: LayoutDashboard,
-    allowedRoles: ["admin", "cooperativa_admin"] as UserRole[],
+    allowedRoles: ["cooperativa_admin"] as UserRole[],
   },
   {
     href: "/dashboard/fincas-cooperativa",
     label: "Fincas",
     icon: Building2,
-    allowedRoles: ["admin", "cooperativa_admin"] as UserRole[],
+    allowedRoles: ["cooperativa_admin"] as UserRole[],
   },
   {
     href: "/dashboard/rutas-cooperativa",
     label: "Rutas",
     icon: MapPin,
-    allowedRoles: ["admin", "cooperativa_admin"] as UserRole[],
+    allowedRoles: ["cooperativa_admin"] as UserRole[],
   },
   {
     href: "/dashboard/recolecciones",
     label: "Recolecciones",
     icon: ClipboardList,
-    allowedRoles: ["admin", "cooperativa_admin", "cooperativa_user"] as UserRole[],
+    allowedRoles: ["cooperativa_admin", "cooperativa_user"] as UserRole[],
+  },
+  {
+    href: "/dashboard/informes-cooperativa",
+    label: "Informes",
+    icon: FileSpreadsheet,
+    allowedRoles: ["cooperativa_admin"] as UserRole[],
   },
 ];
 

@@ -5,7 +5,7 @@ import { RutasTable } from "@/features/rutas-cooperativa/components/rutas-table"
 
 export default async function RutasCooperativaPage() {
   const [userRole, rutas, fincas] = await Promise.all([
-    checkRoutePermission(["admin", "cooperativa_admin"]),
+    checkRoutePermission(["cooperativa_admin"]),
     getRutas(),
     getFincas(),
   ]);

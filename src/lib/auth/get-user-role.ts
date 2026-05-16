@@ -1,7 +1,8 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types";
 
-export async function getUserRole(): Promise<UserRole | null> {
+export const getUserRole = cache(async function getUserRole(): Promise<UserRole | null> {
   const supabase = await createClient();
 
   // Obtener usuario autenticado
@@ -34,4 +35,4 @@ export async function getUserRole(): Promise<UserRole | null> {
     console.error(err);
     return "user"; // Default role en caso de error
   }
-}
+});

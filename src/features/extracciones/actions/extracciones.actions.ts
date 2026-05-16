@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { formatDate } from "@/lib/utils";
+import { requireRole } from "@/lib/auth/check-permissions";
 import type { ExtraccionLeche } from "@/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -88,6 +89,7 @@ export async function createExtraccion(formData: {
   fecha: string;
   litros: number;
 }) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
 
   const { data: vacasRows } = await supabase
@@ -115,6 +117,7 @@ export async function updateExtraccion(
   id: number,
   formData: { fecha: string; litros: number }
 ) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
 
   // Fetch previous date before updating
@@ -152,6 +155,7 @@ export async function updateExtraccion(
 }
 
 export async function deleteExtraccion(id: number) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
 
   // Fetch date before deleting
