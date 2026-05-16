@@ -154,18 +154,9 @@ export function RutasTable({ rutas, fincas, canEdit }: RutasTableProps) {
             return <span className="text-gray-400 text-sm">Sin fincas</span>;
           }
           return (
-            <div className="flex flex-wrap gap-1">
-              <Badge variant="secondary" className="text-xs">
-                {fincasRuta.length} finca{fincasRuta.length !== 1 ? "s" : ""}
-              </Badge>
-              <span className="text-sm text-gray-500 truncate max-w-xs">
-                {fincasRuta
-                  .slice(0, 3)
-                  .map((f) => f.nombre)
-                  .join(", ")}
-                {fincasRuta.length > 3 && "…"}
-              </span>
-            </div>
+            <Badge variant="secondary" className="text-xs">
+              {fincasRuta.length} finca{fincasRuta.length !== 1 ? "s" : ""}
+            </Badge>
           );
         },
       },

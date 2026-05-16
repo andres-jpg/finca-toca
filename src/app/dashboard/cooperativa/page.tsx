@@ -3,10 +3,20 @@ import { formatDate } from "@/lib/utils";
 import { checkRoutePermission } from "@/lib/auth/check-permissions";
 import { Droplets, DollarSign, Building2, TrendingUp } from "lucide-react";
 import { DashboardFilter } from "@/components/dashboard/dashboard-filter";
-import { RecoleccionesTrendChart } from "@/charts/recolecciones-trend-chart";
-import { LitrosPorRutaChart } from "@/charts/litros-por-ruta-chart";
-import { LitrosPorFincaChart } from "@/charts/litros-por-finca-chart";
-import { GastosCooperativaChart } from "@/charts/gastos-cooperativa-chart";
+import dynamic from "next/dynamic";
+
+const RecoleccionesTrendChart = dynamic(() =>
+  import("@/charts/recolecciones-trend-chart").then((m) => m.RecoleccionesTrendChart)
+);
+const LitrosPorRutaChart = dynamic(() =>
+  import("@/charts/litros-por-ruta-chart").then((m) => m.LitrosPorRutaChart)
+);
+const LitrosPorFincaChart = dynamic(() =>
+  import("@/charts/litros-por-finca-chart").then((m) => m.LitrosPorFincaChart)
+);
+const GastosCooperativaChart = dynamic(() =>
+  import("@/charts/gastos-cooperativa-chart").then((m) => m.GastosCooperativaChart)
+);
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -24,7 +34,7 @@ export default async function CooperativaDashboardPage({
 }: {
   searchParams: Promise<{ mes?: string; anio?: string }>;
 }) {
-  await checkRoutePermission(["admin", "cooperativa_admin"]);
+  await checkRoutePermission(["cooperativa_admin"]);
 
   const params = await searchParams;
   const now = new Date();
@@ -44,6 +54,7 @@ export default async function CooperativaDashboardPage({
     { data: recMes },
     { data: fincasActivas },
     { data: allRec },
+    { data: rutasData },
   ] = await Promise.all([
     supabase
       .from("recolecciones")
@@ -60,6 +71,10 @@ export default async function CooperativaDashboardPage({
       .from("recolecciones")
       .select("fecha, litros, precio_litro")
       .order("fecha", { ascending: true }),
+    supabase
+      .from("rutas_cooperativa")
+      .select("id, nombre")
+      .order("nombre", { ascending: true }),
   ]);
 
   const registros = recMes ?? [];
@@ -70,7 +85,21 @@ export default async function CooperativaDashboardPage({
     (s, r: any) => s + Number(r.litros) * Number(r.precio_litro),
     0
   );
+
+  // Quincenas y aportación Fedegan (0.75%)
+  const APORTACION_PCT = 0.0075;
+  const q1Registros = registros.filter((r: any) => parseInt(r.fecha.split("-")[2]) <= 15);
+  const q2Registros = registros.filter((r: any) => parseInt(r.fecha.split("-")[2]) > 15);
+  const quincenas = {
+    q1Litros: q1Registros.reduce((s: number, r: any) => s + Number(r.litros), 0),
+    q1Valor: q1Registros.reduce((s: number, r: any) => s + Number(r.litros) * Number(r.precio_litro), 0),
+    q2Litros: q2Registros.reduce((s: number, r: any) => s + Number(r.litros), 0),
+    q2Valor: q2Registros.reduce((s: number, r: any) => s + Number(r.litros) * Number(r.precio_litro), 0),
+  };
+  const q1Aportacion = quincenas.q1Valor * APORTACION_PCT;
+  const q2Aportacion = quincenas.q2Valor * APORTACION_PCT;
   const fincasActivasCount = (fincasActivas ?? []).length;
+  const rutasCount = (rutasData ?? []).length;
   const fincasConRecoleccion = new Set(
     registros.map((r: any) => {
       const f = Array.isArray(r.fincas_cooperativa)
@@ -112,18 +141,27 @@ export default async function CooperativaDashboardPage({
     litros,
   }));
 
-  // Litros por finca
-  const fincaMap = new Map<string, number>();
+  // Litros por finca (con rutas para filtrado en el chart)
+  const fincaDataMap = new Map<string, { litros: number; rutas: Set<string> }>();
   registros.forEach((r: any) => {
     const finca = Array.isArray(r.fincas_cooperativa)
       ? r.fincas_cooperativa[0]
       : r.fincas_cooperativa;
     const nombre = finca?.nombre ?? "Desconocida";
-    fincaMap.set(nombre, (fincaMap.get(nombre) ?? 0) + Number(r.litros));
+    const entry = fincaDataMap.get(nombre) ?? { litros: 0, rutas: new Set<string>() };
+    entry.litros += Number(r.litros);
+    const rutasFincas = finca?.rutas_fincas;
+    const rfList: any[] = Array.isArray(rutasFincas) ? rutasFincas : rutasFincas ? [rutasFincas] : [];
+    rfList.forEach((rf: any) => {
+      const rutaObj = Array.isArray(rf.rutas_cooperativa) ? rf.rutas_cooperativa[0] : rf.rutas_cooperativa;
+      if (rutaObj?.nombre) entry.rutas.add(rutaObj.nombre);
+    });
+    fincaDataMap.set(nombre, entry);
   });
-  const litrosPorFinca = Array.from(fincaMap.entries()).map(([finca, litros]) => ({
+  const litrosPorFinca = Array.from(fincaDataMap.entries()).map(([finca, d]) => ({
     finca,
-    litros,
+    litros: d.litros,
+    rutas: Array.from(d.rutas),
   }));
 
   // Datos para el trend chart (todos los registros históricos para el mes actual)
@@ -179,8 +217,19 @@ export default async function CooperativaDashboardPage({
               <Droplets className="h-5 w-5" style={{ color: "#0d9488" }} />
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-stone-100">
-            <span className="text-xs text-stone-400">{mesLabel}</span>
+          <div className="mt-3 pt-3 border-t border-stone-100 space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-stone-400">Q1</span>
+              <span className="text-xs text-stone-500">
+                {quincenas.q1Litros.toLocaleString("es-CO", { minimumFractionDigits: 1 })} L
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-stone-400">Q2</span>
+              <span className="text-xs text-stone-500">
+                {quincenas.q2Litros.toLocaleString("es-CO", { minimumFractionDigits: 1 })} L
+              </span>
+            </div>
           </div>
         </div>
 
@@ -202,8 +251,40 @@ export default async function CooperativaDashboardPage({
               <DollarSign className="h-5 w-5" style={{ color: "#0d9488" }} />
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-stone-100">
-            <span className="text-xs text-stone-400">Total pagado a fincas</span>
+          <div className="mt-3 pt-3 border-t border-stone-100 space-y-1.5">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-stone-400">Compra Q1</span>
+                <span className="text-xs text-stone-500">
+                  {quincenas.q1Litros.toLocaleString("es-CO", { minimumFractionDigits: 1 })} L · ${quincenas.q1Valor.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
+                </span>
+              </div>
+              {quincenas.q1Valor > 0 && (
+                <div className="flex items-center justify-end">
+                  <span className="text-xs" style={{ color: "#ef4444" }}>
+                    Des. Fedegan −${q1Aportacion.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-stone-400">Compra Q2</span>
+                <span className="text-xs text-stone-500">
+                  {quincenas.q2Litros.toLocaleString("es-CO", { minimumFractionDigits: 1 })} L · ${quincenas.q2Valor.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
+                </span>
+              </div>
+              {quincenas.q2Valor > 0 && (
+                <div className="flex items-center justify-end">
+                  <span className="text-xs" style={{ color: "#ef4444" }}>
+                    Des. Fedegan −${q2Aportacion.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="pt-0.5">
+              <span className="text-xs text-stone-400">Total pagado a fincas</span>
+            </div>
           </div>
         </div>
 
@@ -225,10 +306,15 @@ export default async function CooperativaDashboardPage({
               <Building2 className="h-5 w-5" style={{ color: "#0d9488" }} />
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-stone-100">
-            <span className="text-xs text-stone-400">
-              {fincasConRecoleccion} con recolección este mes
-            </span>
+          <div className="mt-3 pt-3 border-t border-stone-100 space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-stone-400">Con recolección este mes</span>
+              <span className="text-xs text-stone-500">{fincasConRecoleccion}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-stone-400">Rutas activas</span>
+              <span className="text-xs text-stone-500">{rutasCount}</span>
+            </div>
           </div>
         </div>
 
@@ -266,7 +352,7 @@ export default async function CooperativaDashboardPage({
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <LitrosPorRutaChart data={litrosPorRuta} />
-        <LitrosPorFincaChart data={litrosPorFinca} />
+        <LitrosPorFincaChart data={litrosPorFinca} rutas={rutasData ?? []} />
       </div>
 
       <GastosCooperativaChart data={gastosData} />

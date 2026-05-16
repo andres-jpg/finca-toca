@@ -144,6 +144,17 @@ function RowActions({
   );
 }
 
+const RUTA_COLORS = [
+  "bg-teal-100 text-teal-800",
+  "bg-blue-100 text-blue-800",
+  "bg-violet-100 text-violet-800",
+  "bg-orange-100 text-orange-800",
+  "bg-pink-100 text-pink-800",
+  "bg-yellow-100 text-yellow-800",
+  "bg-green-100 text-green-800",
+  "bg-red-100 text-red-800",
+];
+
 interface RecoleccionesTableProps {
   recolecciones: Recoleccion[];
   fincas: FincaCooperativa[];
@@ -167,6 +178,18 @@ export function RecoleccionesTable({
 }: RecoleccionesTableProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
+
+  const rutaColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    let idx = 0;
+    recolecciones.forEach((r) => {
+      if (r.ruta_nombre && !map.has(r.ruta_nombre)) {
+        map.set(r.ruta_nombre, RUTA_COLORS[idx % RUTA_COLORS.length]);
+        idx++;
+      }
+    });
+    return map;
+  }, [recolecciones]);
 
   const filtered = useMemo(() => {
     if (todayOnly) {
@@ -204,7 +227,16 @@ export function RecoleccionesTable({
       {
         accessorKey: "ruta_nombre",
         header: "Ruta",
-        cell: ({ getValue }) => getValue<string | null>() ?? "—",
+        cell: ({ getValue }) => {
+          const ruta = getValue<string | null>();
+          if (!ruta) return <span className="text-gray-400 text-sm">—</span>;
+          const colorClass = rutaColorMap.get(ruta) ?? RUTA_COLORS[0];
+          return (
+            <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${colorClass}`}>
+              {ruta}
+            </span>
+          );
+        },
       },
       {
         accessorKey: "litros",
@@ -248,7 +280,7 @@ export function RecoleccionesTable({
     });
 
     return base;
-  }, [canEdit, canDelete, canViewDetail, lockDate, showPricing, fincas]);
+  }, [canEdit, canDelete, canViewDetail, lockDate, showPricing, fincas, rutaColorMap]);
 
   return (
     <div className="space-y-5">

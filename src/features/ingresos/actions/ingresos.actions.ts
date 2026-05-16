@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { formatDate } from "@/lib/utils";
+import { requireRole } from "@/lib/auth/check-permissions";
 import type { Ingreso, ConceptoIngreso } from "@/types";
 
 export async function getIngresos(): Promise<Ingreso[]> {
@@ -56,6 +57,7 @@ export async function createIngreso(formData: {
   vacaIdToSell?: string;
   toroIdToSell?: string;
 }) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
   const { error } = await supabase.from("ingresos").insert({
     fecha: formatDate(formData.fecha),
@@ -97,6 +99,7 @@ export async function updateIngreso(
     observaciones?: string;
   }
 ) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
   const { error } = await supabase
     .from("ingresos")
@@ -114,6 +117,7 @@ export async function updateIngreso(
 }
 
 export async function deleteIngreso(id: number) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
   const { error } = await supabase.from("ingresos").delete().eq("id", id);
 

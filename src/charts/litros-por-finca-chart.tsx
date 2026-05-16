@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   BarChart,
   Bar,
@@ -14,21 +15,47 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 interface FincaLitros {
   finca: string;
   litros: number;
+  rutas: string[];
+}
+
+interface RutaOption {
+  id: number;
+  nombre: string;
 }
 
 interface LitrosPorFincaChartProps {
   data: FincaLitros[];
+  rutas: RutaOption[];
 }
 
-export function LitrosPorFincaChart({ data }: LitrosPorFincaChartProps) {
-  const sorted = [...data].sort((a, b) => b.litros - a.litros).slice(0, 4);
+export function LitrosPorFincaChart({ data, rutas }: LitrosPorFincaChartProps) {
+  const [selectedRuta, setSelectedRuta] = useState<string>("General");
+
+  const filtered =
+    selectedRuta === "General"
+      ? data
+      : data.filter((d) => d.rutas.includes(selectedRuta));
+
+  const sorted = [...filtered].sort((a, b) => b.litros - a.litros).slice(0, 5);
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-semibold text-gray-700">
-          Top 4 fincas por litros
+          Top 5 fincas por litros
         </CardTitle>
+        <select
+          value={selectedRuta}
+          onChange={(e) => setSelectedRuta(e.target.value)}
+          className="text-xs border border-stone-200 rounded-md px-2 py-1 bg-white text-stone-600 focus:outline-none focus:ring-1 focus:ring-teal-500"
+        >
+          <option value="General">General</option>
+          {rutas.map((r) => (
+            <option key={r.id} value={r.nombre}>
+              {r.nombre}
+            </option>
+          ))}
+        </select>
       </CardHeader>
       <CardContent>
         {sorted.length === 0 ? (

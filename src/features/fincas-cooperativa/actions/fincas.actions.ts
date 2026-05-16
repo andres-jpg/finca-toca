@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { requireRole } from "@/lib/auth/check-permissions";
 import type { FincaCooperativa } from "@/types";
 
 const FINCA_SELECT =
@@ -53,6 +54,7 @@ export async function createFinca(formData: {
   activa: boolean;
   ruta_id?: number | null;
 }) {
+  await requireRole(["cooperativa_admin"]);
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("fincas_cooperativa")
@@ -82,6 +84,7 @@ export async function updateFinca(
     ruta_id?: number | null;
   }
 ) {
+  await requireRole(["cooperativa_admin"]);
   const supabase = await createClient();
   const { error } = await supabase
     .from("fincas_cooperativa")
@@ -105,6 +108,7 @@ export async function updateFinca(
 }
 
 export async function deleteFinca(id: number) {
+  await requireRole(["cooperativa_admin"]);
   const supabase = await createClient();
   const { error } = await supabase
     .from("fincas_cooperativa")

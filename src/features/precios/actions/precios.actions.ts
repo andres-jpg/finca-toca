@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { requireRole } from "@/lib/auth/check-permissions";
 import type { Precio } from "@/types";
 
 export async function getPrecioActual(): Promise<Precio | null> {
@@ -31,6 +32,7 @@ export async function getHistorialPrecios(): Promise<Precio[]> {
 }
 
 export async function setPrecio(valor: number): Promise<void> {
+  await requireRole(["admin"]);
   const supabase = await createClient();
   const { error } = await supabase.from("precios").insert({ valor, tipo: "leche" });
 

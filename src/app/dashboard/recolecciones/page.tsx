@@ -5,7 +5,7 @@ import { RecoleccionesTable } from "@/features/recolecciones/components/recolecc
 
 export default async function RecoleccionesPage() {
   const [userRole, recolecciones, fincas] = await Promise.all([
-    checkRoutePermission(["admin", "cooperativa_admin", "cooperativa_user"]),
+    checkRoutePermission(["cooperativa_admin", "cooperativa_user"]),
     getRecolecciones(),
     getFincasActivas(),
   ]);

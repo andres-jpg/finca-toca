@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { requireRole } from "@/lib/auth/check-permissions";
 import type { Recoleccion } from "@/types";
 
 export async function getRecolecciones(): Promise<Recoleccion[]> {
@@ -50,6 +51,7 @@ export async function createRecoleccion(formData: {
   fecha: string;
   litros: number;
 }) {
+  await requireRole(["cooperativa_admin", "cooperativa_user"]);
   const supabase = await createClient();
 
   const { data: fincaData, error: fincaError } = await supabase
@@ -81,6 +83,7 @@ export async function updateRecoleccion(
   id: number,
   formData: { finca_id: number; fecha: string; litros: number }
 ) {
+  await requireRole(["cooperativa_admin", "cooperativa_user"]);
   const supabase = await createClient();
 
   const { data: fincaData, error: fincaError } = await supabase
@@ -112,6 +115,7 @@ export async function updateRecoleccion(
 }
 
 export async function deleteRecoleccion(id: number) {
+  await requireRole(["cooperativa_admin", "cooperativa_user"]);
   const supabase = await createClient();
   const { error } = await supabase.from("recolecciones").delete().eq("id", id);
   if (error) throw new Error(error.message);

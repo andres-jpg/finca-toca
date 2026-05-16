@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { formatDate } from "@/lib/utils";
+import { requireRole } from "@/lib/auth/check-permissions";
 import type { Toro, ToroDetalle, CriaAnimal } from "@/types";
 
 const SELECT_FIELDS =
@@ -117,6 +118,7 @@ export async function createToro(formData: {
   madre_id?: string | null;
   padre_id?: string | null;
 }) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
   const { error } = await supabase.from("toros").insert({
     toro_id: formData.toro_id,
@@ -148,6 +150,7 @@ export async function updateToro(
     padre_id?: string | null;
   }
 ) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
   const { error } = await supabase
     .from("toros")
@@ -170,6 +173,7 @@ export async function updateToro(
 }
 
 export async function venderToro(id: string) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
   const { error } = await supabase
     .from("toros")
@@ -181,6 +185,7 @@ export async function venderToro(id: string) {
 }
 
 export async function deleteToro(id: string) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
   const { error } = await supabase.from("toros").delete().eq("id", id);
 

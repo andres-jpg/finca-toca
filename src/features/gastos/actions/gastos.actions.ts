@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { formatDate } from "@/lib/utils";
+import { requireRole } from "@/lib/auth/check-permissions";
 import type { Gasto, ConceptoGasto } from "@/types";
 
 export async function getGastos(): Promise<Gasto[]> {
@@ -64,6 +65,7 @@ export async function createGasto(formData: {
   numero_cuenta?: string;
   observaciones?: string;
 }) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("gastos")
@@ -112,6 +114,7 @@ export async function updateGasto(
     observaciones?: string;
   }
 ) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
   const { error } = await supabase
     .from("gastos")
@@ -149,6 +152,7 @@ export async function updateGasto(
 }
 
 export async function deleteGasto(id: number) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
   const { error } = await supabase.from("gastos").delete().eq("id", id);
 
