@@ -49,8 +49,8 @@ function RowActions({
       await venderToro(toro.id);
       toast.success("Toro dado de baja");
       setDeleteOpen(false);
-    } catch {
-      toast.error("Error al dar de baja");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo dar de baja el toro");
     }
   };
 

@@ -36,8 +36,8 @@ function RowActions({
       await deleteIngreso(ingreso.id);
       toast.success("Ingreso eliminado");
       setDeleteOpen(false);
-    } catch {
-      toast.error("Error al eliminar");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo eliminar el ingreso");
     }
   };
 

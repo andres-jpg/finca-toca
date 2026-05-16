@@ -15,7 +15,7 @@ export async function getIngresos(): Promise<Ingreso[]> {
     )
     .order("fecha", { ascending: false });
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudieron cargar los ingresos");
 
   return (data ?? []).map((row: any) => ({
     id: row.id,
@@ -36,7 +36,7 @@ export async function getConceptosIngreso(): Promise<ConceptoIngreso[]> {
     .select("id, nombre, subconceptos_ingreso(id, concepto_id, nombre)")
     .order("nombre");
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudieron cargar las categorías de ingresos");
 
   return (data ?? []).map((c: any) => ({
     id: c.id,
@@ -66,14 +66,14 @@ export async function createIngreso(formData: {
     observaciones: formData.observaciones || null,
   });
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudo registrar el ingreso");
 
   if (formData.vacaIdToSell) {
     const { error: vacaError } = await supabase
       .from("vacas")
       .update({ alta: false })
       .eq("id", formData.vacaIdToSell);
-    if (vacaError) throw new Error(vacaError.message);
+    if (vacaError) throw new Error("No se pudo actualizar el estado de la vaca");
     revalidatePath("/dashboard/vacas");
   }
 
@@ -82,7 +82,7 @@ export async function createIngreso(formData: {
       .from("toros")
       .update({ alta: false })
       .eq("id", formData.toroIdToSell);
-    if (toroError) throw new Error(toroError.message);
+    if (toroError) throw new Error("No se pudo actualizar el estado del toro");
     revalidatePath("/dashboard/toros");
   }
 
@@ -111,7 +111,7 @@ export async function updateIngreso(
     })
     .eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudo actualizar el ingreso");
   revalidatePath("/dashboard/ingresos");
   revalidatePath("/dashboard");
 }
@@ -121,7 +121,7 @@ export async function deleteIngreso(id: number) {
   const supabase = await createClient();
   const { error } = await supabase.from("ingresos").delete().eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudo eliminar el ingreso");
   revalidatePath("/dashboard/ingresos");
   revalidatePath("/dashboard");
 }

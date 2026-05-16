@@ -15,7 +15,7 @@ export async function getPrecioActual(): Promise<Precio | null> {
     .limit(1)
     .maybeSingle();
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudo cargar el precio actual");
   return data;
 }
 
@@ -27,7 +27,7 @@ export async function getHistorialPrecios(): Promise<Precio[]> {
     .eq("tipo", "leche")
     .order("created_at", { ascending: false });
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudo cargar el historial de precios");
   return data ?? [];
 }
 
@@ -36,6 +36,6 @@ export async function setPrecio(valor: number): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from("precios").insert({ valor, tipo: "leche" });
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudo guardar el nuevo precio");
   revalidatePath("/dashboard/configuracion");
 }

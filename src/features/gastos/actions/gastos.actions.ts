@@ -15,7 +15,7 @@ export async function getGastos(): Promise<Gasto[]> {
     )
     .order("fecha", { ascending: false });
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudieron cargar los gastos");
 
   return (data ?? []).map((row: any) => ({
     id: row.id,
@@ -39,7 +39,7 @@ export async function getConceptosGasto(): Promise<ConceptoGasto[]> {
     .select("id, nombre, subconceptos_gasto(id, concepto_id, nombre)")
     .order("nombre");
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudieron cargar las categorías de gastos");
 
   return (data ?? []).map((c: any) => ({
     id: c.id,
@@ -81,7 +81,7 @@ export async function createGasto(formData: {
     .select("id")
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudo registrar el gasto");
 
   if (formData.pagado && formData.forma_pago) {
     const { error: pagoError } = await supabase.from("pagos").insert({
@@ -91,7 +91,7 @@ export async function createGasto(formData: {
       banco: formData.forma_pago === "transferencia" ? (formData.banco || null) : null,
       numero_cuenta: formData.forma_pago === "transferencia" ? (formData.numero_cuenta || null) : null,
     });
-    if (pagoError) throw new Error(pagoError.message);
+    if (pagoError) throw new Error("No se pudo registrar el pago del gasto");
   }
 
   revalidatePath("/dashboard/gastos");
@@ -129,7 +129,7 @@ export async function updateGasto(
     })
     .eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudo actualizar el gasto");
 
   if (formData.pagado && formData.forma_pago) {
     const { error: pagoError } = await supabase.from("pagos").upsert(
@@ -142,7 +142,7 @@ export async function updateGasto(
       },
       { onConflict: "gasto_id" }
     );
-    if (pagoError) throw new Error(pagoError.message);
+    if (pagoError) throw new Error("No se pudo actualizar el pago del gasto");
   } else {
     await supabase.from("pagos").delete().eq("gasto_id", id);
   }
@@ -156,7 +156,10 @@ export async function deleteGasto(id: number) {
   const supabase = await createClient();
   const { error } = await supabase.from("gastos").delete().eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "23503") throw new Error("No se puede eliminar este gasto porque tiene registros de pago asociados");
+    throw new Error("No se pudo eliminar el gasto");
+  }
   revalidatePath("/dashboard/gastos");
   revalidatePath("/dashboard");
 }

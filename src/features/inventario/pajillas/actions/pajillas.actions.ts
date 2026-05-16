@@ -12,7 +12,7 @@ export async function getPajillas(): Promise<Pajilla[]> {
     .select("id, created_at, toro_nombre, toro_ref_id, fecha_compra, cantidad, cantidad_disponible, observaciones")
     .order("fecha_compra", { ascending: false });
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudo cargar el inventario de pajillas");
 
   return (data ?? []).map((row: any) => ({
     id: row.id,
@@ -32,7 +32,7 @@ export async function getPajillasPorToro(): Promise<PajillaPorToro[]> {
     .from("pajillas")
     .select("toro_nombre, toro_ref_id, cantidad, cantidad_disponible");
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudo cargar el inventario");
 
   const grouped = new Map<string, PajillaPorToro>();
   for (const row of data ?? []) {
@@ -72,7 +72,7 @@ export async function createPajillas(formData: {
     observaciones: formData.observaciones || null,
   });
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudo registrar el lote de pajillas");
 
   revalidatePath("/dashboard/inventario");
 }
@@ -86,7 +86,7 @@ export async function usarPajillas(id: string, cantidad: number) {
     .eq("id", id)
     .single();
 
-  if (fetchError) throw new Error(fetchError.message);
+  if (fetchError) throw new Error("Error al verificar el stock disponible");
   if (data.cantidad_disponible < cantidad) {
     throw new Error(
       `Solo hay ${data.cantidad_disponible} pajilla(s) disponibles en este lote`
@@ -98,7 +98,7 @@ export async function usarPajillas(id: string, cantidad: number) {
     .update({ cantidad_disponible: data.cantidad_disponible - cantidad })
     .eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudo actualizar el inventario de pajillas");
 
   revalidatePath("/dashboard/inventario");
 }
@@ -107,7 +107,7 @@ export async function deletePajilla(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("pajillas").delete().eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudo eliminar el lote de pajillas");
 
   revalidatePath("/dashboard/inventario");
 }

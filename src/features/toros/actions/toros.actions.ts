@@ -37,7 +37,7 @@ export async function getToros(): Promise<Toro[]> {
     .select(SELECT_FIELDS)
     .order("toro_id", { ascending: true });
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudieron cargar los toros");
   return (data ?? []).map(mapRow);
 }
 
@@ -49,7 +49,7 @@ export async function getTorosDeAlta(): Promise<Toro[]> {
     .eq("alta", true)
     .order("toro_id", { ascending: true });
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudieron cargar los toros");
   return (data ?? []).map(mapRow);
 }
 
@@ -132,7 +132,10 @@ export async function createToro(formData: {
     padre_id: formData.padre_id || null,
   });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "23505") throw new Error("Ya existe un toro con ese número de identificación");
+    throw new Error("No se pudo registrar el toro");
+  }
   revalidatePath("/dashboard/toros");
 }
 
@@ -167,7 +170,10 @@ export async function updateToro(
     })
     .eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "23505") throw new Error("Ya existe un toro con ese número de identificación");
+    throw new Error("No se pudo actualizar el toro");
+  }
   revalidatePath("/dashboard/toros");
   revalidatePath(`/dashboard/toros/${id}`);
 }
@@ -180,7 +186,7 @@ export async function venderToro(id: string) {
     .update({ alta: false })
     .eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudo dar de baja el toro");
   revalidatePath("/dashboard/toros");
 }
 
@@ -189,6 +195,9 @@ export async function deleteToro(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("toros").delete().eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "23503") throw new Error("No se puede eliminar este toro porque tiene crías u otros registros asociados");
+    throw new Error("No se pudo eliminar el toro");
+  }
   revalidatePath("/dashboard/toros");
 }

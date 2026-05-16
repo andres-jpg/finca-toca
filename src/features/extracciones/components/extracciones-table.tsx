@@ -24,8 +24,8 @@ function RowActions({ extraccion }: { extraccion: ExtraccionLeche }) {
       await deleteExtraccion(extraccion.id);
       toast.success("Extracción eliminada");
       setDeleteOpen(false);
-    } catch {
-      toast.error("Error al eliminar");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo eliminar la extracción");
     }
   };
 

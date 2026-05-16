@@ -33,7 +33,7 @@ export async function getFincas(): Promise<FincaCooperativa[]> {
     .from("fincas_cooperativa")
     .select(FINCA_SELECT)
     .order("nombre");
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudieron cargar las fincas");
   return (data ?? []).map(mapFinca);
 }
 
@@ -44,7 +44,7 @@ export async function getFincasActivas(): Promise<FincaCooperativa[]> {
     .select(FINCA_SELECT)
     .eq("activa", true)
     .order("nombre");
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudieron cargar las fincas");
   return (data ?? []).map(mapFinca);
 }
 
@@ -61,13 +61,16 @@ export async function createFinca(formData: {
     .insert({ nombre: formData.nombre, precio_litro: formData.precio_litro, activa: formData.activa })
     .select("id")
     .single();
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "23505") throw new Error("Ya existe una finca con ese nombre");
+    throw new Error("No se pudo crear la finca");
+  }
 
   if (formData.ruta_id) {
     const { error: rutaError } = await supabase
       .from("rutas_fincas")
       .insert({ ruta_id: formData.ruta_id, finca_id: data.id });
-    if (rutaError) throw new Error(rutaError.message);
+    if (rutaError) throw new Error("No se pudo asignar la ruta a la finca");
   }
 
   revalidatePath("/dashboard/fincas-cooperativa");
@@ -90,7 +93,10 @@ export async function updateFinca(
     .from("fincas_cooperativa")
     .update({ nombre: formData.nombre, precio_litro: formData.precio_litro, activa: formData.activa })
     .eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "23505") throw new Error("Ya existe una finca con ese nombre");
+    throw new Error("No se pudo actualizar la finca");
+  }
 
   // Reemplaza la asignación de ruta
   await supabase.from("rutas_fincas").delete().eq("finca_id", id);
@@ -98,7 +104,7 @@ export async function updateFinca(
     const { error: rutaError } = await supabase
       .from("rutas_fincas")
       .insert({ ruta_id: formData.ruta_id, finca_id: id });
-    if (rutaError) throw new Error(rutaError.message);
+    if (rutaError) throw new Error("No se pudo actualizar la ruta de la finca");
   }
 
   revalidatePath("/dashboard/fincas-cooperativa");
@@ -120,7 +126,7 @@ export async function deleteFinca(id: number) {
         "No se puede eliminar esta finca porque tiene recolecciones asociadas"
       );
     }
-    throw new Error(error.message);
+    throw new Error("No se pudo eliminar la finca");
   }
   revalidatePath("/dashboard/fincas-cooperativa");
   revalidatePath("/dashboard/cooperativa");

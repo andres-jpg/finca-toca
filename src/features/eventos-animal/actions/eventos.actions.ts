@@ -18,7 +18,7 @@ export async function getEventosAnimal(
     .eq("animal_tipo", animalTipo)
     .order("fecha", { ascending: false });
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudieron cargar los eventos del animal");
   return data ?? [];
 }
 
@@ -41,7 +41,7 @@ export async function createEventoAnimal(formData: {
     responsable: formData.responsable || null,
   });
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudo registrar el evento");
 
   const path =
     formData.animal_tipo === "vaca"
@@ -73,7 +73,7 @@ export async function updateEventoAnimal(
     })
     .eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudo actualizar el evento");
 
   const path =
     formData.animal_tipo === "vaca"

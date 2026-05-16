@@ -13,7 +13,7 @@ export async function getRutas(): Promise<RutaCooperativa[]> {
       "id, nombre, created_at, rutas_fincas(finca_id, fincas_cooperativa(id, nombre, precio_litro, activa, created_at))"
     )
     .order("nombre");
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudieron cargar las rutas");
 
   return (data ?? []).map((row: any) => ({
     id: row.id,
@@ -39,7 +39,10 @@ export async function createRuta(formData: {
     .insert({ nombre: formData.nombre })
     .select("id")
     .single();
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "23505") throw new Error("Ya existe una ruta con ese nombre");
+    throw new Error("No se pudo crear la ruta");
+  }
 
   const rutaId = data.id;
   if (formData.finca_ids.length > 0) {
@@ -50,7 +53,7 @@ export async function createRuta(formData: {
       if (junctionError.code === "23505") {
         throw new Error("Una o más fincas seleccionadas ya pertenecen a otra ruta");
       }
-      throw new Error(junctionError.message);
+      throw new Error("No se pudieron asignar las fincas a la ruta");
     }
   }
 
@@ -69,13 +72,16 @@ export async function updateRuta(
     .from("rutas_cooperativa")
     .update({ nombre: formData.nombre })
     .eq("id", id);
-  if (updateError) throw new Error(updateError.message);
+  if (updateError) {
+    if (updateError.code === "23505") throw new Error("Ya existe una ruta con ese nombre");
+    throw new Error("No se pudo actualizar la ruta");
+  }
 
   const { error: deleteError } = await supabase
     .from("rutas_fincas")
     .delete()
     .eq("ruta_id", id);
-  if (deleteError) throw new Error(deleteError.message);
+  if (deleteError) throw new Error("No se pudieron actualizar las fincas asignadas a la ruta");
 
   if (formData.finca_ids.length > 0) {
     const { error: insertError } = await supabase
@@ -85,7 +91,7 @@ export async function updateRuta(
       if (insertError.code === "23505") {
         throw new Error("Una o más fincas seleccionadas ya pertenecen a otra ruta");
       }
-      throw new Error(insertError.message);
+      throw new Error("No se pudieron asignar las fincas a la ruta");
     }
   }
 
@@ -97,7 +103,10 @@ export async function deleteRuta(id: number) {
   await requireRole(["cooperativa_admin"]);
   const supabase = await createClient();
   const { error } = await supabase.from("rutas_cooperativa").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "23503") throw new Error("No se puede eliminar esta ruta porque tiene recolecciones asociadas");
+    throw new Error("No se pudo eliminar la ruta");
+  }
   revalidatePath("/dashboard/rutas-cooperativa");
   revalidatePath("/dashboard/cooperativa");
 }

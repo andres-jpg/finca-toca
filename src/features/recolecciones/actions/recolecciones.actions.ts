@@ -13,7 +13,7 @@ export async function getRecolecciones(): Promise<Recoleccion[]> {
       "id, finca_id, fecha, litros, precio_litro, created_at, fincas_cooperativa(nombre, rutas_fincas(rutas_cooperativa(nombre)))"
     )
     .order("fecha", { ascending: false });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudieron cargar las recolecciones");
 
   return (data ?? []).map((row: any) => {
     const finca = Array.isArray(row.fincas_cooperativa)
@@ -72,7 +72,7 @@ export async function createRecoleccion(formData: {
     if (error.code === "23505") {
       throw new Error("Ya existe una recolección para esta finca en esta fecha");
     }
-    throw new Error(error.message);
+    throw new Error("No se pudo registrar la recolección");
   }
 
   revalidatePath("/dashboard/recolecciones");
@@ -107,7 +107,7 @@ export async function updateRecoleccion(
     if (error.code === "23505") {
       throw new Error("Ya existe una recolección para esta finca en esta fecha");
     }
-    throw new Error(error.message);
+    throw new Error("No se pudo actualizar la recolección");
   }
 
   revalidatePath("/dashboard/recolecciones");
@@ -118,7 +118,7 @@ export async function deleteRecoleccion(id: number) {
   await requireRole(["cooperativa_admin", "cooperativa_user"]);
   const supabase = await createClient();
   const { error } = await supabase.from("recolecciones").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudo eliminar la recolección");
   revalidatePath("/dashboard/recolecciones");
   revalidatePath("/dashboard/cooperativa");
 }

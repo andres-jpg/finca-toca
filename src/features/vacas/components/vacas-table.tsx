@@ -55,8 +55,8 @@ function RowActions({
       await venderVaca(vaca.id);
       toast.success("Vaca dada de baja");
       setDeleteOpen(false);
-    } catch {
-      toast.error("Error al dar de baja");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo dar de baja la vaca");
     }
   };
 

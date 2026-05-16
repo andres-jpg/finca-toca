@@ -81,7 +81,7 @@ export async function getExtracciones(): Promise<ExtraccionLeche[]> {
     .select("*")
     .order("fecha", { ascending: false });
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudieron cargar las extracciones");
   return data;
 }
 
@@ -104,7 +104,10 @@ export async function createExtraccion(formData: {
     vacas_en_produccion: vacasRows?.length ?? null,
   });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "23505") throw new Error("Ya existe una extracción registrada para esta fecha");
+    throw new Error("No se pudo registrar la extracción");
+  }
 
   await upsertIngresoLeche(formData.fecha, supabase);
 
@@ -142,7 +145,10 @@ export async function updateExtraccion(
     })
     .eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "23505") throw new Error("Ya existe una extracción registrada para esta fecha");
+    throw new Error("No se pudo actualizar la extracción");
+  }
 
   if (oldRow && oldRow.fecha !== formData.fecha) {
     await upsertIngresoLeche(oldRow.fecha, supabase);
@@ -170,7 +176,7 @@ export async function deleteExtraccion(id: number) {
     .delete()
     .eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudo eliminar la extracción");
 
   if (row?.fecha) await upsertIngresoLeche(row.fecha, supabase);
 
@@ -190,7 +196,7 @@ export async function getLitrosDiaActual(): Promise<number> {
     .select("litros")
     .eq("fecha", hoy);
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudieron cargar los datos de extracción del día");
   return (data ?? []).reduce((sum, row) => sum + row.litros, 0);
 }
 
@@ -206,7 +212,7 @@ export async function getLitrosMesActual(): Promise<number> {
     .gte("fecha", start)
     .lte("fecha", end);
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudieron cargar los datos de extracción del mes");
   return (data ?? []).reduce((sum, row) => sum + row.litros, 0);
 }
 

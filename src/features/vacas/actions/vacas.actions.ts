@@ -18,7 +18,7 @@ async function consumirPajillaParaPadre(
     .order("fecha_compra", { ascending: true })
     .limit(1);
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("Error al verificar las pajillas disponibles");
   if (!lotes || lotes.length === 0)
     throw new Error("No hay pajillas disponibles para este toro");
 
@@ -28,7 +28,7 @@ async function consumirPajillaParaPadre(
     .update({ cantidad_disponible: lote.cantidad_disponible - 1 })
     .eq("id", lote.id);
 
-  if (updateError) throw new Error(updateError.message);
+  if (updateError) throw new Error("No se pudo actualizar el inventario de pajillas");
 
   revalidatePath("/dashboard/inventario");
   return lote.toro_nombre as string;
@@ -66,7 +66,7 @@ export async function getVacas(): Promise<Vaca[]> {
     .select(SELECT_FIELDS)
     .order("vaca_id", { ascending: true });
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudieron cargar las vacas");
   return (data ?? []).map(mapRow);
 }
 
@@ -78,7 +78,7 @@ export async function getVacasDeAlta(): Promise<Vaca[]> {
     .eq("alta", true)
     .order("vaca_id", { ascending: true });
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudieron cargar las vacas");
   return (data ?? []).map(mapRow);
 }
 
@@ -172,7 +172,10 @@ export async function createVaca(formData: {
     padre_pajilla_nombre: padrePajillaNombre,
   });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "23505") throw new Error("Ya existe una vaca con ese número de identificación");
+    throw new Error("No se pudo registrar la vaca");
+  }
   revalidatePath("/dashboard/vacas");
 }
 
@@ -222,7 +225,10 @@ export async function updateVaca(
     })
     .eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "23505") throw new Error("Ya existe una vaca con ese número de identificación");
+    throw new Error("No se pudo actualizar la vaca");
+  }
   revalidatePath("/dashboard/vacas");
   revalidatePath(`/dashboard/vacas/${id}`);
 }
@@ -235,7 +241,7 @@ export async function venderVaca(id: string) {
     .update({ alta: false })
     .eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("No se pudo dar de baja la vaca");
   revalidatePath("/dashboard/vacas");
 }
 
@@ -244,6 +250,9 @@ export async function deleteVaca(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("vacas").delete().eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "23503") throw new Error("No se puede eliminar esta vaca porque tiene crías u otros registros asociados");
+    throw new Error("No se pudo eliminar la vaca");
+  }
   revalidatePath("/dashboard/vacas");
 }
