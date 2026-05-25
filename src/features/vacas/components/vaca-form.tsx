@@ -35,7 +35,7 @@ const ESTADO_LABELS: Record<string, string> = {
 type PadreTipo = "none" | "toro" | "pajilla";
 
 interface FormValues {
-  vaca_id: number;
+  vaca_id: string;
   nombre: string;
   origen: "finca" | "externa";
   estado: "produccion" | "secado" | "pre_jardin" | "jardin" | "transicion";
@@ -76,7 +76,7 @@ export function VacaForm({ vaca, vacas, toros, pajillasPorToro, onSuccess }: Vac
   } = useForm<FormValues>({
     resolver: zodResolver(vacaSchema) as any,
     defaultValues: {
-      vaca_id: vaca?.vaca_id ?? 0,
+      vaca_id: vaca?.vaca_id ?? "",
       nombre: vaca?.nombre ?? "",
       origen: vaca?.origen ?? undefined,
       estado: vaca?.estado ?? undefined,
@@ -146,11 +146,9 @@ export function VacaForm({ vaca, vacas, toros, pajillasPorToro, onSuccess }: Vac
           <Label htmlFor="vaca_id">ID de la Vaca</Label>
           <Input
             id="vaca_id"
-            type="number"
-            min="1"
-            max="9999"
-            placeholder="Ej: 123"
-            {...register("vaca_id", { valueAsNumber: true })}
+            type="text"
+            placeholder="Ej: 123, A-01, VL-007"
+            {...register("vaca_id")}
           />
           {errors.vaca_id && (
             <p className="text-sm text-red-500">{errors.vaca_id.message}</p>

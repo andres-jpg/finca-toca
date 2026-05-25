@@ -2,10 +2,9 @@ import { z } from "zod";
 
 export const vacaSchema = z.object({
   vaca_id: z
-    .number()
-    .int("El ID debe ser un número entero")
-    .positive("El ID debe ser mayor a 0")
-    .max(9999, "Valor máximo: 9999"),
+    .string()
+    .min(1, "El ID es obligatorio")
+    .max(20, "Máximo 20 caracteres"),
   nombre: z
     .string()
     .min(1, "El nombre es obligatorio")

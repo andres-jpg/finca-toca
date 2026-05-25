@@ -87,7 +87,7 @@ export type VacaEstado = "produccion" | "secado" | "pre_jardin" | "jardin" | "tr
 export interface Vaca {
   id: string;
   created_at: string | null;
-  vaca_id: number;
+  vaca_id: string;
   nombre: string;
   origen: VacaOrigen | null;
   estado: VacaEstado | null;
@@ -150,7 +150,7 @@ export interface EventoAnimal {
 export interface CriaAnimal {
   id: string;
   tipo: "vaca" | "toro";
-  animal_id: number;
+  animal_id: string | number;
   nombre: string;
   estado: string | null;
   alta: boolean;
@@ -158,13 +158,13 @@ export interface CriaAnimal {
 
 export interface VacaDetalle extends Vaca {
   padre: { id: string; toro_id: number; nombre: string } | null;
-  madre: { id: string; vaca_id: number; nombre: string } | null;
+  madre: { id: string; vaca_id: string; nombre: string } | null;
   crias: CriaAnimal[];
 }
 
 export interface ToroDetalle extends Toro {
   padre: { id: string; toro_id: number; nombre: string } | null;
-  madre: { id: string; vaca_id: number; nombre: string } | null;
+  madre: { id: string; vaca_id: string; nombre: string } | null;
   crias: CriaAnimal[];
 }
 

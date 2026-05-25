@@ -63,11 +63,12 @@ export async function getVacas(): Promise<Vaca[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("vacas")
-    .select(SELECT_FIELDS)
-    .order("vaca_id", { ascending: true });
+    .select(SELECT_FIELDS);
 
   if (error) throw new Error("No se pudieron cargar las vacas");
-  return (data ?? []).map(mapRow);
+  return (data ?? []).map(mapRow).sort((a, b) =>
+    a.vaca_id.localeCompare(b.vaca_id, undefined, { numeric: true })
+  );
 }
 
 export async function getVacasDeAlta(): Promise<Vaca[]> {
@@ -75,11 +76,12 @@ export async function getVacasDeAlta(): Promise<Vaca[]> {
   const { data, error } = await supabase
     .from("vacas")
     .select(SELECT_FIELDS)
-    .eq("alta", true)
-    .order("vaca_id", { ascending: true });
+    .eq("alta", true);
 
   if (error) throw new Error("No se pudieron cargar las vacas");
-  return (data ?? []).map(mapRow);
+  return (data ?? []).map(mapRow).sort((a, b) =>
+    a.vaca_id.localeCompare(b.vaca_id, undefined, { numeric: true })
+  );
 }
 
 export async function getVacaById(id: string): Promise<VacaDetalle | null> {
@@ -97,8 +99,7 @@ export async function getVacaById(id: string): Promise<VacaDetalle | null> {
     supabase
       .from("vacas")
       .select("id, vaca_id, nombre, estado, alta")
-      .eq("madre_id", id)
-      .order("vaca_id", { ascending: true }),
+      .eq("madre_id", id),
     supabase
       .from("toros")
       .select("id, toro_id, nombre, estado, alta")
@@ -109,15 +110,21 @@ export async function getVacaById(id: string): Promise<VacaDetalle | null> {
   const madreRaw = Array.isArray(vaca.madre) ? vaca.madre[0] : vaca.madre;
   const padreRaw = Array.isArray(vaca.padre) ? vaca.padre[0] : vaca.padre;
 
-  const crias: CriaAnimal[] = [
-    ...(criasVacas ?? []).map((c: any) => ({
+  const criasVacasMapped = (criasVacas ?? [])
+    .sort((a: any, b: any) =>
+      String(a.vaca_id).localeCompare(String(b.vaca_id), undefined, { numeric: true })
+    )
+    .map((c: any) => ({
       id: c.id,
       tipo: "vaca" as const,
       animal_id: c.vaca_id,
       nombre: c.nombre,
       estado: c.estado,
       alta: c.alta,
-    })),
+    }));
+
+  const crias: CriaAnimal[] = [
+    ...criasVacasMapped,
     ...(criasToros ?? []).map((c: any) => ({
       id: c.id,
       tipo: "toro" as const,
@@ -137,7 +144,7 @@ export async function getVacaById(id: string): Promise<VacaDetalle | null> {
 }
 
 export async function createVaca(formData: {
-  vaca_id: number;
+  vaca_id: string;
   nombre: string;
   origen: VacaOrigen;
   estado: VacaEstado;
@@ -182,7 +189,7 @@ export async function createVaca(formData: {
 export async function updateVaca(
   id: string,
   formData: {
-    vaca_id: number;
+    vaca_id: string;
     nombre: string;
     origen: VacaOrigen;
     estado: VacaEstado;

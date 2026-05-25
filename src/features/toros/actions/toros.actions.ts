@@ -68,8 +68,7 @@ export async function getToroById(id: string): Promise<ToroDetalle | null> {
     supabase
       .from("vacas")
       .select("id, vaca_id, nombre, estado, alta")
-      .eq("madre_id", id)
-      .order("vaca_id", { ascending: true }),
+      .eq("madre_id", id),
     supabase
       .from("toros")
       .select("id, toro_id, nombre, estado, alta")
@@ -80,15 +79,21 @@ export async function getToroById(id: string): Promise<ToroDetalle | null> {
   const madreRaw = Array.isArray(toro.madre) ? toro.madre[0] : toro.madre;
   const padreRaw = Array.isArray(toro.padre) ? toro.padre[0] : toro.padre;
 
-  const crias: CriaAnimal[] = [
-    ...(criasVacas ?? []).map((c: any) => ({
+  const criasVacasMapped = (criasVacas ?? [])
+    .sort((a: any, b: any) =>
+      String(a.vaca_id).localeCompare(String(b.vaca_id), undefined, { numeric: true })
+    )
+    .map((c: any) => ({
       id: c.id,
       tipo: "vaca" as const,
       animal_id: c.vaca_id,
       nombre: c.nombre,
       estado: c.estado,
       alta: c.alta,
-    })),
+    }));
+
+  const crias: CriaAnimal[] = [
+    ...criasVacasMapped,
     ...(criasToros ?? []).map((c: any) => ({
       id: c.id,
       tipo: "toro" as const,
