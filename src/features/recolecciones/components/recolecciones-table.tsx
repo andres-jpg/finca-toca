@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { MonthPicker } from "@/components/shared/month-picker";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
-import type { Recoleccion, FincaCooperativa } from "@/types";
+import type { Recoleccion, FincaCooperativa, RutaCooperativa } from "@/types";
 
 function RecoleccionDetail({ rec }: { rec: Recoleccion }) {
   return (
@@ -58,6 +58,7 @@ function RecoleccionDetail({ rec }: { rec: Recoleccion }) {
 function RowActions({
   rec,
   fincas,
+  rutas,
   canEdit,
   canDelete,
   canViewDetail,
@@ -66,6 +67,7 @@ function RowActions({
 }: {
   rec: Recoleccion;
   fincas: FincaCooperativa[];
+  rutas: RutaCooperativa[];
   canEdit: boolean;
   canDelete: boolean;
   canViewDetail: boolean;
@@ -127,6 +129,7 @@ function RowActions({
           <RecoleccionForm
             recoleccion={rec}
             fincas={fincas}
+            rutas={rutas}
             lockDate={lockDate}
             showPricing={showPricing}
             onSuccess={() => setEditOpen(false)}
@@ -158,6 +161,7 @@ const RUTA_COLORS = [
 interface RecoleccionesTableProps {
   recolecciones: Recoleccion[];
   fincas: FincaCooperativa[];
+  rutas: RutaCooperativa[];
   canEdit: boolean;
   canDelete: boolean;
   canViewDetail: boolean;
@@ -169,6 +173,7 @@ interface RecoleccionesTableProps {
 export function RecoleccionesTable({
   recolecciones,
   fincas,
+  rutas,
   canEdit,
   canDelete,
   canViewDetail,
@@ -270,6 +275,7 @@ export function RecoleccionesTable({
         <RowActions
           rec={row.original}
           fincas={fincas}
+          rutas={rutas}
           canEdit={canEdit}
           canDelete={canDelete}
           canViewDetail={canViewDetail}
@@ -280,7 +286,7 @@ export function RecoleccionesTable({
     });
 
     return base;
-  }, [canEdit, canDelete, canViewDetail, lockDate, showPricing, fincas, rutaColorMap]);
+  }, [canEdit, canDelete, canViewDetail, lockDate, showPricing, fincas, rutas, rutaColorMap]);
 
   return (
     <div className="space-y-5">
@@ -343,6 +349,7 @@ export function RecoleccionesTable({
         >
           <RecoleccionForm
             fincas={fincas}
+            rutas={rutas}
             lockDate={lockDate}
             showPricing={showPricing}
             onSuccess={() => setModalOpen(false)}

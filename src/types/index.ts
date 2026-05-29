@@ -204,6 +204,7 @@ export interface FincaCooperativa {
   activa: boolean;
   created_at: string;
   ruta_nombre: string | null;
+  orden?: number;
 }
 
 export interface RutaCooperativa {

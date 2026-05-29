@@ -10,7 +10,7 @@ export async function getRutas(): Promise<RutaCooperativa[]> {
   const { data, error } = await supabase
     .from("rutas_cooperativa")
     .select(
-      "id, nombre, created_at, rutas_fincas(finca_id, fincas_cooperativa(id, nombre, precio_litro, activa, created_at))"
+      "id, nombre, created_at, rutas_fincas(finca_id, orden, fincas_cooperativa(id, nombre, precio_litro, activa, created_at))"
     )
     .order("nombre");
   if (error) throw new Error("No se pudieron cargar las rutas");
@@ -19,12 +19,14 @@ export async function getRutas(): Promise<RutaCooperativa[]> {
     id: row.id,
     nombre: row.nombre,
     created_at: row.created_at,
-    fincas: (row.rutas_fincas ?? []).map((rf: any) => {
-      const f = Array.isArray(rf.fincas_cooperativa)
-        ? rf.fincas_cooperativa[0]
-        : rf.fincas_cooperativa;
-      return f as FincaCooperativa;
-    }),
+    fincas: (row.rutas_fincas ?? [])
+      .sort((a: any, b: any) => a.orden - b.orden)
+      .map((rf: any) => {
+        const f = Array.isArray(rf.fincas_cooperativa)
+          ? rf.fincas_cooperativa[0]
+          : rf.fincas_cooperativa;
+        return { ...f, orden: rf.orden } as FincaCooperativa;
+      }),
   }));
 }
 
@@ -48,7 +50,7 @@ export async function createRuta(formData: {
   if (formData.finca_ids.length > 0) {
     const { error: junctionError } = await supabase
       .from("rutas_fincas")
-      .insert(formData.finca_ids.map((finca_id) => ({ ruta_id: rutaId, finca_id })));
+      .insert(formData.finca_ids.map((finca_id, index) => ({ ruta_id: rutaId, finca_id, orden: index })));
     if (junctionError) {
       if (junctionError.code === "23505") {
         throw new Error("Una o más fincas seleccionadas ya pertenecen a otra ruta");
@@ -86,7 +88,7 @@ export async function updateRuta(
   if (formData.finca_ids.length > 0) {
     const { error: insertError } = await supabase
       .from("rutas_fincas")
-      .insert(formData.finca_ids.map((finca_id) => ({ ruta_id: id, finca_id })));
+      .insert(formData.finca_ids.map((finca_id, index) => ({ ruta_id: id, finca_id, orden: index })));
     if (insertError) {
       if (insertError.code === "23505") {
         throw new Error("Una o más fincas seleccionadas ya pertenecen a otra ruta");
@@ -109,4 +111,22 @@ export async function deleteRuta(id: number) {
   }
   revalidatePath("/dashboard/rutas-cooperativa");
   revalidatePath("/dashboard/cooperativa");
+}
+
+export async function updateFincasOrden(rutaId: number, fincaIds: number[]) {
+  await requireRole(["cooperativa_admin"]);
+  const supabase = await createClient();
+
+  await Promise.all(
+    fincaIds.map((fincaId, index) =>
+      supabase
+        .from("rutas_fincas")
+        .update({ orden: index })
+        .eq("ruta_id", rutaId)
+        .eq("finca_id", fincaId)
+    )
+  );
+
+  revalidatePath("/dashboard/rutas-cooperativa");
+  revalidatePath("/dashboard/recolecciones");
 }
