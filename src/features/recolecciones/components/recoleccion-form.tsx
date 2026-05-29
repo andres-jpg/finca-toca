@@ -21,31 +21,52 @@ import {
 import { DatePicker } from "@/components/shared/date-picker";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
-import type { Recoleccion, FincaCooperativa } from "@/types";
+import type { Recoleccion, FincaCooperativa, RutaCooperativa } from "@/types";
 import type { RecoleccionFormValues } from "@/features/recolecciones/schemas/recoleccion.schema";
 
 interface RecoleccionFormProps {
   recoleccion?: Recoleccion;
   fincas: FincaCooperativa[];
+  rutas?: RutaCooperativa[];
   lockDate?: boolean;
   showPricing?: boolean;
   onSuccess: () => void;
 }
 
+function deriveRutaId(fincaId: number, rutas: RutaCooperativa[]): number | null {
+  for (const ruta of rutas) {
+    if (ruta.fincas.some((f) => f.id === fincaId)) return ruta.id;
+  }
+  return null;
+}
+
 export function RecoleccionForm({
   recoleccion,
   fincas,
+  rutas = [],
   lockDate = false,
   showPricing = true,
   onSuccess,
 }: RecoleccionFormProps) {
   const initialFincaId = recoleccion?.finca_id ?? 0;
+  const initialRutaId = initialFincaId && rutas.length > 0
+    ? deriveRutaId(initialFincaId, rutas)
+    : null;
+
+  const [selectedRutaId, setSelectedRutaId] = useState<number | null>(initialRutaId);
   const [selectedFincaId, setSelectedFincaId] = useState<number>(initialFincaId);
   const [datePickerValue, setDatePickerValue] = useState<Date>(
     recoleccion?.fecha ? new Date(recoleccion.fecha + "T00:00:00") : new Date()
   );
 
-  const selectedFinca = fincas.find((f) => f.id === selectedFincaId) ?? null;
+  const selectedRuta = rutas.find((r) => r.id === selectedRutaId) ?? null;
+
+  // Fincas disponibles en el selector: si hay ruta seleccionada, usar las de esa ruta en orden guardado
+  const fincasDisponibles: FincaCooperativa[] = selectedRuta
+    ? selectedRuta.fincas
+    : fincas;
+
+  const selectedFinca = fincasDisponibles.find((f) => f.id === selectedFincaId) ?? null;
 
   const {
     register,
@@ -69,6 +90,14 @@ export function RecoleccionForm({
       ? litrosValue * selectedFinca.precio_litro
       : null;
 
+  const handleRutaChange = (val: string) => {
+    const id = val === "all" ? null : parseInt(val, 10);
+    setSelectedRutaId(id);
+    // Reset finca when ruta changes
+    setSelectedFincaId(0);
+    setValue("finca_id", undefined as any);
+  };
+
   const onSubmit = async (data: RecoleccionFormValues) => {
     try {
       if (recoleccion) {
@@ -86,6 +115,29 @@ export function RecoleccionForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      {/* Selector de ruta (solo si hay rutas disponibles) */}
+      {rutas.length > 0 && (
+        <div className="space-y-2">
+          <Label>Ruta</Label>
+          <Select
+            value={selectedRutaId !== null ? String(selectedRutaId) : "all"}
+            onValueChange={handleRutaChange}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Selecciona una ruta" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las fincas</SelectItem>
+              {rutas.map((r) => (
+                <SelectItem key={r.id} value={String(r.id)}>
+                  {r.nombre}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       <div className="space-y-2">
         <Label>Finca</Label>
         <Select
@@ -100,7 +152,7 @@ export function RecoleccionForm({
             <SelectValue placeholder="Selecciona una finca" />
           </SelectTrigger>
           <SelectContent>
-            {fincas.map((f) => (
+            {fincasDisponibles.map((f) => (
               <SelectItem key={f.id} value={String(f.id)}>
                 {f.nombre}
               </SelectItem>

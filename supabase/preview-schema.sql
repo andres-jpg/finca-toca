@@ -183,6 +183,7 @@ CREATE TABLE public.rutas_cooperativa (
 CREATE TABLE public.rutas_fincas (
   ruta_id  integer NOT NULL REFERENCES public.rutas_cooperativa(id),
   finca_id integer NOT NULL UNIQUE REFERENCES public.fincas_cooperativa(id),
+  orden    integer NOT NULL DEFAULT 0,
   PRIMARY KEY (ruta_id, finca_id)
 );
 
