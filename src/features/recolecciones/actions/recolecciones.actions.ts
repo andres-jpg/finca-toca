@@ -3,16 +3,50 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/check-permissions";
+import { getUserRole } from "@/lib/auth/get-user-role";
 import type { Recoleccion } from "@/types";
 
 export async function getRecolecciones(): Promise<Recoleccion[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+
+  // Filtrar por ruta asignada si el usuario es cooperativa_user
+  const role = await getUserRole();
+  let fincaIdsFiltro: number[] | null = null;
+
+  if (role === "cooperativa_user") {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: userRuta } = await supabase
+        .from("user_rutas")
+        .select("ruta_id")
+        .eq("user_id", user.id)
+        .single();
+
+      if (userRuta) {
+        const { data: fincasRuta } = await supabase
+          .from("rutas_fincas")
+          .select("finca_id")
+          .eq("ruta_id", userRuta.ruta_id);
+        fincaIdsFiltro = (fincasRuta ?? []).map((f: any) => f.finca_id as number);
+      } else {
+        return []; // sin ruta asignada → sin recolecciones
+      }
+    }
+  }
+
+  let query = supabase
     .from("recolecciones")
     .select(
       "id, finca_id, fecha, litros, precio_litro, created_at, fincas_cooperativa(nombre, rutas_fincas(rutas_cooperativa(nombre)))"
     )
     .order("fecha", { ascending: false });
+
+  if (fincaIdsFiltro !== null) {
+    if (fincaIdsFiltro.length === 0) return [];
+    query = query.in("finca_id", fincaIdsFiltro);
+  }
+
+  const { data, error } = await query;
   if (error) throw new Error("No se pudieron cargar las recolecciones");
 
   return (data ?? []).map((row: any) => {
