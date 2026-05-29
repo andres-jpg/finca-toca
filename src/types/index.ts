@@ -197,6 +197,13 @@ export interface UserWithRole {
 }
 
 // ===== COOPERATIVA =====
+export interface UserCooperativa {
+  id: string;
+  email: string;
+  ruta_id: number | null;
+  ruta_nombre: string | null;
+}
+
 export interface FincaCooperativa {
   id: number;
   nombre: string;
