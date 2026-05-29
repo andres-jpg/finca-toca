@@ -1,17 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { TrendingDown, TrendingUp, Droplets, Milk } from "lucide-react";
 import { formatDate } from "@/lib/utils";
-import dynamic from "next/dynamic";
-
-const ConceptosDonutChart = dynamic(() =>
-  import("@/charts/conceptos-donut-chart").then((m) => m.ConceptosDonutChart)
-);
-const GastosIngresosLineChart = dynamic(() =>
-  import("@/charts/gastos-ingresos-line-chart").then((m) => m.GastosIngresosLineChart)
-);
-const ExtraccionesLineChart = dynamic(() =>
-  import("@/charts/extracciones-line-chart").then((m) => m.ExtraccionesLineChart)
-);
+import {
+  ConceptosDonutChart,
+  GastosIngresosLineChart,
+  ExtraccionesLineChart,
+} from "@/charts/chart-wrappers";
 import { getLitrosDiaActual } from "@/features/extracciones/actions/extracciones.actions";
 import { checkRoutePermission } from "@/lib/auth/check-permissions";
 import { getUserRole } from "@/lib/auth/get-user-role";
