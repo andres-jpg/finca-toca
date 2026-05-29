@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { FincaCombobox } from "@/components/shared/finca-combobox";
 import { DatePicker } from "@/components/shared/date-picker";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
@@ -140,25 +141,14 @@ export function RecoleccionForm({
 
       <div className="space-y-2">
         <Label>Finca</Label>
-        <Select
-          value={selectedFincaId ? String(selectedFincaId) : ""}
-          onValueChange={(val) => {
-            const id = parseInt(val, 10);
+        <FincaCombobox
+          fincas={fincasDisponibles}
+          value={selectedFincaId || null}
+          onChange={(id) => {
             setSelectedFincaId(id);
             setValue("finca_id", id);
           }}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Selecciona una finca" />
-          </SelectTrigger>
-          <SelectContent>
-            {fincasDisponibles.map((f) => (
-              <SelectItem key={f.id} value={String(f.id)}>
-                {f.nombre}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        />
         {errors.finca_id && (
           <p className="text-sm text-red-500">{errors.finca_id.message}</p>
         )}

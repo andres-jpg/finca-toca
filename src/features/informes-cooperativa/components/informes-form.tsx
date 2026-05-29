@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FincaCombobox } from "@/components/shared/finca-combobox";
 import type { FincaCooperativa, RutaCooperativa } from "@/types";
 
 const MESES = [
@@ -18,8 +19,8 @@ interface InformesFormProps {
 
 export function InformesForm({ fincas, rutas }: InformesFormProps) {
   const now = new Date();
-  const [tipo, setTipo] = useState<"finca" | "ruta">("finca");
-  const [fincaId, setFincaId] = useState<string>(fincas[0]?.id?.toString() ?? "");
+  const [tipo, setTipo] = useState<"finca" | "ruta" | "general">("finca");
+  const [fincaId, setFincaId] = useState<number | null>(fincas[0]?.id ?? null);
   const [rutaId, setRutaId] = useState<string>(rutas[0]?.id?.toString() ?? "");
   const [mes, setMes] = useState<string>(String(now.getMonth() + 1));
   const [anio, setAnio] = useState<string>(String(now.getFullYear()));
@@ -27,8 +28,8 @@ export function InformesForm({ fincas, rutas }: InformesFormProps) {
   const [loading, setLoading] = useState(false);
 
   const handleDownload = async () => {
-    const id = tipo === "finca" ? fincaId : rutaId;
-    if (!id) {
+    const id = tipo === "finca" ? (fincaId !== null ? String(fincaId) : "") : tipo === "ruta" ? rutaId : null;
+    if (tipo !== "general" && !id) {
       toast.error("Selecciona una finca o ruta");
       return;
     }
@@ -39,7 +40,8 @@ export function InformesForm({ fincas, rutas }: InformesFormProps) {
 
     setLoading(true);
     try {
-      const params = new URLSearchParams({ tipo, id, mes, anio, quincena });
+      const params = new URLSearchParams({ tipo, mes, anio, quincena });
+      if (id) params.set("id", id);
       const res = await fetch(`/api/informes-cooperativa?${params}`);
 
       if (!res.ok) {
@@ -51,8 +53,10 @@ export function InformesForm({ fincas, rutas }: InformesFormProps) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       const nombreLabel =
-        tipo === "finca"
-          ? fincas.find((f) => f.id.toString() === fincaId)?.nombre ?? fincaId
+        tipo === "general"
+          ? "General"
+          : tipo === "finca"
+          ? fincas.find((f) => f.id === fincaId)?.nombre ?? String(fincaId)
           : rutas.find((r) => r.id.toString() === rutaId)?.nombre ?? rutaId;
       a.href = url;
       a.download = `informe_Q${quincena}_${MESES[parseInt(mes) - 1]}_${anio}_${nombreLabel}.xlsx`;
@@ -72,7 +76,7 @@ export function InformesForm({ fincas, rutas }: InformesFormProps) {
       <div>
         <p className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-2">Tipo de informe</p>
         <div className="flex gap-2">
-          {(["finca", "ruta"] as const).map((t) => (
+          {(["finca", "ruta", "general"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTipo(t)}
@@ -82,45 +86,49 @@ export function InformesForm({ fincas, rutas }: InformesFormProps) {
                   : "bg-white text-stone-600 border-stone-200 hover:border-teal-300"
               }`}
             >
-              {t === "finca" ? "Finca individual" : "Ruta (todas sus fincas)"}
+              {t === "finca" ? "Finca individual" : t === "ruta" ? "Ruta (todas sus fincas)" : "Informe general"}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Selector finca o ruta */}
-      <div>
-        <p className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-2">
-          {tipo === "finca" ? "Finca" : "Ruta"}
+      {/* Selector finca o ruta (oculto en modo general) */}
+      {tipo !== "general" && (
+        <div>
+          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-2">
+            {tipo === "finca" ? "Finca" : "Ruta"}
+          </p>
+          {tipo === "finca" ? (
+            fincas.length === 0 ? (
+              <p className="text-sm text-stone-400 italic">Sin fincas activas</p>
+            ) : (
+              <FincaCombobox
+                fincas={fincas}
+                value={fincaId}
+                onChange={setFincaId}
+              />
+            )
+          ) : (
+            <select
+              value={rutaId}
+              onChange={(e) => setRutaId(e.target.value)}
+              className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm text-stone-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            >
+              {rutas.length === 0 && <option value="">Sin rutas</option>}
+              {rutas.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.nombre} ({r.fincas.length} finca{r.fincas.length !== 1 ? "s" : ""})
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+      {tipo === "general" && (
+        <p className="text-sm text-stone-500 italic">
+          Incluye todas las rutas y sus fincas, agrupadas por ruta.
         </p>
-        {tipo === "finca" ? (
-          <select
-            value={fincaId}
-            onChange={(e) => setFincaId(e.target.value)}
-            className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm text-stone-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
-          >
-            {fincas.length === 0 && <option value="">Sin fincas activas</option>}
-            {fincas.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.nombre}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <select
-            value={rutaId}
-            onChange={(e) => setRutaId(e.target.value)}
-            className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm text-stone-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
-          >
-            {rutas.length === 0 && <option value="">Sin rutas</option>}
-            {rutas.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.nombre} ({r.fincas.length} finca{r.fincas.length !== 1 ? "s" : ""})
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
+      )}
 
       {/* Mes y año */}
       <div className="grid grid-cols-2 gap-3">
