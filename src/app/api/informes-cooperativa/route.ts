@@ -166,7 +166,8 @@ export async function GET(req: NextRequest) {
       .select("finca_id, fecha, litros, precio_litro")
       .in("finca_id", allFincaIds)
       .gte("fecha", startDate)
-      .lte("fecha", endDate);
+      .lte("fecha", endDate)
+      .limit(10000);
 
     if (recErrGen) return new Response("Error al obtener recolecciones", { status: 500 });
 
@@ -288,7 +289,8 @@ export async function GET(req: NextRequest) {
     .select("finca_id, fecha, litros, precio_litro")
     .in("finca_id", fincaIds)
     .gte("fecha", startDate)
-    .lte("fecha", endDate);
+    .lte("fecha", endDate)
+    .limit(10000);
 
   if (recError) return new Response("Error al obtener recolecciones", { status: 500 });
 
