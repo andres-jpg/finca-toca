@@ -207,6 +207,13 @@ export function RecoleccionesTable({
     return recolecciones.filter((r) => r.fecha.startsWith(prefix));
   }, [recolecciones, selectedMonth, todayOnly]);
 
+  // Fincas disponibles para CREAR: excluye las ya recolectadas hoy (solo para cooperativa_user)
+  const fincasParaCrear = useMemo(() => {
+    if (!todayOnly) return fincas;
+    const recolectadasHoy = new Set(filtered.map((r) => r.finca_id));
+    return fincas.filter((f) => !recolectadasHoy.has(f.id));
+  }, [fincas, filtered, todayOnly]);
+
   const totalLitros = useMemo(
     () => filtered.reduce((acc, r) => acc + r.litros, 0),
     [filtered]
@@ -348,7 +355,7 @@ export function RecoleccionesTable({
           title="Nueva recolección"
         >
           <RecoleccionForm
-            fincas={fincas}
+            fincas={fincasParaCrear}
             rutas={rutas}
             lockDate={lockDate}
             showPricing={showPricing}

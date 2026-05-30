@@ -45,7 +45,7 @@ export function GastosCooperativaChart({ data }: GastosCooperativaChartProps) {
     <Card>
       <CardHeader>
         <CardTitle className="text-sm font-semibold text-gray-700">
-          Gastos por mes
+          Compras leche por mes
         </CardTitle>
       </CardHeader>
       <CardContent>
