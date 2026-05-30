@@ -99,6 +99,27 @@ export async function GET(req: NextRequest) {
 
   const supabase = await createClient();
 
+  // Pagina en bloques de 1000 para no depender del max_rows configurado en PostgREST
+  async function fetchAllRecolecciones(fincaIds: number[], start: string, end: string) {
+    const PAGE = 1000;
+    const all: { finca_id: number; fecha: string; litros: number; precio_litro: number }[] = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("recolecciones")
+        .select("finca_id, fecha, litros, precio_litro")
+        .in("finca_id", fincaIds)
+        .gte("fecha", start)
+        .lte("fecha", end)
+        .range(from, from + PAGE - 1);
+      if (error || !data || data.length === 0) break;
+      all.push(...(data as typeof all));
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    return all;
+  }
+
   // Fincas
   type FincaInfo = { id: number; nombre: string; precio_litro: number };
   let fincas: FincaInfo[] = [];
@@ -161,19 +182,11 @@ export async function GET(req: NextRequest) {
     if (rutas.length === 0) return new Response("Sin rutas con fincas", { status: 404 });
 
     const allFincaIds = rutas.flatMap((r) => r.fincas.map((f) => f.id));
-    const { data: recsGen, error: recErrGen } = await supabase
-      .from("recolecciones")
-      .select("finca_id, fecha, litros, precio_litro")
-      .in("finca_id", allFincaIds)
-      .gte("fecha", startDate)
-      .lte("fecha", endDate)
-      .limit(10000);
-
-    if (recErrGen) return new Response("Error al obtener recolecciones", { status: 500 });
+    const recsGen = await fetchAllRecolecciones(allFincaIds, startDate, endDate);
 
     type DayRec = { litros: number; precio_litro: number };
     const recMapGen = new Map<number, Map<number, DayRec>>();
-    for (const rec of recsGen ?? []) {
+    for (const rec of recsGen) {
       const day = parseInt((rec.fecha as string).split("-")[2]);
       if (!recMapGen.has(rec.finca_id)) recMapGen.set(rec.finca_id, new Map());
       recMapGen.get(rec.finca_id)!.set(day, { litros: Number(rec.litros), precio_litro: Number(rec.precio_litro) });
@@ -284,19 +297,11 @@ export async function GET(req: NextRequest) {
 
   // Recolecciones
   const fincaIds = fincas.map((f) => f.id);
-  const { data: recolecciones, error: recError } = await supabase
-    .from("recolecciones")
-    .select("finca_id, fecha, litros, precio_litro")
-    .in("finca_id", fincaIds)
-    .gte("fecha", startDate)
-    .lte("fecha", endDate)
-    .limit(10000);
-
-  if (recError) return new Response("Error al obtener recolecciones", { status: 500 });
+  const recolecciones = await fetchAllRecolecciones(fincaIds, startDate, endDate);
 
   type DayRec = { litros: number; precio_litro: number };
   const recMap = new Map<number, Map<number, DayRec>>();
-  for (const rec of recolecciones ?? []) {
+  for (const rec of recolecciones) {
     const day = parseInt((rec.fecha as string).split("-")[2]);
     if (!recMap.has(rec.finca_id)) recMap.set(rec.finca_id, new Map());
     recMap.get(rec.finca_id)!.set(day, {
