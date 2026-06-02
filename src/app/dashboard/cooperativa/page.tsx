@@ -50,34 +50,54 @@ export default async function CooperativaDashboardPage({
 
   const supabase = await createClient();
 
+  async function fetchRecMes() {
+    const PAGE = 1000;
+    const all: any[] = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("recolecciones")
+        .select("litros, precio_litro, fecha, fincas_cooperativa(nombre, rutas_fincas(rutas_cooperativa(nombre)))")
+        .gte("fecha", start)
+        .lte("fecha", end)
+        .range(from, from + PAGE - 1);
+      if (error || !data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    return all;
+  }
+
+  async function fetchAllRec() {
+    const PAGE = 1000;
+    const all: any[] = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("recolecciones")
+        .select("fecha, litros, precio_litro")
+        .order("fecha", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error || !data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    return all;
+  }
+
   const [
-    { data: recMes },
+    registros,
+    allRecData,
     { data: fincasActivas },
-    { data: allRec },
     { data: rutasData },
   ] = await Promise.all([
-    supabase
-      .from("recolecciones")
-      .select(
-        "litros, precio_litro, fecha, fincas_cooperativa(nombre, rutas_fincas(rutas_cooperativa(nombre)))"
-      )
-      .gte("fecha", start)
-      .lte("fecha", end),
-    supabase
-      .from("fincas_cooperativa")
-      .select("id")
-      .eq("activa", true),
-    supabase
-      .from("recolecciones")
-      .select("fecha, litros, precio_litro")
-      .order("fecha", { ascending: true }),
-    supabase
-      .from("rutas_cooperativa")
-      .select("id, nombre")
-      .order("nombre", { ascending: true }),
+    fetchRecMes(),
+    fetchAllRec(),
+    supabase.from("fincas_cooperativa").select("id").eq("activa", true),
+    supabase.from("rutas_cooperativa").select("id, nombre").order("nombre", { ascending: true }),
   ]);
-
-  const registros = recMes ?? [];
 
   // KPIs del mes
   const totalLitros = registros.reduce((s, r: any) => s + Number(r.litros), 0);
@@ -165,13 +185,13 @@ export default async function CooperativaDashboardPage({
   }));
 
   // Datos para el trend chart (todos los registros históricos para el mes actual)
-  const trendData = (allRec ?? []).map((r: any) => ({
+  const trendData = allRecData.map((r: any) => ({
     fecha: r.fecha as string,
     litros: Number(r.litros),
   }));
 
   // Datos para el chart de gastos mensuales (histórico completo)
-  const gastosData = (allRec ?? []).map((r: any) => ({
+  const gastosData = allRecData.map((r: any) => ({
     fecha: r.fecha as string,
     litros: Number(r.litros),
     precio_litro: Number(r.precio_litro),

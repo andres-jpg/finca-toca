@@ -4,30 +4,42 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/auth/get-user-role";
 
-const querySchema = z.object({
-  tipo: z.enum(["finca", "ruta", "general"]),
-  id: z.coerce.number().int().positive().optional(),
-  mes: z.coerce.number().int().min(1).max(12),
-  anio: z.coerce.number().int().min(2000).max(2100),
-  quincena: z.enum(["1", "2"]).transform(Number) as z.ZodType<1 | 2>,
-}).refine((d) => d.tipo === "general" || d.id !== undefined, {
-  message: "id requerido para tipo finca o ruta",
-});
+const querySchema = z
+  .object({
+    tipo: z.enum(["finca", "ruta", "general"]),
+    id: z.coerce.number().int().positive().optional(),
+    mes: z.coerce.number().int().min(1).max(12),
+    anio: z.coerce.number().int().min(2000).max(2100),
+    quincena: z.enum(["1", "2"]).transform(Number) as z.ZodType<1 | 2>,
+  })
+  .refine((d) => d.tipo === "general" || d.id !== undefined, {
+    message: "id requerido para tipo finca o ruta",
+  });
 
 const FEDEGAN_PCT = 0.0075;
 const MESES = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
 ];
 
 // Colors (ARGB)
-const COLOR_HEADER_BG    = "FF0D9488"; // teal-600
-const COLOR_HEADER_FG    = "FFFFFFFF"; // white
-const COLOR_SUMMARY_BG   = "FFCCFBF1"; // teal-100
-const COLOR_TOTALS_BG    = "FF0F766E"; // teal-800
+const COLOR_HEADER_BG = "FF0D9488"; // teal-600
+const COLOR_HEADER_FG = "FFFFFFFF"; // white
+const COLOR_SUMMARY_BG = "FFCCFBF1"; // teal-100
+const COLOR_TOTALS_BG = "FF0F766E"; // teal-800
 const COLOR_ROUTE_HDR_BG = "FF1E4E79"; // blue-900 — cabecera de sección por ruta
 const COLOR_GRAND_TOT_BG = "FF134E4A"; // teal-950 — total general
-const FMT_COP = '"$"#,##0';            // pesos colombianos
+const FMT_COP = '"$"#,##0'; // pesos colombianos
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -35,33 +47,53 @@ function pad(n: number) {
 
 function styleHeader(cell: ExcelJS.Cell) {
   cell.font = { bold: true, color: { argb: COLOR_HEADER_FG } };
-  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_HEADER_BG } };
+  cell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: COLOR_HEADER_BG },
+  };
   cell.alignment = { vertical: "middle", horizontal: "center" };
 }
 
 function styleSummary(cell: ExcelJS.Cell) {
   cell.font = { bold: true };
-  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_SUMMARY_BG } };
+  cell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: COLOR_SUMMARY_BG },
+  };
   cell.alignment = { horizontal: "right" };
   cell.numFmt = FMT_COP;
 }
 
 function styleTotal(cell: ExcelJS.Cell, isCurrency = false) {
   cell.font = { bold: true, color: { argb: COLOR_HEADER_FG } };
-  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_TOTALS_BG } };
+  cell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: COLOR_TOTALS_BG },
+  };
   cell.alignment = { horizontal: "right" };
   if (isCurrency) cell.numFmt = FMT_COP;
 }
 
 function styleRouteHeader(cell: ExcelJS.Cell) {
   cell.font = { bold: true, color: { argb: COLOR_HEADER_FG }, size: 11 };
-  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_ROUTE_HDR_BG } };
+  cell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: COLOR_ROUTE_HDR_BG },
+  };
   cell.alignment = { vertical: "middle", horizontal: "left" };
 }
 
 function styleGrandTotal(cell: ExcelJS.Cell, isCurrency = false) {
   cell.font = { bold: true, color: { argb: COLOR_HEADER_FG }, size: 11 };
-  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_GRAND_TOT_BG } };
+  cell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: COLOR_GRAND_TOT_BG },
+  };
   cell.alignment = { horizontal: "right" };
   if (isCurrency) cell.numFmt = FMT_COP;
 }
@@ -95,14 +127,26 @@ export async function GET(req: NextRequest) {
   const endDay = quincena === 1 ? 15 : lastDay;
   const startDate = `${anio}-${pad(mes)}-${pad(startDay)}`;
   const endDate = `${anio}-${pad(mes)}-${pad(endDay)}`;
-  const days = Array.from({ length: endDay - startDay + 1 }, (_, i) => startDay + i);
+  const days = Array.from(
+    { length: endDay - startDay + 1 },
+    (_, i) => startDay + i,
+  );
 
   const supabase = await createClient();
 
   // Pagina en bloques de 1000 para no depender del max_rows configurado en PostgREST
-  async function fetchAllRecolecciones(fincaIds: number[], start: string, end: string) {
+  async function fetchAllRecolecciones(
+    fincaIds: number[],
+    start: string,
+    end: string,
+  ) {
     const PAGE = 1000;
-    const all: { finca_id: number; fecha: string; litros: number; precio_litro: number }[] = [];
+    const all: {
+      finca_id: number;
+      fecha: string;
+      litros: number;
+      precio_litro: number;
+    }[] = [];
     let from = 0;
     while (true) {
       const { data, error } = await supabase
@@ -130,21 +174,39 @@ export async function GET(req: NextRequest) {
       .select("id, nombre, precio_litro")
       .eq("id", id)
       .single();
-    if (error || !data) return new Response("Finca no encontrada", { status: 404 });
-    fincas = [{ id: data.id, nombre: data.nombre, precio_litro: Number(data.precio_litro) }];
+    if (error || !data)
+      return new Response("Finca no encontrada", { status: 404 });
+    fincas = [
+      {
+        id: data.id,
+        nombre: data.nombre,
+        precio_litro: Number(data.precio_litro),
+      },
+    ];
   } else if (tipo === "ruta") {
     const { data, error } = await supabase
       .from("rutas_cooperativa")
-      .select("nombre, rutas_fincas(fincas_cooperativa(id, nombre, precio_litro))")
+      .select(
+        "nombre, rutas_fincas(fincas_cooperativa(id, nombre, precio_litro))",
+      )
       .eq("id", id)
       .single();
-    if (error || !data) return new Response("Ruta no encontrada", { status: 404 });
-    const rfList: any[] = Array.isArray(data.rutas_fincas) ? data.rutas_fincas : [];
+    if (error || !data)
+      return new Response("Ruta no encontrada", { status: 404 });
+    const rfList: any[] = Array.isArray(data.rutas_fincas)
+      ? data.rutas_fincas
+      : [];
     fincas = rfList
       .map((rf: any) => {
-        const f = Array.isArray(rf.fincas_cooperativa) ? rf.fincas_cooperativa[0] : rf.fincas_cooperativa;
+        const f = Array.isArray(rf.fincas_cooperativa)
+          ? rf.fincas_cooperativa[0]
+          : rf.fincas_cooperativa;
         if (!f) return null;
-        return { id: f.id, nombre: f.nombre, precio_litro: Number(f.precio_litro) };
+        return {
+          id: f.id,
+          nombre: f.nombre,
+          precio_litro: Number(f.precio_litro),
+        };
       })
       .filter(Boolean) as FincaInfo[];
     fincas.sort((a, b) => a.nombre.localeCompare(b.nombre));
@@ -158,49 +220,74 @@ export async function GET(req: NextRequest) {
   if (tipo === "general") {
     const { data: rutasRaw, error: rutasErr } = await supabase
       .from("rutas_cooperativa")
-      .select("id, nombre, rutas_fincas(orden, fincas_cooperativa(id, nombre, precio_litro))")
+      .select(
+        "id, nombre, rutas_fincas(orden, fincas_cooperativa(id, nombre, precio_litro))",
+      )
       .order("nombre");
 
-    if (rutasErr) return new Response("Error al obtener rutas", { status: 500 });
+    if (rutasErr)
+      return new Response("Error al obtener rutas", { status: 500 });
 
     type FincaInfo = { id: number; nombre: string; precio_litro: number };
     type RutaSection = { id: number; nombre: string; fincas: FincaInfo[] };
 
-    const rutas: RutaSection[] = (rutasRaw ?? []).map((r: any) => {
-      const rfList: any[] = Array.isArray(r.rutas_fincas) ? r.rutas_fincas : [];
-      const fincasOrdenadas: FincaInfo[] = rfList
-        .sort((a: any, b: any) => (a.orden ?? 0) - (b.orden ?? 0))
-        .map((rf: any) => {
-          const f = Array.isArray(rf.fincas_cooperativa) ? rf.fincas_cooperativa[0] : rf.fincas_cooperativa;
-          if (!f) return null;
-          return { id: f.id, nombre: f.nombre, precio_litro: Number(f.precio_litro) };
-        })
-        .filter(Boolean) as FincaInfo[];
-      return { id: r.id, nombre: r.nombre, fincas: fincasOrdenadas };
-    }).filter((r: RutaSection) => r.fincas.length > 0);
+    const rutas: RutaSection[] = (rutasRaw ?? [])
+      .map((r: any) => {
+        const rfList: any[] = Array.isArray(r.rutas_fincas)
+          ? r.rutas_fincas
+          : [];
+        const fincasOrdenadas: FincaInfo[] = rfList
+          .sort((a: any, b: any) => (a.orden ?? 0) - (b.orden ?? 0))
+          .map((rf: any) => {
+            const f = Array.isArray(rf.fincas_cooperativa)
+              ? rf.fincas_cooperativa[0]
+              : rf.fincas_cooperativa;
+            if (!f) return null;
+            return {
+              id: f.id,
+              nombre: f.nombre,
+              precio_litro: Number(f.precio_litro),
+            };
+          })
+          .filter(Boolean) as FincaInfo[];
+        return { id: r.id, nombre: r.nombre, fincas: fincasOrdenadas };
+      })
+      .filter((r: RutaSection) => r.fincas.length > 0);
 
-    if (rutas.length === 0) return new Response("Sin rutas con fincas", { status: 404 });
+    if (rutas.length === 0)
+      return new Response("Sin rutas con fincas", { status: 404 });
 
     const allFincaIds = rutas.flatMap((r) => r.fincas.map((f) => f.id));
-    const recsGen = await fetchAllRecolecciones(allFincaIds, startDate, endDate);
+    const recsGen = await fetchAllRecolecciones(
+      allFincaIds,
+      startDate,
+      endDate,
+    );
 
     type DayRec = { litros: number; precio_litro: number };
     const recMapGen = new Map<number, Map<number, DayRec>>();
     for (const rec of recsGen) {
       const day = parseInt((rec.fecha as string).split("-")[2]);
       if (!recMapGen.has(rec.finca_id)) recMapGen.set(rec.finca_id, new Map());
-      recMapGen.get(rec.finca_id)!.set(day, { litros: Number(rec.litros), precio_litro: Number(rec.precio_litro) });
+      recMapGen
+        .get(rec.finca_id)!
+        .set(day, {
+          litros: Number(rec.litros),
+          precio_litro: Number(rec.precio_litro),
+        });
     }
 
     const mesNombreGen = MESES[mes - 1];
     const wbGen = new ExcelJS.Workbook();
     wbGen.creator = "Toca Lácteos";
-    const wsGen = wbGen.addWorksheet(`Q${quincena} ${mesNombreGen} ${anio}`.slice(0, 31));
+    const wsGen = wbGen.addWorksheet(
+      `Q${quincena} ${mesNombreGen} ${anio}`.slice(0, 31),
+    );
 
     const totalColsGen = 1 + days.length + 5;
     const colPrecioBrutoG = totalColsGen - 2;
-    const colDesFedeganG  = totalColsGen - 1;
-    const colPrecioNetoG  = totalColsGen;
+    const colDesFedeganG = totalColsGen - 1;
+    const colPrecioNetoG = totalColsGen;
     const colTotalLitrosG = days.length + 3;
 
     wsGen.getColumn(1).width = 28;
@@ -212,21 +299,43 @@ export async function GET(req: NextRequest) {
     wsGen.getColumn(colPrecioNetoG).width = 14;
 
     // Cabecera de columnas
-    const headerGen = ["Finca", ...days.map((d) => d), "Precio/L", "Total Litros", "Precio Bruto", "Des. Fedegan", "Precio Neto"];
+    const headerGen = [
+      "Finca",
+      ...days.map((d) => d),
+      "Precio/L",
+      "Total Litros",
+      "Precio Bruto",
+      "Des. Fedegan",
+      "Precio Neto",
+    ];
     const headerRowGen = wsGen.addRow(headerGen);
     headerRowGen.height = 20;
     headerRowGen.eachCell((cell) => styleHeader(cell));
 
-    let grandLitros = 0, grandBruto = 0, grandFedegan = 0, grandNeto = 0;
+    let grandLitros = 0,
+      grandBruto = 0,
+      grandFedegan = 0,
+      grandNeto = 0;
 
     for (const ruta of rutas) {
       // Fila cabecera de ruta (fusionada)
-      const rutaHeaderRow = wsGen.addRow([`RUTA: ${ruta.nombre}`, ...Array(totalColsGen - 1).fill("")]);
+      const rutaHeaderRow = wsGen.addRow([
+        `RUTA: ${ruta.nombre}`,
+        ...Array(totalColsGen - 1).fill(""),
+      ]);
       rutaHeaderRow.height = 22;
-      wsGen.mergeCells(rutaHeaderRow.number, 1, rutaHeaderRow.number, totalColsGen);
+      wsGen.mergeCells(
+        rutaHeaderRow.number,
+        1,
+        rutaHeaderRow.number,
+        totalColsGen,
+      );
       rutaHeaderRow.eachCell((cell) => styleRouteHeader(cell));
 
-      let rutaLitros = 0, rutaBruto = 0, rutaFedegan = 0, rutaNeto = 0;
+      let rutaLitros = 0,
+        rutaBruto = 0,
+        rutaFedegan = 0,
+        rutaNeto = 0;
 
       for (const finca of ruta.fincas) {
         const dayMap = recMapGen.get(finca.id) ?? new Map<number, DayRec>();
@@ -239,12 +348,20 @@ export async function GET(req: NextRequest) {
         const desFedegan = Math.round(precioBruto * FEDEGAN_PCT);
         const precioNeto = Math.round(precioBruto) - desFedegan;
 
-        rutaLitros  += totalLitros;
-        rutaBruto   += Math.round(precioBruto);
+        rutaLitros += totalLitros;
+        rutaBruto += Math.round(precioBruto);
         rutaFedegan += desFedegan;
-        rutaNeto    += precioNeto;
+        rutaNeto += precioNeto;
 
-        const row = wsGen.addRow([finca.nombre, ...dayValues, finca.precio_litro, totalLitros, Math.round(precioBruto), desFedegan, precioNeto]);
+        const row = wsGen.addRow([
+          finca.nombre,
+          ...dayValues,
+          finca.precio_litro,
+          totalLitros,
+          Math.round(precioBruto),
+          desFedegan,
+          precioNeto,
+        ]);
         row.getCell(1).font = { bold: true };
         row.getCell(1).alignment = { vertical: "middle" };
         row.getCell(days.length + 2).numFmt = FMT_COP;
@@ -254,10 +371,21 @@ export async function GET(req: NextRequest) {
       }
 
       // Subtotal de ruta
-      const subtotalRow = wsGen.addRow(["Subtotal " + ruta.nombre, ...Array(days.length + 1).fill(""), rutaLitros, rutaBruto, rutaFedegan, rutaNeto]);
+      const subtotalRow = wsGen.addRow([
+        "Subtotal " + ruta.nombre,
+        ...Array(days.length + 1).fill(""),
+        rutaLitros,
+        rutaBruto,
+        rutaFedegan,
+        rutaNeto,
+      ]);
       subtotalRow.height = 18;
       subtotalRow.getCell(1).font = { bold: true };
-      subtotalRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_SUMMARY_BG } };
+      subtotalRow.getCell(1).fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: COLOR_SUMMARY_BG },
+      };
       subtotalRow.getCell(1).alignment = { horizontal: "left" };
       styleTotal(subtotalRow.getCell(colTotalLitrosG));
       styleTotal(subtotalRow.getCell(colPrecioBrutoG), true);
@@ -267,17 +395,32 @@ export async function GET(req: NextRequest) {
       // Fila vacía entre rutas
       wsGen.addRow([]);
 
-      grandLitros  += rutaLitros;
-      grandBruto   += rutaBruto;
+      grandLitros += rutaLitros;
+      grandBruto += rutaBruto;
       grandFedegan += rutaFedegan;
-      grandNeto    += rutaNeto;
+      grandNeto += rutaNeto;
     }
 
     // Total general
-    const grandRow = wsGen.addRow(["TOTAL GENERAL", ...Array(days.length + 1).fill(""), grandLitros, grandBruto, grandFedegan, grandNeto]);
+    const grandRow = wsGen.addRow([
+      "TOTAL GENERAL",
+      ...Array(days.length + 1).fill(""),
+      grandLitros,
+      grandBruto,
+      grandFedegan,
+      grandNeto,
+    ]);
     grandRow.height = 22;
-    grandRow.getCell(1).font = { bold: true, color: { argb: COLOR_HEADER_FG }, size: 11 };
-    grandRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_GRAND_TOT_BG } };
+    grandRow.getCell(1).font = {
+      bold: true,
+      color: { argb: COLOR_HEADER_FG },
+      size: 11,
+    };
+    grandRow.getCell(1).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: COLOR_GRAND_TOT_BG },
+    };
     grandRow.getCell(1).alignment = { horizontal: "left" };
     styleGrandTotal(grandRow.getCell(colTotalLitrosG));
     styleGrandTotal(grandRow.getCell(colPrecioBrutoG), true);
@@ -288,7 +431,8 @@ export async function GET(req: NextRequest) {
     const filenameGen = `informe_general_Q${quincena}_${mesNombreGen}_${anio}.xlsx`;
     return new Response(bufferGen as ArrayBuffer, {
       headers: {
-        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Type":
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": `attachment; filename="${filenameGen}"`,
       },
     });
@@ -364,10 +508,10 @@ export async function GET(req: NextRequest) {
     const desFedegan = Math.round(precioBruto * FEDEGAN_PCT);
     const precioNeto = Math.round(precioBruto) - desFedegan;
 
-    sumLitros  += totalLitros;
-    sumBruto   += Math.round(precioBruto);
+    sumLitros += totalLitros;
+    sumBruto += Math.round(precioBruto);
     sumFedegan += desFedegan;
-    sumNeto    += precioNeto;
+    sumNeto += precioNeto;
 
     const row = ws.addRow([
       finca.nombre,
@@ -392,25 +536,32 @@ export async function GET(req: NextRequest) {
 
   // Fila de totales (solo para rutas con varias fincas)
   if (tipo === "ruta") {
-  const colTotalLitros = days.length + 3;
-  const totalsRow = ws.addRow([
-    "TOTAL",
-    ...Array(days.length + 1).fill(""),
-    sumLitros,
-    sumBruto,
-    sumFedegan,
-    sumNeto,
-  ]);
-  totalsRow.height = 20;
+    const colTotalLitros = days.length + 3;
+    const totalsRow = ws.addRow([
+      "TOTAL",
+      ...Array(days.length + 1).fill(""),
+      sumLitros,
+      sumBruto,
+      sumFedegan,
+      sumNeto,
+    ]);
+    totalsRow.height = 20;
 
-  totalsRow.getCell(1).font = { bold: true, color: { argb: COLOR_HEADER_FG } };
-  totalsRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_TOTALS_BG } };
-  totalsRow.getCell(1).alignment = { horizontal: "left" };
+    totalsRow.getCell(1).font = {
+      bold: true,
+      color: { argb: COLOR_HEADER_FG },
+    };
+    totalsRow.getCell(1).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: COLOR_TOTALS_BG },
+    };
+    totalsRow.getCell(1).alignment = { horizontal: "left" };
 
-  styleTotal(totalsRow.getCell(colTotalLitros));
-  styleTotal(totalsRow.getCell(colPrecioBruto), true);
-  styleTotal(totalsRow.getCell(colDesFedegan), true);
-  styleTotal(totalsRow.getCell(colPrecioNeto), true);
+    styleTotal(totalsRow.getCell(colTotalLitros));
+    styleTotal(totalsRow.getCell(colPrecioBruto), true);
+    styleTotal(totalsRow.getCell(colDesFedegan), true);
+    styleTotal(totalsRow.getCell(colPrecioNeto), true);
   } // fin if tipo === "ruta"
 
   // Generar buffer
@@ -419,7 +570,8 @@ export async function GET(req: NextRequest) {
 
   return new Response(buffer as ArrayBuffer, {
     headers: {
-      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Type":
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });

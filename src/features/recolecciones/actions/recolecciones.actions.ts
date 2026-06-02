@@ -34,22 +34,34 @@ export async function getRecolecciones(): Promise<Recoleccion[]> {
     }
   }
 
-  let query = supabase
-    .from("recolecciones")
-    .select(
-      "id, finca_id, fecha, litros, precio_litro, created_at, fincas_cooperativa(nombre, rutas_fincas(rutas_cooperativa(nombre)))"
-    )
-    .order("fecha", { ascending: false });
+  if (fincaIdsFiltro !== null && fincaIdsFiltro.length === 0) return [];
 
-  if (fincaIdsFiltro !== null) {
-    if (fincaIdsFiltro.length === 0) return [];
-    query = query.in("finca_id", fincaIdsFiltro);
+  const PAGE = 1000;
+  const allRows: any[] = [];
+  let from = 0;
+
+  while (true) {
+    let q = supabase
+      .from("recolecciones")
+      .select(
+        "id, finca_id, fecha, litros, precio_litro, created_at, fincas_cooperativa(nombre, rutas_fincas(rutas_cooperativa(nombre)))"
+      )
+      .order("fecha", { ascending: false })
+      .range(from, from + PAGE - 1);
+
+    if (fincaIdsFiltro !== null) {
+      q = q.in("finca_id", fincaIdsFiltro);
+    }
+
+    const { data, error } = await q;
+    if (error) throw new Error("No se pudieron cargar las recolecciones");
+    if (!data || data.length === 0) break;
+    allRows.push(...data);
+    if (data.length < PAGE) break;
+    from += PAGE;
   }
 
-  const { data, error } = await query;
-  if (error) throw new Error("No se pudieron cargar las recolecciones");
-
-  return (data ?? []).map((row: any) => {
+  return allRows.map((row: any) => {
     const finca = Array.isArray(row.fincas_cooperativa)
       ? row.fincas_cooperativa[0]
       : row.fincas_cooperativa;
