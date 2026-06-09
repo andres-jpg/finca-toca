@@ -50,34 +50,42 @@ export default async function CooperativaDashboardPage({
 
   const supabase = await createClient();
 
-  const [
-    { data: recMes },
-    { data: fincasActivas },
-    { data: allRec },
-    { data: rutasData },
-  ] = await Promise.all([
-    supabase
-      .from("recolecciones")
-      .select(
-        "litros, precio_litro, fecha, fincas_cooperativa(nombre, rutas_fincas(rutas_cooperativa(nombre)))"
-      )
-      .gte("fecha", start)
-      .lte("fecha", end),
-    supabase
-      .from("fincas_cooperativa")
-      .select("id")
-      .eq("activa", true),
-    supabase
-      .from("recolecciones")
-      .select("fecha, litros, precio_litro")
-      .order("fecha", { ascending: true }),
-    supabase
-      .from("rutas_cooperativa")
-      .select("id, nombre")
-      .order("nombre", { ascending: true }),
+  const PAGE = 1000;
+
+  // fincasActivas y rutasData no superan el límite, se pueden hacer en paralelo
+  const [{ data: fincasActivas }, { data: rutasData }] = await Promise.all([
+    supabase.from("fincas_cooperativa").select("id").eq("activa", true),
+    supabase.from("rutas_cooperativa").select("id, nombre").order("nombre", { ascending: true }),
   ]);
 
-  const registros = recMes ?? [];
+  // recMes paginado: con 200+ fincas activas un mes puede superar los 1000 registros
+  const recMes: { litros: number; precio_litro: number; fecha: string; fincas_cooperativa: unknown }[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data } = await supabase
+      .from("recolecciones")
+      .select("litros, precio_litro, fecha, fincas_cooperativa(nombre, rutas_fincas(rutas_cooperativa(nombre)))")
+      .gte("fecha", start)
+      .lte("fecha", end)
+      .range(from, from + PAGE - 1);
+    if (!data || data.length === 0) break;
+    recMes.push(...data);
+    if (data.length < PAGE) break;
+  }
+
+  // allRec paginado: histórico completo para trend y gastos charts
+  const allRec: { fecha: string; litros: number; precio_litro: number }[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data } = await supabase
+      .from("recolecciones")
+      .select("fecha, litros, precio_litro")
+      .order("fecha", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (!data || data.length === 0) break;
+    allRec.push(...data);
+    if (data.length < PAGE) break;
+  }
+
+  const registros = recMes;
 
   // KPIs del mes
   const totalLitros = registros.reduce((s, r: any) => s + Number(r.litros), 0);
@@ -165,13 +173,13 @@ export default async function CooperativaDashboardPage({
   }));
 
   // Datos para el trend chart (todos los registros históricos para el mes actual)
-  const trendData = (allRec ?? []).map((r: any) => ({
+  const trendData = allRec.map((r: any) => ({
     fecha: r.fecha as string,
     litros: Number(r.litros),
   }));
 
   // Datos para el chart de gastos mensuales (histórico completo)
-  const gastosData = (allRec ?? []).map((r: any) => ({
+  const gastosData = allRec.map((r: any) => ({
     fecha: r.fecha as string,
     litros: Number(r.litros),
     precio_litro: Number(r.precio_litro),
