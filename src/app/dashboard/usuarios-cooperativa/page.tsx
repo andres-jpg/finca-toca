@@ -1,15 +1,15 @@
 import { checkRoutePermission } from "@/lib/auth/check-permissions";
 import { getCooperativaUsers } from "@/features/usuarios-cooperativa/actions/usuarios.actions";
-import { getRutas } from "@/features/rutas-cooperativa/actions/rutas.actions";
+import { getItinerarios } from "@/features/itinerarios/actions/itinerarios.actions";
 import { UsuariosCooperativaTable } from "@/features/usuarios-cooperativa/components/usuarios-cooperativa-table";
 
 export default async function UsuariosCooperativaPage() {
   await checkRoutePermission(["cooperativa_admin"]);
 
-  const [users, rutas] = await Promise.all([
+  const [users, itinerarios] = await Promise.all([
     getCooperativaUsers(),
-    getRutas(),
+    getItinerarios(),
   ]);
 
-  return <UsuariosCooperativaTable users={users} rutas={rutas} />;
+  return <UsuariosCooperativaTable users={users} itinerarios={itinerarios} />;
 }
