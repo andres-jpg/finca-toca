@@ -1,21 +1,15 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Plus, Pencil, Trash2, Eye, ListOrdered, ArrowLeft } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/shared/data-table";
 import { EntityModal } from "@/components/shared/entity-modal";
 import { DeleteConfirmationDialog } from "@/components/shared/delete-confirmation-dialog";
 import { RutaForm } from "@/features/rutas-cooperativa/components/ruta-form";
-import { FincasOrderEditor } from "@/features/rutas-cooperativa/components/fincas-order-editor";
 import { deleteRuta } from "@/features/rutas-cooperativa/actions/rutas.actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import type { RutaCooperativa, FincaCooperativa } from "@/types";
 
@@ -53,56 +47,6 @@ function RutaDetail({ ruta }: { ruta: RutaCooperativa }) {
   );
 }
 
-function OrderDialog({
-  ruta,
-  open,
-  onClose,
-}: {
-  ruta: RutaCooperativa;
-  open: boolean;
-  onClose: () => void;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent
-        showCloseButton={false}
-        className="inset-0 translate-x-0 translate-y-0 max-w-none w-screen h-screen rounded-none border-0 p-0 flex flex-col gap-0"
-      >
-        <DialogTitle className="sr-only">Editar orden de fincas — {ruta.nombre}</DialogTitle>
-
-        {/* Header */}
-        <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4 shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Volver
-          </button>
-          <div className="h-4 w-px bg-gray-200" />
-          <div>
-            <p className="text-xs text-gray-400 uppercase tracking-wide leading-none mb-0.5">
-              Orden de fincas
-            </p>
-            <p className="font-semibold text-gray-900">{ruta.nombre}</p>
-          </div>
-        </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-xl mx-auto px-6 py-8">
-            <p className="text-sm text-gray-500 mb-6">
-              Arrastra las fincas para establecer el orden en que aparecerán al registrar una recolección.
-            </p>
-            <FincasOrderEditor fincas={ruta.fincas} rutaId={ruta.id} onDone={onClose} />
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function RowActions({
   ruta,
   fincas,
@@ -116,7 +60,6 @@ function RowActions({
 }) {
   const [viewOpen, setViewOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [orderOpen, setOrderOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const handleDelete = async () => {
@@ -141,15 +84,6 @@ function RowActions({
         </button>
         {canEdit && (
           <>
-            {ruta.fincas.length > 1 && (
-              <button
-                onClick={() => setOrderOpen(true)}
-                className="p-1.5 rounded hover:bg-gray-100 text-gray-500"
-                title="Editar orden de fincas"
-              >
-                <ListOrdered className="h-3.5 w-3.5" />
-              </button>
-            )}
             <button
               onClick={() => setEditOpen(true)}
               className="p-1.5 rounded hover:bg-gray-100 text-gray-500"
@@ -173,13 +107,9 @@ function RowActions({
       </EntityModal>
 
       {canEdit && (
-        <>
-          <EntityModal open={editOpen} onClose={() => setEditOpen(false)} title="Editar ruta">
-            <RutaForm ruta={ruta} fincas={fincas} fincaRutaMap={fincaRutaMap} onSuccess={() => setEditOpen(false)} />
-          </EntityModal>
-
-          <OrderDialog ruta={ruta} open={orderOpen} onClose={() => setOrderOpen(false)} />
-        </>
+        <EntityModal open={editOpen} onClose={() => setEditOpen(false)} title="Editar ruta">
+          <RutaForm ruta={ruta} fincas={fincas} fincaRutaMap={fincaRutaMap} onSuccess={() => setEditOpen(false)} />
+        </EntityModal>
       )}
 
       <DeleteConfirmationDialog

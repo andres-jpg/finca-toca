@@ -15,6 +15,7 @@ import {
   Package,
   FileSpreadsheet,
   Users,
+  Route,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types";
@@ -87,6 +88,12 @@ const navItems = [
     label: "Rutas",
     icon: MapPin,
     allowedRoles: ["cooperativa_admin"] as UserRole[],
+  },
+  {
+    href: "/dashboard/itinerarios",
+    label: "Itinerarios",
+    icon: Route,
+    allowedRoles: ["cooperativa_admin", "cooperativa_user"] as UserRole[],
   },
   {
     href: "/dashboard/recolecciones",

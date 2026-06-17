@@ -200,8 +200,24 @@ export interface UserWithRole {
 export interface UserCooperativa {
   id: string;
   email: string;
-  ruta_id: number | null;
+  itinerario_id: number | null;
+  itinerario_nombre: string | null;
+}
+
+export interface ItinerarioFinca {
+  id: number;
+  nombre: string;
+  precio_litro: number;
+  activa: boolean;
+  created_at: string;
   ruta_nombre: string | null;
+  orden: number;
+}
+
+export interface Itinerario {
+  id: number;
+  nombre: string;
+  fincas: ItinerarioFinca[];
 }
 
 export interface FincaCooperativa {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { asignarRuta, desasignarRuta } from "@/features/usuarios-cooperativa/actions/usuarios.actions";
+import { asignarItinerario, desasignarItinerario } from "@/features/usuarios-cooperativa/actions/usuarios.actions";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -12,27 +12,27 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import type { UserCooperativa, RutaCooperativa } from "@/types";
+import type { UserCooperativa, Itinerario } from "@/types";
 
-interface UsuarioRutaFormProps {
+interface UsuarioItinerarioFormProps {
   user: UserCooperativa;
-  rutas: RutaCooperativa[];
+  itinerarios: Itinerario[];
   onSuccess: () => void;
 }
 
-export function UsuarioRutaForm({ user, rutas, onSuccess }: UsuarioRutaFormProps) {
-  const [selectedRutaId, setSelectedRutaId] = useState<string>(
-    user.ruta_id ? String(user.ruta_id) : ""
+export function UsuarioRutaForm({ user, itinerarios, onSuccess }: UsuarioItinerarioFormProps) {
+  const [selectedId, setSelectedId] = useState<string>(
+    user.itinerario_id ? String(user.itinerario_id) : ""
   );
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
 
   const handleAsignar = async () => {
-    if (!selectedRutaId) return;
+    if (!selectedId) return;
     setSaving(true);
     try {
-      await asignarRuta(user.id, parseInt(selectedRutaId, 10));
-      toast.success("Ruta asignada correctamente");
+      await asignarItinerario(user.id, parseInt(selectedId, 10));
+      toast.success("Itinerario asignado correctamente");
       onSuccess();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Error inesperado");
@@ -44,8 +44,8 @@ export function UsuarioRutaForm({ user, rutas, onSuccess }: UsuarioRutaFormProps
   const handleDesasignar = async () => {
     setRemoving(true);
     try {
-      await desasignarRuta(user.id);
-      toast.success("Ruta desasignada");
+      await desasignarItinerario(user.id);
+      toast.success("Itinerario desasignado");
       onSuccess();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Error inesperado");
@@ -62,15 +62,15 @@ export function UsuarioRutaForm({ user, rutas, onSuccess }: UsuarioRutaFormProps
       </div>
 
       <div className="space-y-2">
-        <Label>Ruta asignada</Label>
-        <Select value={selectedRutaId} onValueChange={setSelectedRutaId}>
+        <Label>Itinerario asignado</Label>
+        <Select value={selectedId} onValueChange={setSelectedId}>
           <SelectTrigger>
-            <SelectValue placeholder="Selecciona una ruta" />
+            <SelectValue placeholder="Selecciona un itinerario" />
           </SelectTrigger>
           <SelectContent>
-            {rutas.map((r) => (
-              <SelectItem key={r.id} value={String(r.id)}>
-                {r.nombre}
+            {itinerarios.map((it) => (
+              <SelectItem key={it.id} value={String(it.id)}>
+                {it.nombre}
               </SelectItem>
             ))}
           </SelectContent>
@@ -79,13 +79,13 @@ export function UsuarioRutaForm({ user, rutas, onSuccess }: UsuarioRutaFormProps
 
       <Button
         onClick={handleAsignar}
-        disabled={!selectedRutaId || saving}
+        disabled={!selectedId || saving}
         className="w-full"
       >
-        {saving ? "Guardando..." : user.ruta_id ? "Cambiar ruta" : "Asignar ruta"}
+        {saving ? "Guardando..." : user.itinerario_id ? "Cambiar itinerario" : "Asignar itinerario"}
       </Button>
 
-      {user.ruta_id && (
+      {user.itinerario_id && (
         <Button
           variant="outline"
           onClick={handleDesasignar}

@@ -3,24 +3,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, X } from "lucide-react";
+import { X } from "lucide-react";
 import { rutaSchema } from "@/features/rutas-cooperativa/schemas/ruta.schema";
 import { createRuta, updateRuta } from "@/features/rutas-cooperativa/actions/rutas.actions";
 import { Button } from "@/components/ui/button";
@@ -29,49 +12,6 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import type { RutaCooperativa, FincaCooperativa } from "@/types";
 import type { RutaFormValues } from "@/features/rutas-cooperativa/schemas/ruta.schema";
-
-function SortableAssignedFinca({
-  finca,
-  onRemove,
-}: {
-  finca: FincaCooperativa;
-  onRemove: (id: number) => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: finca.id,
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="flex items-center gap-2 rounded-lg border border-teal-100 bg-teal-50 px-2.5 py-1.5"
-    >
-      <button
-        type="button"
-        className="cursor-grab touch-none text-gray-400 hover:text-gray-600"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="h-3.5 w-3.5" />
-      </button>
-      <span className="text-sm font-medium flex-1">{finca.nombre}</span>
-      <button
-        type="button"
-        onClick={() => onRemove(finca.id)}
-        className="text-gray-400 hover:text-red-500"
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  );
-}
 
 interface RutaFormProps {
   ruta?: RutaCooperativa;
@@ -85,22 +25,6 @@ export function RutaForm({ ruta, fincas, fincaRutaMap, onSuccess }: RutaFormProp
   const [assignedFincas, setAssignedFincas] = useState<FincaCooperativa[]>(initialAssigned);
 
   const assignedIds = assignedFincas.map((f) => f.id);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      setAssignedFincas((prev) => {
-        const oldIndex = prev.findIndex((f) => f.id === active.id);
-        const newIndex = prev.findIndex((f) => f.id === over.id);
-        return arrayMove(prev, oldIndex, newIndex);
-      });
-    }
-  };
 
   const addFinca = (finca: FincaCooperativa) => {
     setAssignedFincas((prev) => [...prev, finca]);
@@ -164,31 +88,32 @@ export function RutaForm({ ruta, fincas, fincaRutaMap, onSuccess }: RutaFormProp
         )}
       </div>
 
-      {/* Fincas asignadas — sortable */}
+      {/* Fincas asignadas */}
       <div className="space-y-2">
-        <Label>
-          Fincas asignadas{" "}
-          {assignedFincas.length > 0 && (
-            <span className="text-gray-400 font-normal text-xs ml-1">
-              (arrastra para reordenar)
-            </span>
-          )}
-        </Label>
+        <Label>Fincas asignadas</Label>
 
         {assignedFincas.length === 0 ? (
           <p className="text-sm text-gray-400 border rounded-lg p-3 bg-gray-50">
             Sin fincas asignadas aún
           </p>
         ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={assignedIds} strategy={verticalListSortingStrategy}>
-              <div className="space-y-1.5 border rounded-lg p-2 bg-gray-50">
-                {assignedFincas.map((finca) => (
-                  <SortableAssignedFinca key={finca.id} finca={finca} onRemove={removeFinca} />
-                ))}
+          <div className="space-y-1.5 border rounded-lg p-2 bg-gray-50">
+            {assignedFincas.map((finca) => (
+              <div
+                key={finca.id}
+                className="flex items-center gap-2 rounded-lg border border-teal-100 bg-teal-50 px-2.5 py-1.5"
+              >
+                <span className="text-sm font-medium flex-1">{finca.nombre}</span>
+                <button
+                  type="button"
+                  onClick={() => removeFinca(finca.id)}
+                  className="text-gray-400 hover:text-red-500"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
               </div>
-            </SortableContext>
-          </DndContext>
+            ))}
+          </div>
         )}
       </div>
 

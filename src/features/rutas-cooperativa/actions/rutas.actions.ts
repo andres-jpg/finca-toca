@@ -113,20 +113,3 @@ export async function deleteRuta(id: number) {
   revalidatePath("/dashboard/cooperativa");
 }
 
-export async function updateFincasOrden(rutaId: number, fincaIds: number[]) {
-  await requireRole(["cooperativa_admin"]);
-  const supabase = await createClient();
-
-  await Promise.all(
-    fincaIds.map((fincaId, index) =>
-      supabase
-        .from("rutas_fincas")
-        .update({ orden: index })
-        .eq("ruta_id", rutaId)
-        .eq("finca_id", fincaId)
-    )
-  );
-
-  revalidatePath("/dashboard/rutas-cooperativa");
-  revalidatePath("/dashboard/recolecciones");
-}

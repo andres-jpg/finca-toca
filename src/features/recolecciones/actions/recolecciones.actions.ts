@@ -16,20 +16,20 @@ export async function getRecolecciones(): Promise<Recoleccion[]> {
   if (role === "cooperativa_user") {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      const { data: userRuta } = await supabase
-        .from("user_rutas")
-        .select("ruta_id")
+      const { data: userIt } = await supabase
+        .from("user_itinerarios")
+        .select("itinerario_id")
         .eq("user_id", user.id)
         .single();
 
-      if (userRuta) {
-        const { data: fincasRuta } = await supabase
-          .from("rutas_fincas")
+      if (userIt) {
+        const { data: fincasIt } = await supabase
+          .from("itinerarios_fincas")
           .select("finca_id")
-          .eq("ruta_id", userRuta.ruta_id);
-        fincaIdsFiltro = (fincasRuta ?? []).map((f: any) => f.finca_id as number);
+          .eq("itinerario_id", userIt.itinerario_id);
+        fincaIdsFiltro = (fincasIt ?? []).map((f: any) => f.finca_id as number);
       } else {
-        return []; // sin ruta asignada → sin recolecciones
+        return []; // sin itinerario asignado → sin recolecciones
       }
     }
   }
