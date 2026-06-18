@@ -3,6 +3,7 @@ import ExcelJS from "exceljs";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/auth/get-user-role";
+import { fetchAllRecolecciones } from "@/lib/cooperativa/recolecciones";
 
 const querySchema = z
   .object({
@@ -134,36 +135,6 @@ export async function GET(req: NextRequest) {
 
   const supabase = await createClient();
 
-  // Pagina en bloques de 1000 para no depender del max_rows configurado en PostgREST
-  async function fetchAllRecolecciones(
-    fincaIds: number[],
-    start: string,
-    end: string,
-  ) {
-    const PAGE = 1000;
-    const all: {
-      finca_id: number;
-      fecha: string;
-      litros: number;
-      precio_litro: number;
-    }[] = [];
-    let from = 0;
-    while (true) {
-      const { data, error } = await supabase
-        .from("recolecciones")
-        .select("finca_id, fecha, litros, precio_litro")
-        .in("finca_id", fincaIds)
-        .gte("fecha", start)
-        .lte("fecha", end)
-        .range(from, from + PAGE - 1);
-      if (error || !data || data.length === 0) break;
-      all.push(...(data as typeof all));
-      if (data.length < PAGE) break;
-      from += PAGE;
-    }
-    return all;
-  }
-
   // Fincas
   type FincaInfo = { id: number; nombre: string; precio_litro: number };
   let fincas: FincaInfo[] = [];
@@ -259,6 +230,7 @@ export async function GET(req: NextRequest) {
 
     const allFincaIds = rutas.flatMap((r) => r.fincas.map((f) => f.id));
     const recsGen = await fetchAllRecolecciones(
+      supabase,
       allFincaIds,
       startDate,
       endDate,
@@ -441,7 +413,7 @@ export async function GET(req: NextRequest) {
 
   // Recolecciones
   const fincaIds = fincas.map((f) => f.id);
-  const recolecciones = await fetchAllRecolecciones(fincaIds, startDate, endDate);
+  const recolecciones = await fetchAllRecolecciones(supabase, fincaIds, startDate, endDate);
 
   type DayRec = { litros: number; precio_litro: number };
   const recMap = new Map<number, Map<number, DayRec>>();

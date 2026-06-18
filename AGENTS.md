@@ -28,7 +28,8 @@ Package manager is **pnpm**. There are no test commands configured.
 src/
 ├── app/                              # Next.js App Router pages
 │   ├── api/
-│   │   └── informes-cooperativa/     # GET → Excel report (ExcelJS), cooperativa_admin only
+│   │   ├── informes-cooperativa/     # GET → Excel report (ExcelJS), cooperativa_admin only
+│   │   └── comprobantes-pago/        # GET → Excel payment vouchers 3×3 grid, cooperativa_admin only
 │   ├── dashboard/
 │   │   ├── cooperativa/              # Cooperativa overview
 │   │   ├── fincas-cooperativa/       # Finca CRUD
@@ -59,7 +60,9 @@ src/
 │   ├── supabase/server.ts            # Server-side Supabase client (cookie-based)
 │   ├── supabase/client.ts            # Client-side Supabase client
 │   ├── supabase/admin.ts             # Service-role client (server-only)
-│   └── auth/                         # getUserRole, checkRoutePermission, canWrite, requireRole
+│   ├── auth/                         # getUserRole, checkRoutePermission, canWrite, requireRole
+│   └── cooperativa/
+│       └── recolecciones.ts          # Shared: fetchAllRecolecciones, FEDEGAN_PCT, MESES, RecRow
 ├── charts/
 │   ├── chart-wrappers.tsx            # Static barrel re-exporting all charts (avoids dynamic imports)
 │   ├── gastos-ingresos-line-chart.tsx
@@ -130,7 +133,14 @@ The cooperativa module manages a milk cooperative: farms (fincas), collection ro
 
 **Recolecciones uniqueness**: `(finca_id, fecha)` has a UNIQUE constraint. The creation form excludes fincas that already have a collection on the selected date.
 
-**Informe Excel**: `GET /api/informes-cooperativa` generates an `.xlsx` with ExcelJS. Supports three types: `finca` (single farm), `ruta` (all farms in a route), `general` (all routes, grouped with subtotals). Applies a 0.75% Fedegan discount. Auth-gated to `cooperativa_admin`.
+**Informe Excel**: `GET /api/informes-cooperativa` generates an `.xlsx` with ExcelJS. Supports three types: `finca` (single farm), `ruta` (all farms in a route), `general` (all routes, grouped with subtotals). Applies a 0.75% Fedegan discount. Auth-gated to `cooperativa_admin`. Only supports quincena mode (`"1"` or `"2"`); the custom date range is not supported here.
+
+**Comprobantes de pago**: `GET /api/comprobantes-pago` generates printable payment vouchers as a 3×3 grid per A4 page (ExcelJS). Same tipo/id params as informes, plus date selection:
+- Quincena mode: `quincena=1|2` + `mes` + `anio` (Q1 = days 1–15, Q2 = days 16–end)
+- Free-range mode: `fechaDesde=YYYY-MM-DD` + `fechaHasta=YYYY-MM-DD` (supports cross-month ranges)
+Each voucher shows: finca, ruta, period, liters, bruto (calculated), Descuento (editable cell), subtotal (formula), Fedegan (0.75%), Saldo Anterior (editable cell), Total (formula). Fincas with 0 liters in the period are excluded. Both APIs share `fetchAllRecolecciones` from `lib/cooperativa/recolecciones.ts`. The `InformesForm` quincena selector has three options: `"1"`, `"2"`, `"custom"` — the informe button is disabled in `"custom"` mode.
+
+**Shared cooperativa lib** (`lib/cooperativa/recolecciones.ts`): exports `fetchAllRecolecciones(supabase, fincaIds, start, end)` (paginated, bypasses PostgREST max_rows), `FEDEGAN_PCT = 0.0075`, `MESES` array, and `RecRow` type. Both API routes import from here.
 
 **RLS policies for `recolecciones`** (public schema):
 
@@ -165,6 +175,9 @@ The cooperativa module manages a milk cooperative: farms (fincas), collection ro
 | `rutas_fincas` | `ruta_id` (FK), `finca_id` (FK, unique), `orden` (int) |
 | `recolecciones` | `id`, `finca_id` (FK), `fecha`, `litros`, `precio_litro`, `created_at` — unique (finca_id, fecha) |
 | `user_rutas` | `user_id` (unique FK→auth.users), `ruta_id` (FK→rutas_cooperativa) |
+| `itinerarios` | `id`, `nombre`, `created_at` |
+| `itinerarios_fincas` | `itinerario_id` (FK→itinerarios), `finca_id` (FK→fincas_cooperativa), `orden` (int) |
+| `user_itinerarios` | `user_id` (unique FK→auth.users), `itinerario_id` (FK→itinerarios) |
 
 ### Dashboard
 
