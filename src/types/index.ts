@@ -1,3 +1,5 @@
+import type { Database } from "@/lib/supabase/database.types";
+
 // ===== CONCEPTOS DE GASTO =====
 export interface SubconceptoGasto {
   id: number;
@@ -188,7 +190,7 @@ export interface PajillaPorToro {
 }
 
 // ===== ROLES DE USUARIO =====
-export type UserRole = "admin" | "user" | "viewer" | "cooperativa_admin" | "cooperativa_user";
+export type UserRole = Database["public"]["Enums"]["rol"];
 
 export interface UserWithRole {
   id: string;
