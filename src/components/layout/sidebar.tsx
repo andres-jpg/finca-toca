@@ -1,4 +1,5 @@
 "use client";
+import React, { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
@@ -22,7 +23,15 @@ import type { UserRole } from "@/types";
 import { GiBull, GiCheeseWedge } from "react-icons/gi";
 import { PiCow } from "react-icons/pi";
 
-const navItems = [
+type NavItem = {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+  allowedRoles: UserRole[];
+  hideInPWA?: boolean;
+};
+
+const navItems: NavItem[] = [
   {
     href: "/dashboard",
     label: "Dashboard",
@@ -94,6 +103,7 @@ const navItems = [
     label: "Itinerarios",
     icon: Route,
     allowedRoles: ["cooperativa_admin", "cooperativa_user"] as UserRole[],
+    hideInPWA: true,
   },
   {
     href: "/dashboard/recolecciones",
@@ -135,10 +145,20 @@ export function Sidebar({
   onCloseMobileMenu,
 }: SidebarProps = {}) {
   const pathname = usePathname();
+  const [isPWA, setIsPWA] = useState(false);
 
-  const allowedItems = navItems.filter((item) =>
-    role ? item.allowedRoles.includes(role) : false
-  );
+  useEffect(() => {
+    const standalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      ("standalone" in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true);
+    setIsPWA(standalone);
+  }, []);
+
+  const allowedItems = navItems.filter((item) => {
+    if (!role || !item.allowedRoles.includes(role)) return false;
+    if (isPWA && item.hideInPWA && role === "cooperativa_user") return false;
+    return true;
+  });
 
   const roleMeta = role ? roleConfig[role] : null;
 

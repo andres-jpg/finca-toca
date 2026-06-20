@@ -15,10 +15,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Finca Toca",
-  description: "Panel de gestión de finca",
+  title: "Toca Lácteos",
+  description: "Panel de gestión de finca y recolección de leche",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "TocaLácteos",
+  },
   icons: {
     icon: "/icon.png",
+    apple: "/icon.png",
   },
 };
 
