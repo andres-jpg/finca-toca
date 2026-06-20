@@ -5,7 +5,7 @@ export const recoleccionSchema = z.object({
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "La fecha es obligatoria"),
   litros: z
     .number({ message: "Ingresa los litros" })
-    .positive("Los litros deben ser mayores a 0")
+    .min(0, "Los litros no pueden ser negativos")
     .max(10000, "Valor máximo 10.000 litros"),
 });
 

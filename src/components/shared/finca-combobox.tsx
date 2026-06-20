@@ -24,6 +24,7 @@ interface FincaComboboxProps {
   onChange: (id: number) => void;
   placeholder?: string;
   disabled?: boolean;
+  forceDown?: boolean;
 }
 
 export function FincaCombobox({
@@ -32,6 +33,7 @@ export function FincaCombobox({
   onChange,
   placeholder = "Selecciona una finca",
   disabled = false,
+  forceDown = false,
 }: FincaComboboxProps) {
   const [open, setOpen] = useState(false);
 
@@ -53,7 +55,12 @@ export function FincaCombobox({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+      <PopoverContent
+        className="w-[--radix-popover-trigger-width] p-0"
+        align="start"
+        side="bottom"
+        avoidCollisions={!forceDown}
+      >
         <Command>
           <CommandInput placeholder="Buscar finca..." />
           <CommandList>
