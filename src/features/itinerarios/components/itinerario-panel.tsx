@@ -51,6 +51,15 @@ export function ItinerarioPanel({ itinerario, fincasDisponibles, isAdmin }: Itin
           <p className="text-xs text-gray-400 mt-0.5">
             {itinerario.fincas.length} finca{itinerario.fincas.length !== 1 ? "s" : ""}
           </p>
+          {itinerario.conductores.length > 0 && (
+            <div className="mt-1 space-y-0.5">
+              {itinerario.conductores.map((email) => (
+                <p key={email} className="text-xs text-teal-600 truncate max-w-[180px]">
+                  {email}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
         {isAdmin && (
           <Button

@@ -36,7 +36,7 @@ function mapItinerarioRow(row: any): Itinerario {
       } satisfies ItinerarioFinca;
     });
 
-  return { id: row.id, nombre: row.nombre, fincas };
+  return { id: row.id, nombre: row.nombre, fincas, conductores: [] };
 }
 
 const ITINERARIO_SELECT =
@@ -44,12 +44,25 @@ const ITINERARIO_SELECT =
 
 export async function getItinerarios(): Promise<Itinerario[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("itinerarios")
-    .select(ITINERARIO_SELECT)
-    .order("id");
+  const [{ data, error }, { data: usersData }] = await Promise.all([
+    supabase.from("itinerarios").select(ITINERARIO_SELECT).order("id"),
+    supabase.rpc("get_cooperativa_users"),
+  ]);
   if (error) throw new Error("No se pudieron cargar los itinerarios");
-  return (data ?? []).map(mapItinerarioRow);
+
+  const conductoresMap = new Map<number, string[]>();
+  for (const row of usersData ?? []) {
+    if (row.itinerario_id) {
+      const arr = conductoresMap.get(row.itinerario_id) ?? [];
+      arr.push(row.email);
+      conductoresMap.set(row.itinerario_id, arr);
+    }
+  }
+
+  return (data ?? []).map((row) => ({
+    ...mapItinerarioRow(row),
+    conductores: conductoresMap.get(row.id) ?? [],
+  }));
 }
 
 export async function getItinerarioAsignado(): Promise<Itinerario | null> {

@@ -302,9 +302,6 @@ export default async function CooperativaDashboardPage({
                 </div>
               )}
             </div>
-            <div className="pt-0.5">
-              <span className="text-xs text-stone-400">Total pagado a fincas</span>
-            </div>
           </div>
         </div>
 
