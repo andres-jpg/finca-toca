@@ -220,6 +220,7 @@ export interface Itinerario {
   id: number;
   nombre: string;
   fincas: ItinerarioFinca[];
+  conductores: string[];
 }
 
 export interface FincaCooperativa {
