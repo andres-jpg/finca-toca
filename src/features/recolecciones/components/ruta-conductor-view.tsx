@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Wifi, WifiOff, Loader2, CheckSquare, Square, Pencil, Check, X } from "lucide-react";
+import { Wifi, WifiOff, Loader2, CheckSquare, Square, Pencil, Check, X, Search } from "lucide-react";
 import { toast } from "sonner";
 import { db, type FincaCacheRecord } from "@/lib/offline/db";
 import { addToSyncQueue } from "@/lib/offline/sync";
@@ -30,6 +30,10 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
   const { pendingCount, isSyncing, syncNow } = useSyncQueue();
 
   const [selectedFincaId, setSelectedFincaId] = useState<number | null>(null);
+  const [fincaSearch, setFincaSearch] = useState("");
+  const [fincaDropdownOpen, setFincaDropdownOpen] = useState(false);
+  const fincaSearchRef = useRef<HTMLInputElement>(null);
+  const fincaDropdownRef = useRef<HTMLDivElement>(null);
   const [litros, setLitros] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingCache, setIsLoadingCache] = useState(false);
@@ -39,6 +43,22 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const [today, setToday] = useState(() => new Date().toLocaleDateString("en-CA"));
+
+  // Cerrar dropdown al tocar fuera
+  useEffect(() => {
+    const handlePointerDown = (e: PointerEvent) => {
+      if (
+        fincaDropdownRef.current &&
+        !fincaDropdownRef.current.contains(e.target as Node) &&
+        fincaSearchRef.current &&
+        !fincaSearchRef.current.contains(e.target as Node)
+      ) {
+        setFincaDropdownOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
 
   // Actualizar la fecha cuando el conductor vuelve a la app (nuevo día)
   useEffect(() => {
@@ -171,6 +191,7 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
       // Auto-seleccionar la siguiente finca pendiente
       const nextFinca = fincasRestantes.find((f) => f.id !== selectedFincaId);
       setSelectedFincaId(nextFinca?.id ?? null);
+      setFincaSearch(nextFinca?.nombre ?? "");
       setLitros("");
       toast.success(`${finca.nombre} registrada`);
     } catch {
@@ -328,17 +349,56 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
         <div className="space-y-4">
           <div>
             <Label className="text-sm mb-1.5 block">Finca</Label>
-            <select
-              value={selectedFincaId ?? ""}
-              onChange={(e) => setSelectedFincaId(e.target.value ? Number(e.target.value) : null)}
-              disabled={isSubmitting}
-              className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50"
-            >
-              <option value="">Selecciona una finca</option>
-              {fincasRestantes.map((f) => (
-                <option key={f.id} value={f.id}>{f.nombre}</option>
-              ))}
-            </select>
+            <div className="relative">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  ref={fincaSearchRef}
+                  value={fincaSearch}
+                  onChange={(e) => {
+                    setFincaSearch(e.target.value);
+                    setSelectedFincaId(null);
+                    setFincaDropdownOpen(true);
+                  }}
+                  onFocus={() => setFincaDropdownOpen(true)}
+                  placeholder="Buscar finca..."
+                  disabled={isSubmitting}
+                  autoComplete="off"
+                  className="pl-9"
+                />
+              </div>
+              {fincaDropdownOpen && (
+                <div
+                  ref={fincaDropdownRef}
+                  className="absolute z-10 mt-1 w-full max-h-52 overflow-y-auto rounded-md border border-input bg-background shadow-md"
+                >
+                  {fincasRestantes
+                    .filter((f) =>
+                      f.nombre.toLowerCase().includes(fincaSearch.toLowerCase())
+                    )
+                    .map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onPointerDown={(e) => {
+                          e.preventDefault();
+                          setSelectedFincaId(f.id);
+                          setFincaSearch(f.nombre);
+                          setFincaDropdownOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-2.5 text-sm hover:bg-accent active:bg-accent/80 border-b border-border/50 last:border-0"
+                      >
+                        {f.nombre}
+                      </button>
+                    ))}
+                  {fincasRestantes.filter((f) =>
+                    f.nombre.toLowerCase().includes(fincaSearch.toLowerCase())
+                  ).length === 0 && (
+                    <p className="px-3 py-2.5 text-sm text-muted-foreground">Sin resultados</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <div>
