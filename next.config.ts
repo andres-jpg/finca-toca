@@ -16,6 +16,16 @@ export default withPWA({
     skipWaiting: true,
     clientsClaim: true,
     runtimeCaching: [
+      // Cachear el HTML de la página del conductor para que funcione offline al reabrir
+      {
+        urlPattern: /^\/dashboard\/recolecciones/,
+        handler: "NetworkFirst",
+        options: {
+          cacheName: "pages-cache",
+          networkTimeoutSeconds: 3,
+          expiration: { maxAgeSeconds: 86400 },
+        },
+      },
       {
         urlPattern: /\/api\/itinerario-data/,
         handler: "NetworkFirst",
