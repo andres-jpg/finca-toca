@@ -92,7 +92,12 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
     undefined
   );
   const recoleccionesHoy = useLiveQuery(
-    () => db.recoleccionesLocal.toArray().then((rows) => rows.filter((r) => r.fecha === today)),
+    () =>
+      db.recoleccionesLocal
+        .toArray()
+        .then((rows) =>
+          rows.filter((r) => r.fecha === today).sort((a, b) => b.createdAt - a.createdAt)
+        ),
     [today],
     []
   );
