@@ -69,6 +69,7 @@ export async function GET() {
     serverId: r.id as number,
     litros: Number(r.litros ?? 0),
     precio_litro: Number(r.precio_litro ?? 0),
+    fecha: today,
   }));
 
   return NextResponse.json(

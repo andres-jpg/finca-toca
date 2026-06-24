@@ -26,14 +26,13 @@ export default withPWA({
           expiration: { maxAgeSeconds: 86400 },
         },
       },
+      // API de itinerario: siempre desde la red, nunca cachear.
+      // Si se cachea, el SW puede devolver syncedToday del día anterior cuando
+      // la conexión es lenta (>networkTimeoutSeconds), importando colecciones
+      // de ayer como si fueran de hoy. El offline lo maneja IndexedDB (Dexie).
       {
         urlPattern: /\/api\/itinerario-data/,
-        handler: "NetworkFirst",
-        options: {
-          cacheName: "itinerario-data",
-          networkTimeoutSeconds: 5,
-          expiration: { maxAgeSeconds: 86400 },
-        },
+        handler: "NetworkOnly",
       },
     ],
   },
