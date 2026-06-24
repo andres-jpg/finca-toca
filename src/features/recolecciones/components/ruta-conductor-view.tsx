@@ -42,7 +42,9 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
   const [editLitros, setEditLitros] = useState("");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-  const [today, setToday] = useState(() => new Date().toLocaleDateString("en-CA"));
+  const [today, setToday] = useState(() =>
+    new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date())
+  );
 
   // Cerrar dropdown al tocar fuera
   useEffect(() => {
@@ -63,7 +65,7 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
   // Actualizar la fecha cuando el conductor vuelve a la app (nuevo día)
   useEffect(() => {
     const checkDate = () => {
-      const newDate = new Date().toLocaleDateString("en-CA");
+      const newDate = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
       setToday((prev) => (prev !== newDate ? newDate : prev));
     };
     document.addEventListener("visibilitychange", checkDate);
@@ -126,7 +128,9 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
           await db.fincasCache.bulkPut(fincasToCache);
 
           // Reconciliar registros ya sincronizados hoy
-          for (const synced of data.syncedToday as { finca_id: number; serverId: number; litros: number; precio_litro: number }[]) {
+          for (const synced of data.syncedToday as { finca_id: number; serverId: number; litros: number; precio_litro: number; fecha: string }[]) {
+            // Guard: descartar si el servidor devolvió datos de otro día (p.ej. respuesta cacheada)
+            if (synced.fecha && synced.fecha !== today) continue;
             const existing = await db.recoleccionesLocal
               .where("[finca_id+fecha]")
               .equals([synced.finca_id, today])
