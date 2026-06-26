@@ -48,23 +48,52 @@ export function InformesForm({ fincas, rutas }: InformesFormProps) {
     return rutas.find((r) => r.id.toString() === rutaId)?.nombre ?? rutaId;
   }
 
+  function buildPeriodoParams(params: URLSearchParams) {
+    if (quincena === "custom") {
+      if (!fechaDesde || !fechaHasta) {
+        toast.error("Selecciona fecha inicio y fecha fin");
+        return false;
+      }
+      if (fechaDesde > fechaHasta) {
+        toast.error("La fecha inicio debe ser anterior a la fecha fin");
+        return false;
+      }
+      params.set("fechaDesde", format(fechaDesde, "yyyy-MM-dd"));
+      params.set("fechaHasta", format(fechaHasta, "yyyy-MM-dd"));
+    } else {
+      if (!mes || !anio) { toast.error("Selecciona mes y año"); return false; }
+      params.set("quincena", quincena);
+      params.set("mes", mes);
+      params.set("anio", anio);
+    }
+    return true;
+  }
+
+  function buildFilename(prefix: string, ext: string) {
+    const label = nombreLabel();
+    if (quincena === "custom" && fechaDesde && fechaHasta) {
+      return `${prefix}_${format(fechaDesde, "yyyy-MM-dd")}_${format(fechaHasta, "yyyy-MM-dd")}_${label}.${ext}`;
+    }
+    return `${prefix}_Q${quincena}_${MESES[parseInt(mes) - 1]}_${anio}_${label}.${ext}`;
+  }
+
   const handleDownload = async () => {
     const { id } = buildCommonParams();
     if (tipo !== "general" && !id) { toast.error("Selecciona una finca o ruta"); return; }
-    if (!mes || !anio) { toast.error("Selecciona mes y año"); return; }
-    if (quincena === "custom") { toast.error("El informe solo admite Q1 o Q2 — cambia la quincena"); return; }
+
+    const params = new URLSearchParams({ tipo });
+    if (id) params.set("id", id);
+    if (!buildPeriodoParams(params)) return;
 
     setLoading(true);
     try {
-      const params = new URLSearchParams({ tipo, mes, anio, quincena });
-      if (id) params.set("id", id);
       const res = await fetch(`/api/informes-cooperativa?${params}`);
       if (!res.ok) throw new Error((await res.text()) || "Error al generar el informe");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `informe_Q${quincena}_${MESES[parseInt(mes) - 1]}_${anio}_${nombreLabel()}.xlsx`;
+      a.download = buildFilename("informe", "xlsx");
       a.click();
       URL.revokeObjectURL(url);
       toast.success("Informe descargado");
@@ -79,41 +108,19 @@ export function InformesForm({ fincas, rutas }: InformesFormProps) {
     const { id } = buildCommonParams();
     if (tipo !== "general" && !id) { toast.error("Selecciona una finca o ruta"); return; }
 
+    const params = new URLSearchParams({ tipo });
+    if (id) params.set("id", id);
+    if (!buildPeriodoParams(params)) return;
+
     setLoadingComp(true);
     try {
-      const params = new URLSearchParams({ tipo });
-      if (id) params.set("id", id);
-
-      if (quincena === "custom") {
-        if (!fechaDesde || !fechaHasta) {
-          toast.error("Selecciona fecha inicio y fecha fin");
-          return;
-        }
-        if (fechaDesde > fechaHasta) {
-          toast.error("La fecha inicio debe ser anterior a la fecha fin");
-          return;
-        }
-        params.set("fechaDesde", format(fechaDesde, "yyyy-MM-dd"));
-        params.set("fechaHasta", format(fechaHasta, "yyyy-MM-dd"));
-      } else {
-        if (!mes || !anio) { toast.error("Selecciona mes y año"); return; }
-        params.set("quincena", quincena);
-        params.set("mes", mes);
-        params.set("anio", anio);
-      }
-
       const res = await fetch(`/api/comprobantes-pago?${params}`);
       if (!res.ok) throw new Error((await res.text()) || "Error al generar los comprobantes");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      const label = nombreLabel();
-      if (quincena === "custom" && fechaDesde && fechaHasta) {
-        a.download = `comprobantes_${format(fechaDesde, "yyyy-MM-dd")}_${format(fechaHasta, "yyyy-MM-dd")}_${label}.xlsx`;
-      } else {
-        a.download = `comprobantes_Q${quincena}_${MESES[parseInt(mes) - 1]}_${anio}_${label}.xlsx`;
-      }
+      a.download = buildFilename("comprobantes", "xlsx");
       a.click();
       URL.revokeObjectURL(url);
       toast.success("Comprobantes descargados");
@@ -257,8 +264,7 @@ export function InformesForm({ fincas, rutas }: InformesFormProps) {
       <div className="flex flex-col gap-2">
         <Button
           onClick={handleDownload}
-          disabled={loading || loadingComp || quincena === "custom"}
-          title={quincena === "custom" ? "El informe solo admite Q1 o Q2" : undefined}
+          disabled={loading || loadingComp}
           className="w-full bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50"
         >
           {loading ? (
@@ -280,12 +286,6 @@ export function InformesForm({ fincas, rutas }: InformesFormProps) {
             <><Ticket className="h-4 w-4 mr-2" />Descargar comprobantes de pago</>
           )}
         </Button>
-
-        {quincena === "custom" && (
-          <p className="text-xs text-stone-400 text-center">
-            El rango libre solo está disponible para comprobantes de pago.
-          </p>
-        )}
       </div>
     </div>
   );

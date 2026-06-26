@@ -3,47 +3,65 @@ import ExcelJS from "exceljs";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/auth/get-user-role";
-import { fetchAllRecolecciones } from "@/lib/cooperativa/recolecciones";
+import { fetchAllRecolecciones, MESES } from "@/lib/cooperativa/recolecciones";
 
 const querySchema = z
   .object({
     tipo: z.enum(["finca", "ruta", "general"]),
     id: z.coerce.number().int().positive().optional(),
-    mes: z.coerce.number().int().min(1).max(12),
-    anio: z.coerce.number().int().min(2000).max(2100),
-    quincena: z.enum(["1", "2"]).transform(Number) as z.ZodType<1 | 2>,
+    // Modo quincena
+    quincena: z.enum(["1", "2"]).optional(),
+    mes: z.coerce.number().int().min(1).max(12).optional(),
+    anio: z.coerce.number().int().min(2000).max(2100).optional(),
+    // Modo rango libre
+    fechaDesde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    fechaHasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   })
   .refine((d) => d.tipo === "general" || d.id !== undefined, {
     message: "id requerido para tipo finca o ruta",
-  });
+  })
+  .refine(
+    (d) => {
+      const hasQuincena =
+        d.quincena !== undefined &&
+        d.mes !== undefined &&
+        d.anio !== undefined;
+      const hasCustom =
+        d.fechaDesde !== undefined && d.fechaHasta !== undefined;
+      return hasQuincena || hasCustom;
+    },
+    { message: "Se requiere quincena+mes+anio o fechaDesde+fechaHasta" },
+  );
 
 const FEDEGAN_PCT = 0.0075;
-const MESES = [
-  "Enero",
-  "Febrero",
-  "Marzo",
-  "Abril",
-  "Mayo",
-  "Junio",
-  "Julio",
-  "Agosto",
-  "Septiembre",
-  "Octubre",
-  "Noviembre",
-  "Diciembre",
-];
 
 // Colors (ARGB)
 const COLOR_HEADER_BG = "FF0D9488"; // teal-600
 const COLOR_HEADER_FG = "FFFFFFFF"; // white
 const COLOR_SUMMARY_BG = "FFCCFBF1"; // teal-100
 const COLOR_TOTALS_BG = "FF0F766E"; // teal-800
-const COLOR_ROUTE_HDR_BG = "FF1E4E79"; // blue-900 — cabecera de sección por ruta
-const COLOR_GRAND_TOT_BG = "FF134E4A"; // teal-950 — total general
-const FMT_COP = '"$"#,##0'; // pesos colombianos
+const COLOR_ROUTE_HDR_BG = "FF1E4E79"; // blue-900
+const COLOR_GRAND_TOT_BG = "FF134E4A"; // teal-950
+const FMT_COP = '"$"#,##0';
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
+}
+
+// Genera todas las fechas ISO entre start y end (inclusive)
+function generateDates(start: string, end: string): string[] {
+  const dates: string[] = [];
+  const [sy, sm, sd] = start.split("-").map(Number);
+  const [ey, em, ed] = end.split("-").map(Number);
+  const cur = new Date(sy, sm - 1, sd);
+  const endD = new Date(ey, em - 1, ed);
+  while (cur <= endD) {
+    dates.push(
+      `${cur.getFullYear()}-${pad(cur.getMonth() + 1)}-${pad(cur.getDate())}`,
+    );
+    cur.setDate(cur.getDate() + 1);
+  }
+  return dates;
 }
 
 function styleHeader(cell: ExcelJS.Cell) {
@@ -111,27 +129,51 @@ export async function GET(req: NextRequest) {
   const parsed = querySchema.safeParse({
     tipo: searchParams.get("tipo"),
     id: searchParams.get("id") ?? undefined,
-    mes: searchParams.get("mes"),
-    anio: searchParams.get("anio"),
-    quincena: searchParams.get("quincena"),
+    quincena: searchParams.get("quincena") ?? undefined,
+    mes: searchParams.get("mes") ?? undefined,
+    anio: searchParams.get("anio") ?? undefined,
+    fechaDesde: searchParams.get("fechaDesde") ?? undefined,
+    fechaHasta: searchParams.get("fechaHasta") ?? undefined,
   });
 
   if (!parsed.success) {
     return new Response("Parámetros inválidos", { status: 400 });
   }
 
-  const { tipo, id, mes, anio, quincena } = parsed.data;
+  const { tipo, id, quincena, mes, anio, fechaDesde, fechaHasta } =
+    parsed.data;
 
-  // Rango de fechas
-  const lastDay = new Date(anio, mes, 0).getDate();
-  const startDay = quincena === 1 ? 1 : 16;
-  const endDay = quincena === 1 ? 15 : lastDay;
-  const startDate = `${anio}-${pad(mes)}-${pad(startDay)}`;
-  const endDate = `${anio}-${pad(mes)}-${pad(endDay)}`;
-  const days = Array.from(
-    { length: endDay - startDay + 1 },
-    (_, i) => startDay + i,
-  );
+  // Rango de fechas y etiquetas de columna
+  let startDate: string;
+  let endDate: string;
+  let periodoLabel: string;
+  let isSameMonth: boolean;
+
+  if (quincena && mes !== undefined && anio !== undefined) {
+    const lastDay = new Date(anio, mes, 0).getDate();
+    const startDay = quincena === "1" ? 1 : 16;
+    const endDay = quincena === "1" ? 15 : lastDay;
+    startDate = `${anio}-${pad(mes)}-${pad(startDay)}`;
+    endDate = `${anio}-${pad(mes)}-${pad(endDay)}`;
+    periodoLabel = `Q${quincena} ${MESES[mes - 1]} ${anio}`;
+    isSameMonth = true;
+  } else {
+    startDate = fechaDesde!;
+    endDate = fechaHasta!;
+    const [sy, sm] = startDate.split("-").map(Number);
+    const [ey, em] = endDate.split("-").map(Number);
+    isSameMonth = sy === ey && sm === em;
+    periodoLabel = `${startDate} a ${endDate}`;
+  }
+
+  // Array de fechas ISO y etiquetas para cabeceras de columna
+  const dates = generateDates(startDate, endDate);
+  const dayLabels: (number | string)[] = dates.map((iso) => {
+    const parts = iso.split("-");
+    const d = parseInt(parts[2]);
+    const m = parseInt(parts[1]);
+    return isSameMonth ? d : `${pad(d)}/${pad(m)}`;
+  });
 
   const supabase = await createClient();
 
@@ -199,7 +241,6 @@ export async function GET(req: NextRequest) {
     if (rutasErr)
       return new Response("Error al obtener rutas", { status: 500 });
 
-    type FincaInfo = { id: number; nombre: string; precio_litro: number };
     type RutaSection = { id: number; nombre: string; fincas: FincaInfo[] };
 
     const rutas: RutaSection[] = (rutasRaw ?? [])
@@ -237,43 +278,41 @@ export async function GET(req: NextRequest) {
     );
 
     type DayRec = { litros: number; precio_litro: number };
-    const recMapGen = new Map<number, Map<number, DayRec>>();
+    const recMapGen = new Map<number, Map<string, DayRec>>();
     for (const rec of recsGen) {
-      const day = parseInt((rec.fecha as string).split("-")[2]);
-      if (!recMapGen.has(rec.finca_id)) recMapGen.set(rec.finca_id, new Map());
-      recMapGen
-        .get(rec.finca_id)!
-        .set(day, {
-          litros: Number(rec.litros),
-          precio_litro: Number(rec.precio_litro),
-        });
+      const fecha = rec.fecha as string;
+      if (!recMapGen.has(rec.finca_id))
+        recMapGen.set(rec.finca_id, new Map());
+      recMapGen.get(rec.finca_id)!.set(fecha, {
+        litros: Number(rec.litros),
+        precio_litro: Number(rec.precio_litro),
+      });
     }
 
-    const mesNombreGen = MESES[mes - 1];
     const wbGen = new ExcelJS.Workbook();
     wbGen.creator = "Toca Lácteos";
-    const wsGen = wbGen.addWorksheet(
-      `Q${quincena} ${mesNombreGen} ${anio}`.slice(0, 31),
-    );
+    const wsGen = wbGen.addWorksheet(periodoLabel.slice(0, 31));
 
-    const totalColsGen = 1 + days.length + 5;
+    // Congelar primera fila (cabecera de días)
+    wsGen.views = [{ state: "frozen", xSplit: 0, ySplit: 1 }];
+
+    const totalColsGen = 1 + dates.length + 5;
     const colPrecioBrutoG = totalColsGen - 2;
     const colDesFedeganG = totalColsGen - 1;
     const colPrecioNetoG = totalColsGen;
-    const colTotalLitrosG = days.length + 3;
+    const colTotalLitrosG = dates.length + 3;
 
     wsGen.getColumn(1).width = 28;
-    for (let i = 2; i <= days.length + 1; i++) wsGen.getColumn(i).width = 8;
-    wsGen.getColumn(days.length + 2).width = 12;
-    wsGen.getColumn(days.length + 3).width = 14;
+    for (let i = 2; i <= dates.length + 1; i++) wsGen.getColumn(i).width = isSameMonth ? 8 : 10;
+    wsGen.getColumn(dates.length + 2).width = 12;
+    wsGen.getColumn(dates.length + 3).width = 14;
     wsGen.getColumn(colPrecioBrutoG).width = 16;
     wsGen.getColumn(colDesFedeganG).width = 15;
     wsGen.getColumn(colPrecioNetoG).width = 14;
 
-    // Cabecera de columnas
     const headerGen = [
       "Finca",
-      ...days.map((d) => d),
+      ...dayLabels,
       "Precio/L",
       "Total Litros",
       "Precio Bruto",
@@ -288,6 +327,7 @@ export async function GET(req: NextRequest) {
       grandBruto = 0,
       grandFedegan = 0,
       grandNeto = 0;
+    const grandDayTotals = new Array(dates.length).fill(0);
 
     for (const ruta of rutas) {
       // Fila cabecera de ruta (fusionada)
@@ -308,13 +348,18 @@ export async function GET(req: NextRequest) {
         rutaBruto = 0,
         rutaFedegan = 0,
         rutaNeto = 0;
+      const rutaDayTotals = new Array(dates.length).fill(0);
 
       for (const finca of ruta.fincas) {
-        const dayMap = recMapGen.get(finca.id) ?? new Map<number, DayRec>();
-        const dayValues = days.map((d) => dayMap.get(d)?.litros ?? 0);
+        const dayMap =
+          recMapGen.get(finca.id) ?? new Map<string, DayRec>();
+        const dayValues = dates.map((iso) => dayMap.get(iso)?.litros ?? 0);
+        dayValues.forEach((v, i) => {
+          rutaDayTotals[i] += v;
+        });
         const totalLitros = dayValues.reduce((s, v) => s + v, 0);
-        const precioBruto = days.reduce((s, d) => {
-          const rec = dayMap.get(d);
+        const precioBruto = dates.reduce((s, iso) => {
+          const rec = dayMap.get(iso);
           return s + (rec ? rec.litros * rec.precio_litro : 0);
         }, 0);
         const desFedegan = Math.round(precioBruto * FEDEGAN_PCT);
@@ -336,16 +381,17 @@ export async function GET(req: NextRequest) {
         ]);
         row.getCell(1).font = { bold: true };
         row.getCell(1).alignment = { vertical: "middle" };
-        row.getCell(days.length + 2).numFmt = FMT_COP;
+        row.getCell(dates.length + 2).numFmt = FMT_COP;
         styleSummary(row.getCell(colPrecioBrutoG));
         styleSummary(row.getCell(colDesFedeganG));
         styleSummary(row.getCell(colPrecioNetoG));
       }
 
-      // Subtotal de ruta
+      // Subtotal de ruta con sumatorio diario
       const subtotalRow = wsGen.addRow([
         "Subtotal " + ruta.nombre,
-        ...Array(days.length + 1).fill(""),
+        ...rutaDayTotals,
+        "",
         rutaLitros,
         rutaBruto,
         rutaFedegan,
@@ -359,6 +405,9 @@ export async function GET(req: NextRequest) {
         fgColor: { argb: COLOR_SUMMARY_BG },
       };
       subtotalRow.getCell(1).alignment = { horizontal: "left" };
+      for (let i = 2; i <= dates.length + 1; i++) {
+        styleTotal(subtotalRow.getCell(i));
+      }
       styleTotal(subtotalRow.getCell(colTotalLitrosG));
       styleTotal(subtotalRow.getCell(colPrecioBrutoG), true);
       styleTotal(subtotalRow.getCell(colDesFedeganG), true);
@@ -367,16 +416,20 @@ export async function GET(req: NextRequest) {
       // Fila vacía entre rutas
       wsGen.addRow([]);
 
+      rutaDayTotals.forEach((v, i) => {
+        grandDayTotals[i] += v;
+      });
       grandLitros += rutaLitros;
       grandBruto += rutaBruto;
       grandFedegan += rutaFedegan;
       grandNeto += rutaNeto;
     }
 
-    // Total general
+    // Total general con sumatorio diario
     const grandRow = wsGen.addRow([
       "TOTAL GENERAL",
-      ...Array(days.length + 1).fill(""),
+      ...grandDayTotals,
+      "",
       grandLitros,
       grandBruto,
       grandFedegan,
@@ -394,13 +447,19 @@ export async function GET(req: NextRequest) {
       fgColor: { argb: COLOR_GRAND_TOT_BG },
     };
     grandRow.getCell(1).alignment = { horizontal: "left" };
+    for (let i = 2; i <= dates.length + 1; i++) {
+      styleGrandTotal(grandRow.getCell(i));
+    }
     styleGrandTotal(grandRow.getCell(colTotalLitrosG));
     styleGrandTotal(grandRow.getCell(colPrecioBrutoG), true);
     styleGrandTotal(grandRow.getCell(colDesFedeganG), true);
     styleGrandTotal(grandRow.getCell(colPrecioNetoG), true);
 
     const bufferGen = await wbGen.xlsx.writeBuffer();
-    const filenameGen = `informe_general_Q${quincena}_${mesNombreGen}_${anio}.xlsx`;
+    const filenameGen =
+      quincena && mes !== undefined && anio !== undefined
+        ? `informe_general_Q${quincena}_${MESES[mes - 1]}_${anio}.xlsx`
+        : `informe_general_${startDate}_${endDate}.xlsx`;
     return new Response(bufferGen as ArrayBuffer, {
       headers: {
         "Content-Type":
@@ -411,40 +470,46 @@ export async function GET(req: NextRequest) {
   }
   // ── FIN INFORME GENERAL ──────────────────────────────────────────────────────
 
-  // Recolecciones
+  // Recolecciones (finca / ruta)
   const fincaIds = fincas.map((f) => f.id);
-  const recolecciones = await fetchAllRecolecciones(supabase, fincaIds, startDate, endDate);
+  const recolecciones = await fetchAllRecolecciones(
+    supabase,
+    fincaIds,
+    startDate,
+    endDate,
+  );
 
   type DayRec = { litros: number; precio_litro: number };
-  const recMap = new Map<number, Map<number, DayRec>>();
+  const recMap = new Map<number, Map<string, DayRec>>();
   for (const rec of recolecciones) {
-    const day = parseInt((rec.fecha as string).split("-")[2]);
+    const fecha = rec.fecha as string;
     if (!recMap.has(rec.finca_id)) recMap.set(rec.finca_id, new Map());
-    recMap.get(rec.finca_id)!.set(day, {
+    recMap.get(rec.finca_id)!.set(fecha, {
       litros: Number(rec.litros),
       precio_litro: Number(rec.precio_litro),
     });
   }
 
   // Workbook
-  const mesNombre = MESES[mes - 1];
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Toca Lácteos";
-  const sheetName = `Q${quincena} ${mesNombre} ${anio}`.slice(0, 31);
-  const ws = workbook.addWorksheet(sheetName);
+  const ws = workbook.addWorksheet(periodoLabel.slice(0, 31));
+
+  // Congelar primera fila (cabecera de días)
+  ws.views = [{ state: "frozen", xSplit: 0, ySplit: 1 }];
 
   // Índices de columnas de resumen (1-based)
-  // 1: Finca | 2...(days.length+1): días | +2: Precio/L | +3: Total L | +4: Precio Bruto | +5: Des. Fedegan | +6: Precio Neto
-  const totalCols = 1 + days.length + 5;
+  const totalCols = 1 + dates.length + 5;
   const colPrecioBruto = totalCols - 2;
   const colDesFedegan = totalCols - 1;
   const colPrecioNeto = totalCols;
+  const colTotalLitros = dates.length + 3;
 
   // Anchos de columna
   ws.getColumn(1).width = 26;
-  for (let i = 2; i <= days.length + 1; i++) ws.getColumn(i).width = 8;
-  ws.getColumn(days.length + 2).width = 12; // Precio/L
-  ws.getColumn(days.length + 3).width = 14; // Total Litros
+  for (let i = 2; i <= dates.length + 1; i++) ws.getColumn(i).width = isSameMonth ? 8 : 10;
+  ws.getColumn(dates.length + 2).width = 12; // Precio/L
+  ws.getColumn(dates.length + 3).width = 14; // Total Litros
   ws.getColumn(colPrecioBruto).width = 16;
   ws.getColumn(colDesFedegan).width = 15;
   ws.getColumn(colPrecioNeto).width = 14;
@@ -452,7 +517,7 @@ export async function GET(req: NextRequest) {
   // Cabecera
   const header = [
     "Finca",
-    ...days.map((d) => d),
+    ...dayLabels,
     "Precio/L",
     "Total Litros",
     "Precio Bruto",
@@ -468,13 +533,17 @@ export async function GET(req: NextRequest) {
   let sumBruto = 0;
   let sumFedegan = 0;
   let sumNeto = 0;
+  const dayTotals = new Array(dates.length).fill(0);
 
   for (const finca of fincas) {
-    const dayMap = recMap.get(finca.id) ?? new Map<number, DayRec>();
-    const dayValues = days.map((d) => dayMap.get(d)?.litros ?? 0);
+    const dayMap = recMap.get(finca.id) ?? new Map<string, DayRec>();
+    const dayValues = dates.map((iso) => dayMap.get(iso)?.litros ?? 0);
+    dayValues.forEach((v, i) => {
+      dayTotals[i] += v;
+    });
     const totalLitros = dayValues.reduce((s, v) => s + v, 0);
-    const precioBruto = days.reduce((s, d) => {
-      const rec = dayMap.get(d);
+    const precioBruto = dates.reduce((s, iso) => {
+      const rec = dayMap.get(iso);
       return s + (rec ? rec.litros * rec.precio_litro : 0);
     }, 0);
     const desFedegan = Math.round(precioBruto * FEDEGAN_PCT);
@@ -497,48 +566,47 @@ export async function GET(req: NextRequest) {
 
     row.getCell(1).font = { bold: true };
     row.getCell(1).alignment = { vertical: "middle" };
-
-    // Precio/L con formato COP
-    row.getCell(days.length + 2).numFmt = FMT_COP;
-
+    row.getCell(dates.length + 2).numFmt = FMT_COP;
     styleSummary(row.getCell(colPrecioBruto));
     styleSummary(row.getCell(colDesFedegan));
     styleSummary(row.getCell(colPrecioNeto));
   }
 
-  // Fila de totales (solo para rutas con varias fincas)
-  if (tipo === "ruta") {
-    const colTotalLitros = days.length + 3;
-    const totalsRow = ws.addRow([
-      "TOTAL",
-      ...Array(days.length + 1).fill(""),
-      sumLitros,
-      sumBruto,
-      sumFedegan,
-      sumNeto,
-    ]);
-    totalsRow.height = 20;
-
-    totalsRow.getCell(1).font = {
-      bold: true,
-      color: { argb: COLOR_HEADER_FG },
-    };
-    totalsRow.getCell(1).fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: COLOR_TOTALS_BG },
-    };
-    totalsRow.getCell(1).alignment = { horizontal: "left" };
-
-    styleTotal(totalsRow.getCell(colTotalLitros));
-    styleTotal(totalsRow.getCell(colPrecioBruto), true);
-    styleTotal(totalsRow.getCell(colDesFedegan), true);
-    styleTotal(totalsRow.getCell(colPrecioNeto), true);
-  } // fin if tipo === "ruta"
+  // Fila de totales con sumatorio diario
+  const totalsRow = ws.addRow([
+    "TOTAL",
+    ...dayTotals,
+    "",
+    sumLitros,
+    sumBruto,
+    sumFedegan,
+    sumNeto,
+  ]);
+  totalsRow.height = 20;
+  totalsRow.getCell(1).font = {
+    bold: true,
+    color: { argb: COLOR_HEADER_FG },
+  };
+  totalsRow.getCell(1).fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: COLOR_TOTALS_BG },
+  };
+  totalsRow.getCell(1).alignment = { horizontal: "left" };
+  for (let i = 2; i <= dates.length + 1; i++) {
+    styleTotal(totalsRow.getCell(i));
+  }
+  styleTotal(totalsRow.getCell(colTotalLitros));
+  styleTotal(totalsRow.getCell(colPrecioBruto), true);
+  styleTotal(totalsRow.getCell(colDesFedegan), true);
+  styleTotal(totalsRow.getCell(colPrecioNeto), true);
 
   // Generar buffer
   const buffer = await workbook.xlsx.writeBuffer();
-  const filename = `informe_Q${quincena}_${mesNombre}_${anio}.xlsx`;
+  const filename =
+    quincena && mes !== undefined && anio !== undefined
+      ? `informe_Q${quincena}_${MESES[mes - 1]}_${anio}.xlsx`
+      : `informe_${startDate}_${endDate}.xlsx`;
 
   return new Response(buffer as ArrayBuffer, {
     headers: {

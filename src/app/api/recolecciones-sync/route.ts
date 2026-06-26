@@ -9,7 +9,7 @@ const bodySchema = z
       localId: z.number().int(),
       finca_id: z.number().int().positive(),
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      litros: z.number().min(0).max(10000),
+      litros: z.number().min(0).max(100000),
       precio_litro: z.number().nonnegative(),
     })
   )
