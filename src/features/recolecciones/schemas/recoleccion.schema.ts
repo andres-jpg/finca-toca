@@ -6,7 +6,7 @@ export const recoleccionSchema = z.object({
   litros: z
     .number({ message: "Ingresa los litros" })
     .min(0, "Los litros no pueden ser negativos")
-    .max(10000, "Valor máximo 10.000 litros"),
+    .max(100000, "Valor máximo 100.000 litros"),
 });
 
 export type RecoleccionFormValues = z.infer<typeof recoleccionSchema>;
