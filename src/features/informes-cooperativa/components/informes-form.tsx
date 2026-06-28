@@ -7,7 +7,7 @@ import { Download, Loader2, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FincaCombobox } from "@/components/shared/finca-combobox";
 import { DatePicker } from "@/components/shared/date-picker";
-import type { FincaCooperativa, RutaCooperativa } from "@/types";
+import type { FincaCooperativa, Itinerario, RutaCooperativa } from "@/types";
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -17,13 +17,15 @@ const MESES = [
 interface InformesFormProps {
   fincas: FincaCooperativa[];
   rutas: RutaCooperativa[];
+  itinerarios: Itinerario[];
 }
 
-export function InformesForm({ fincas, rutas }: InformesFormProps) {
+export function InformesForm({ fincas, rutas, itinerarios }: InformesFormProps) {
   const now = new Date();
-  const [tipo, setTipo] = useState<"finca" | "ruta" | "general">("finca");
+  const [tipo, setTipo] = useState<"finca" | "ruta" | "itinerario" | "general">("finca");
   const [fincaId, setFincaId] = useState<number | null>(fincas[0]?.id ?? null);
   const [rutaId, setRutaId] = useState<string>(rutas[0]?.id?.toString() ?? "");
+  const [itinerarioId, setItinerarioId] = useState<string>(itinerarios[0]?.id?.toString() ?? "");
   const [mes, setMes] = useState<string>(String(now.getMonth() + 1));
   const [anio, setAnio] = useState<string>(String(now.getFullYear()));
   const [quincena, setQuincena] = useState<"1" | "2" | "custom">("1");
@@ -38,6 +40,8 @@ export function InformesForm({ fincas, rutas }: InformesFormProps) {
         ? fincaId !== null ? String(fincaId) : ""
         : tipo === "ruta"
         ? rutaId
+        : tipo === "itinerario"
+        ? itinerarioId
         : null;
     return { id };
   }
@@ -45,7 +49,8 @@ export function InformesForm({ fincas, rutas }: InformesFormProps) {
   function nombreLabel() {
     if (tipo === "general") return "General";
     if (tipo === "finca") return fincas.find((f) => f.id === fincaId)?.nombre ?? String(fincaId);
-    return rutas.find((r) => r.id.toString() === rutaId)?.nombre ?? rutaId;
+    if (tipo === "ruta") return rutas.find((r) => r.id.toString() === rutaId)?.nombre ?? rutaId;
+    return itinerarios.find((it) => it.id.toString() === itinerarioId)?.nombre ?? itinerarioId;
   }
 
   function buildPeriodoParams(params: URLSearchParams) {
@@ -79,7 +84,7 @@ export function InformesForm({ fincas, rutas }: InformesFormProps) {
 
   const handleDownload = async () => {
     const { id } = buildCommonParams();
-    if (tipo !== "general" && !id) { toast.error("Selecciona una finca o ruta"); return; }
+    if (tipo !== "general" && !id) { toast.error("Selecciona una finca, ruta o itinerario"); return; }
 
     const params = new URLSearchParams({ tipo });
     if (id) params.set("id", id);
@@ -106,7 +111,7 @@ export function InformesForm({ fincas, rutas }: InformesFormProps) {
 
   const handleDownloadComprobantes = async () => {
     const { id } = buildCommonParams();
-    if (tipo !== "general" && !id) { toast.error("Selecciona una finca o ruta"); return; }
+    if (tipo !== "general" && !id) { toast.error("Selecciona una finca, ruta o itinerario"); return; }
 
     const params = new URLSearchParams({ tipo });
     if (id) params.set("id", id);
@@ -136,8 +141,8 @@ export function InformesForm({ fincas, rutas }: InformesFormProps) {
       {/* Tipo */}
       <div>
         <p className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-2">Tipo de informe</p>
-        <div className="flex gap-2">
-          {(["finca", "ruta", "general"] as const).map((t) => (
+        <div className="flex flex-wrap gap-2">
+          {(["finca", "ruta", "itinerario", "general"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTipo(t)}
@@ -147,17 +152,23 @@ export function InformesForm({ fincas, rutas }: InformesFormProps) {
                   : "bg-white text-stone-600 border-stone-200 hover:border-teal-300"
               }`}
             >
-              {t === "finca" ? "Finca individual" : t === "ruta" ? "Ruta (todas sus fincas)" : "Informe general"}
+              {t === "finca"
+                ? "Finca individual"
+                : t === "ruta"
+                ? "Ruta"
+                : t === "itinerario"
+                ? "Itinerario"
+                : "Informe general"}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Selector finca o ruta */}
+      {/* Selector finca, ruta o itinerario */}
       {tipo !== "general" && (
         <div>
           <p className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-2">
-            {tipo === "finca" ? "Finca" : "Ruta"}
+            {tipo === "finca" ? "Finca" : tipo === "ruta" ? "Ruta" : "Itinerario"}
           </p>
           {tipo === "finca" ? (
             fincas.length === 0 ? (
@@ -165,7 +176,7 @@ export function InformesForm({ fincas, rutas }: InformesFormProps) {
             ) : (
               <FincaCombobox fincas={fincas} value={fincaId} onChange={setFincaId} />
             )
-          ) : (
+          ) : tipo === "ruta" ? (
             <select
               value={rutaId}
               onChange={(e) => setRutaId(e.target.value)}
@@ -175,6 +186,19 @@ export function InformesForm({ fincas, rutas }: InformesFormProps) {
               {rutas.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.nombre} ({r.fincas.length} finca{r.fincas.length !== 1 ? "s" : ""})
+                </option>
+              ))}
+            </select>
+          ) : (
+            <select
+              value={itinerarioId}
+              onChange={(e) => setItinerarioId(e.target.value)}
+              className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm text-stone-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            >
+              {itinerarios.length === 0 && <option value="">Sin itinerarios</option>}
+              {itinerarios.map((it) => (
+                <option key={it.id} value={it.id}>
+                  {it.nombre} ({it.fincas.length} finca{it.fincas.length !== 1 ? "s" : ""})
                 </option>
               ))}
             </select>
