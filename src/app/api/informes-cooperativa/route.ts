@@ -7,7 +7,7 @@ import { fetchAllRecolecciones, MESES } from "@/lib/cooperativa/recolecciones";
 
 const querySchema = z
   .object({
-    tipo: z.enum(["finca", "ruta", "general"]),
+    tipo: z.enum(["finca", "ruta", "itinerario", "general"]),
     id: z.coerce.number().int().positive().optional(),
     // Modo quincena
     quincena: z.enum(["1", "2"]).optional(),
@@ -18,7 +18,7 @@ const querySchema = z
     fechaHasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   })
   .refine((d) => d.tipo === "general" || d.id !== undefined, {
-    message: "id requerido para tipo finca o ruta",
+    message: "id requerido para tipo finca, ruta o itinerario",
   })
   .refine(
     (d) => {
@@ -223,6 +223,31 @@ export async function GET(req: NextRequest) {
       })
       .filter(Boolean) as FincaInfo[];
     fincas.sort((a, b) => a.nombre.localeCompare(b.nombre));
+  } else if (tipo === "itinerario") {
+    const { data, error } = await supabase
+      .from("itinerarios")
+      .select("nombre, itinerarios_fincas(orden, fincas_cooperativa(id, nombre, precio_litro))")
+      .eq("id", id)
+      .single();
+    if (error || !data)
+      return new Response("Itinerario no encontrado", { status: 404 });
+    const ifList: any[] = Array.isArray(data.itinerarios_fincas)
+      ? data.itinerarios_fincas
+      : [];
+    fincas = ifList
+      .sort((a: any, b: any) => (a.orden ?? 0) - (b.orden ?? 0))
+      .map((itF: any) => {
+        const f = Array.isArray(itF.fincas_cooperativa)
+          ? itF.fincas_cooperativa[0]
+          : itF.fincas_cooperativa;
+        if (!f) return null;
+        return {
+          id: f.id,
+          nombre: f.nombre,
+          precio_litro: Number(f.precio_litro),
+        };
+      })
+      .filter(Boolean) as FincaInfo[];
   }
 
   if (tipo !== "general" && fincas.length === 0) {

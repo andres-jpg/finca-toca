@@ -1,13 +1,18 @@
 import { checkRoutePermission } from "@/lib/auth/check-permissions";
 import { getFincasActivas } from "@/features/fincas-cooperativa/actions/fincas.actions";
 import { getRutas } from "@/features/rutas-cooperativa/actions/rutas.actions";
+import { getItinerarios } from "@/features/itinerarios/actions/itinerarios.actions";
 import { InformesForm } from "@/features/informes-cooperativa/components/informes-form";
 import { FileSpreadsheet } from "lucide-react";
 
 export default async function InformesCooperativaPage() {
   await checkRoutePermission(["cooperativa_admin"]);
 
-  const [fincas, rutas] = await Promise.all([getFincasActivas(), getRutas()]);
+  const [fincas, rutas, itinerarios] = await Promise.all([
+    getFincasActivas(),
+    getRutas(),
+    getItinerarios(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -20,7 +25,7 @@ export default async function InformesCooperativaPage() {
           <p className="text-sm text-stone-500 mt-0.5">Genera y descarga informes de recolecciones por quincena</p>
         </div>
       </div>
-      <InformesForm fincas={fincas} rutas={rutas} />
+      <InformesForm fincas={fincas} rutas={rutas} itinerarios={itinerarios} />
     </div>
   );
 }
