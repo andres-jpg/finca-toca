@@ -1,9 +1,9 @@
 import { checkRoutePermission, canWrite, canDelete } from "@/lib/auth/check-permissions";
+import { getCurrentUser } from "@/lib/auth/get-user-role";
 import { getRecolecciones } from "@/features/recolecciones/actions/recolecciones.actions";
 import { getFincasActivas } from "@/features/fincas-cooperativa/actions/fincas.actions";
 import { getRutas } from "@/features/rutas-cooperativa/actions/rutas.actions";
 import { getItinerarioAsignado } from "@/features/itinerarios/actions/itinerarios.actions";
-import { createClient } from "@/lib/supabase/server";
 import { RecoleccionesTable } from "@/features/recolecciones/components/recolecciones-table";
 import { RutaConductorView } from "@/features/recolecciones/components/ruta-conductor-view";
 
@@ -24,9 +24,7 @@ export default async function RecoleccionesPage() {
 
   // Conductores: UI móvil offline-first
   if (userRole === "cooperativa_user") {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    const itinerario = await getItinerarioAsignado();
+    const [user, itinerario] = await Promise.all([getCurrentUser(), getItinerarioAsignado()]);
     if (itinerario === null) return <SinItinerarioAsignado />;
     return (
       <RutaConductorView

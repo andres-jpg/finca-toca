@@ -231,6 +231,27 @@ export interface FincaCooperativa {
   created_at: string;
   ruta_nombre: string | null;
   orden?: number;
+  metodo_pago: 'conductor' | 'punto_venta' | 'gerente';
+}
+
+export type EstadoPago = 'pendiente' | 'pagado' | 'punto_venta' | 'devuelto';
+export type ResponsablePago = 'conductor' | 'punto_venta' | 'gerente';
+
+export interface PagoFinca {
+  id: number;
+  finca_id: number;
+  finca_nombre: string;
+  itinerario_id: number | null;
+  itinerario_nombre: string | null;
+  fecha_inicio: string;
+  fecha_fin: string;
+  litros: number;
+  estado: EstadoPago;
+  responsable: ResponsablePago;
+  fecha_marcado: string | null;
+  activado_por: string | null;
+  marcado_por: string | null;
+  created_at: string;
 }
 
 export interface RutaCooperativa {

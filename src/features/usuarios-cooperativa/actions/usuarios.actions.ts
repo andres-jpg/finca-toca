@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/check-permissions";
+import { getCurrentUser } from "@/lib/auth/get-user-role";
 import type { UserCooperativa } from "@/types";
 
 export async function getCooperativaUsers(): Promise<UserCooperativa[]> {
@@ -43,12 +44,10 @@ export async function desasignarItinerario(userId: string) {
 }
 
 export async function getItinerarioIdAsignado(): Promise<number | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return null;
 
+  const supabase = await createClient();
   const { data } = await supabase
     .from("user_itinerarios")
     .select("itinerario_id")

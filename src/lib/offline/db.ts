@@ -28,10 +28,24 @@ export interface SyncQueueRecord {
   error: string | null;
 }
 
+export interface PagoLocalRecord {
+  localId?: number;
+  serverId: number;
+  finca_id: number;
+  fecha_inicio: string;
+  fecha_fin: string;
+  estado: "pendiente" | "pagado" | "punto_venta" | "devuelto";
+  responsable: "conductor" | "punto_venta" | "gerente";
+  fechaMarcadoLocal: number | null;
+  syncStatus: "synced" | "pending" | "failed";
+  cachedAt: number;
+}
+
 class FincaTocaOfflineDB extends Dexie {
   fincasCache!: Table<FincaCacheRecord>;
   recoleccionesLocal!: Table<RecoleccionLocalRecord>;
   syncQueue!: Table<SyncQueueRecord>;
+  pagosLocal!: Table<PagoLocalRecord>;
 
   constructor() {
     super("finca-toca-offline");
@@ -43,6 +57,10 @@ class FincaTocaOfflineDB extends Dexie {
     // v2: añade índice individual en fecha para queries eficientes
     this.version(2).stores({
       recoleccionesLocal: "++localId, [finca_id+fecha], fecha, syncStatus, createdAt, syncedAt",
+    });
+    // v3: tabla pagosLocal para pagos offline del conductor
+    this.version(3).stores({
+      pagosLocal: "++localId, serverId, finca_id, syncStatus",
     });
   }
 }

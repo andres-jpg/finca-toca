@@ -46,4 +46,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# supabase CLI local state
+supabase/.temp
+
+# local agent tooling scratch state
+.claire/
+
 

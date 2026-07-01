@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/check-permissions";
-import { getUserRole } from "@/lib/auth/get-user-role";
+import { getUserRole, getCurrentUser } from "@/lib/auth/get-user-role";
 import type { Recoleccion } from "@/types";
 
 export async function getRecolecciones(): Promise<Recoleccion[]> {
@@ -14,7 +14,7 @@ export async function getRecolecciones(): Promise<Recoleccion[]> {
   let fincaIdsFiltro: number[] | null = null;
 
   if (role === "cooperativa_user") {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getCurrentUser();
     if (user) {
       const { data: userIt } = await supabase
         .from("user_itinerarios")

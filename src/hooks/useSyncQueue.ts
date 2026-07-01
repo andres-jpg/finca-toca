@@ -3,11 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, purgeOldSyncedRecords } from "@/lib/offline/db";
-import { syncQueue } from "@/lib/offline/sync";
-import { useOnline } from "./useOnline";
+import { syncQueue, syncPagos } from "@/lib/offline/sync";
 
-export function useSyncQueue() {
-  const isOnline = useOnline();
+export function useSyncQueue(isOnline: boolean) {
+  // Mutex real: useRef se lee/escribe sincrónicamente, a diferencia de useState (cuyo
+  // setState diferido permite que dos syncNow() casi simultáneos lean isSyncing=false
+  // y corran en paralelo, duplicando peticiones). isSyncing (state) solo refleja la UI.
+  const isSyncingRef = useRef(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const prevOnlineRef = useRef(isOnline);
 
@@ -19,11 +21,13 @@ export function useSyncQueue() {
     ) ?? 0;
 
   const syncNow = async () => {
-    if (isSyncing) return;
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
     setIsSyncing(true);
     try {
-      await syncQueue();
+      await Promise.all([syncQueue(), syncPagos()]);
     } finally {
+      isSyncingRef.current = false;
       setIsSyncing(false);
     }
   };

@@ -178,8 +178,10 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient();
 
   // Fincas
-  type FincaInfo = { id: number; nombre: string; precio_litro: number };
+  type FincaInfo = { id: number; nombre: string; precio_litro: number; ruta_nombre?: string | null };
   let fincas: FincaInfo[] = [];
+  let conductorName: string | null = null;
+  let itinerarioNombre: string | null = null;
 
   if (tipo === "finca") {
     const { data, error } = await supabase
@@ -224,13 +226,18 @@ export async function GET(req: NextRequest) {
       .filter(Boolean) as FincaInfo[];
     fincas.sort((a, b) => a.nombre.localeCompare(b.nombre));
   } else if (tipo === "itinerario") {
-    const { data, error } = await supabase
-      .from("itinerarios")
-      .select("nombre, itinerarios_fincas(orden, fincas_cooperativa(id, nombre, precio_litro))")
-      .eq("id", id)
-      .single();
-    if (error || !data)
+    const [itResult, usersResult] = await Promise.all([
+      supabase
+        .from("itinerarios")
+        .select("nombre, itinerarios_fincas(orden, fincas_cooperativa(id, nombre, precio_litro, rutas_fincas(rutas_cooperativa(nombre))))")
+        .eq("id", id!)
+        .single(),
+      supabase.rpc("get_cooperativa_users"),
+    ]);
+    if (itResult.error || !itResult.data)
       return new Response("Itinerario no encontrado", { status: 404 });
+    const data = itResult.data;
+    itinerarioNombre = data.nombre;
     const ifList: any[] = Array.isArray(data.itinerarios_fincas)
       ? data.itinerarios_fincas
       : [];
@@ -241,13 +248,28 @@ export async function GET(req: NextRequest) {
           ? itF.fincas_cooperativa[0]
           : itF.fincas_cooperativa;
         if (!f) return null;
+        const rutasFincasRaw = f.rutas_fincas;
+        const rutasFincas: any[] = Array.isArray(rutasFincasRaw)
+          ? rutasFincasRaw
+          : rutasFincasRaw ? [rutasFincasRaw] : [];
+        const primeraRuta = rutasFincas[0]?.rutas_cooperativa;
+        const rutaNombre: string | null = primeraRuta
+          ? Array.isArray(primeraRuta)
+            ? primeraRuta[0]?.nombre ?? null
+            : primeraRuta.nombre ?? null
+          : null;
         return {
           id: f.id,
           nombre: f.nombre,
           precio_litro: Number(f.precio_litro),
+          ruta_nombre: rutaNombre,
         };
       })
       .filter(Boolean) as FincaInfo[];
+    const conductores = (usersResult.data ?? [])
+      .filter((u: any) => u.itinerario_id === id)
+      .map((u: any) => u.email as string);
+    conductorName = conductores[0] ?? null;
   }
 
   if (tipo !== "general" && fincas.length === 0) {
@@ -494,6 +516,149 @@ export async function GET(req: NextRequest) {
     });
   }
   // ── FIN INFORME GENERAL ──────────────────────────────────────────────────────
+
+  // ── INFORME ITINERARIO ────────────────────────────────────────────────────
+  if (tipo === "itinerario") {
+    const fincaIdsIt = fincas.map((f) => f.id);
+    const recsIt = await fetchAllRecolecciones(supabase, fincaIdsIt, startDate, endDate);
+
+    type DayRecIt = { litros: number; precio_litro: number };
+    const recMapIt = new Map<number, Map<string, DayRecIt>>();
+    for (const rec of recsIt) {
+      const fecha = rec.fecha as string;
+      if (!recMapIt.has(rec.finca_id)) recMapIt.set(rec.finca_id, new Map());
+      recMapIt.get(rec.finca_id)!.set(fecha, {
+        litros: Number(rec.litros),
+        precio_litro: Number(rec.precio_litro),
+      });
+    }
+
+    const wbIt = new ExcelJS.Workbook();
+    wbIt.creator = "Toca Lácteos";
+    const wsIt = wbIt.addWorksheet(periodoLabel.slice(0, 31));
+
+    // Col 1: Finca, Col 2: Ruta, Cols 3...(dates.length+2): días
+    // Col dates.length+3: Precio/L, Col dates.length+4: Total Litros
+    // Col dates.length+5: Precio Bruto, Col dates.length+6: Des. Fedegan, Col dates.length+7: Precio Neto
+    const totalColsIt = 2 + dates.length + 5;
+    const colPrecioBrutoIt = totalColsIt - 2;
+    const colDesFedeganIt = totalColsIt - 1;
+    const colPrecioNetoIt = totalColsIt;
+    const colTotalLitrosIt = dates.length + 4;
+
+    wsIt.getColumn(1).width = 26;
+    wsIt.getColumn(2).width = 20;
+    for (let i = 3; i <= dates.length + 2; i++) wsIt.getColumn(i).width = isSameMonth ? 8 : 10;
+    wsIt.getColumn(dates.length + 3).width = 12;
+    wsIt.getColumn(dates.length + 4).width = 14;
+    wsIt.getColumn(colPrecioBrutoIt).width = 16;
+    wsIt.getColumn(colDesFedeganIt).width = 15;
+    wsIt.getColumn(colPrecioNetoIt).width = 14;
+
+    // Fila 1: nombre del conductor
+    const conductorRow = wsIt.addRow([
+      "CONDUCTOR",
+      conductorName ?? "",
+      ...Array(totalColsIt - 2).fill(""),
+    ]);
+    wsIt.mergeCells(1, 2, 1, totalColsIt);
+    conductorRow.height = 22;
+    conductorRow.getCell(1).font = { bold: true };
+    conductorRow.getCell(1).alignment = { vertical: "middle" };
+    conductorRow.getCell(2).font = { bold: true, size: 12 };
+    conductorRow.getCell(2).alignment = { vertical: "middle", horizontal: "left" };
+
+    // Congelar filas 1 y 2
+    wsIt.views = [{ state: "frozen", xSplit: 0, ySplit: 2 }];
+
+    // Fila 2: cabecera de columnas
+    const headerIt = [
+      "Finca",
+      "Ruta",
+      ...dayLabels,
+      "Precio/L",
+      "Total Litros",
+      "Precio Bruto",
+      "Des. Fedegan",
+      "Precio Neto",
+    ];
+    const headerRowIt = wsIt.addRow(headerIt);
+    headerRowIt.height = 20;
+    headerRowIt.eachCell((cell) => styleHeader(cell));
+
+    let sumLitrosIt = 0, sumBrutoIt = 0, sumFedeganIt = 0, sumNetoIt = 0;
+    const dayTotalsIt = new Array(dates.length).fill(0);
+
+    for (const finca of fincas) {
+      const dayMap = recMapIt.get(finca.id) ?? new Map<string, DayRecIt>();
+      const dayValues = dates.map((iso) => dayMap.get(iso)?.litros ?? 0);
+      dayValues.forEach((v, i) => { dayTotalsIt[i] += v; });
+      const totalLitros = dayValues.reduce((s, v) => s + v, 0);
+      const precioBruto = dates.reduce((s, iso) => {
+        const rec = dayMap.get(iso);
+        return s + (rec ? rec.litros * rec.precio_litro : 0);
+      }, 0);
+      const desFedegan = Math.round(precioBruto * FEDEGAN_PCT);
+      const precioNeto = Math.round(precioBruto) - desFedegan;
+
+      sumLitrosIt += totalLitros;
+      sumBrutoIt += Math.round(precioBruto);
+      sumFedeganIt += desFedegan;
+      sumNetoIt += precioNeto;
+
+      const row = wsIt.addRow([
+        finca.nombre,
+        finca.ruta_nombre ?? "",
+        ...dayValues,
+        finca.precio_litro,
+        totalLitros,
+        Math.round(precioBruto),
+        desFedegan,
+        precioNeto,
+      ]);
+      row.getCell(1).font = { bold: true };
+      row.getCell(1).alignment = { vertical: "middle" };
+      row.getCell(dates.length + 3).numFmt = FMT_COP;
+      styleSummary(row.getCell(colPrecioBrutoIt));
+      styleSummary(row.getCell(colDesFedeganIt));
+      styleSummary(row.getCell(colPrecioNetoIt));
+    }
+
+    const totalsRowIt = wsIt.addRow([
+      "TOTAL",
+      "",
+      ...dayTotalsIt,
+      "",
+      sumLitrosIt,
+      sumBrutoIt,
+      sumFedeganIt,
+      sumNetoIt,
+    ]);
+    totalsRowIt.height = 20;
+    totalsRowIt.getCell(1).font = { bold: true, color: { argb: COLOR_HEADER_FG } };
+    totalsRowIt.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_TOTALS_BG } };
+    totalsRowIt.getCell(1).alignment = { horizontal: "left" };
+    totalsRowIt.getCell(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_TOTALS_BG } };
+    for (let i = 3; i <= dates.length + 2; i++) styleTotal(totalsRowIt.getCell(i));
+    styleTotal(totalsRowIt.getCell(colTotalLitrosIt));
+    styleTotal(totalsRowIt.getCell(colPrecioBrutoIt), true);
+    styleTotal(totalsRowIt.getCell(colDesFedeganIt), true);
+    styleTotal(totalsRowIt.getCell(colPrecioNetoIt), true);
+
+    const bufferIt = await wbIt.xlsx.writeBuffer();
+    const filenameIt =
+      quincena && mes !== undefined && anio !== undefined
+        ? `informe_Q${quincena}_${MESES[mes - 1]}_${anio}_${itinerarioNombre ?? id}.xlsx`
+        : `informe_${startDate}_${endDate}_${itinerarioNombre ?? id}.xlsx`;
+
+    return new Response(bufferIt as ArrayBuffer, {
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${filenameIt}"`,
+      },
+    });
+  }
+  // ── FIN INFORME ITINERARIO ────────────────────────────────────────────────
 
   // Recolecciones (finca / ruta)
   const fincaIds = fincas.map((f) => f.id);

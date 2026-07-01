@@ -17,6 +17,7 @@ import {
   FileSpreadsheet,
   Users,
   Route,
+  Banknote,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types";
@@ -115,6 +116,12 @@ const navItems: NavItem[] = [
     href: "/dashboard/informes-cooperativa",
     label: "Informes",
     icon: FileSpreadsheet,
+    allowedRoles: ["cooperativa_admin"] as UserRole[],
+  },
+  {
+    href: "/dashboard/pagos-cooperativa",
+    label: "Pagos",
+    icon: Banknote,
     allowedRoles: ["cooperativa_admin"] as UserRole[],
   },
   {

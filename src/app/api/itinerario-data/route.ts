@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getUserRole } from "@/lib/auth/get-user-role";
+import { getUserRole, getCurrentUser } from "@/lib/auth/get-user-role";
 
 const ITINERARIO_SELECT =
   "id, nombre, itinerarios_fincas(finca_id, orden, fincas_cooperativa(id, nombre, precio_litro))";
@@ -11,11 +11,10 @@ export async function GET() {
     return new NextResponse("No autorizado", { status: 401 });
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return new NextResponse("No autorizado", { status: 401 });
+
+  const supabase = await createClient();
 
   // Obtener itinerario asignado
   const { data: userIt } = await supabase
@@ -72,8 +71,27 @@ export async function GET() {
     fecha: today,
   }));
 
+  // Pagos pendientes con responsable=conductor para las fincas de este itinerario
+  const { data: pagosRows } = fincaIds.length
+    ? await supabase
+        .from("pagos_finca")
+        .select("id, finca_id, fecha_inicio, fecha_fin, estado, responsable")
+        .in("finca_id", fincaIds)
+        .eq("estado", "pendiente")
+        .eq("responsable", "conductor")
+    : { data: [] };
+
+  const pagosActivos = (pagosRows ?? []).map((p: any) => ({
+    id: p.id as number,
+    finca_id: p.finca_id as number,
+    fecha_inicio: p.fecha_inicio as string,
+    fecha_fin: p.fecha_fin as string,
+    estado: p.estado as string,
+    responsable: p.responsable as string,
+  }));
+
   return NextResponse.json(
-    { itinerario: { id: itRow.id, nombre: itRow.nombre, fincas }, syncedToday },
+    { itinerario: { id: itRow.id, nombre: itRow.nombre, fincas }, syncedToday, pagosActivos },
     { headers: { "Cache-Control": "no-store" } }
   );
 }

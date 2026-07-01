@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Wifi, WifiOff, Loader2, CheckSquare, Square, Pencil, Check, X, Search } from "lucide-react";
+import { Wifi, WifiOff, Loader2, CheckSquare, Square, Pencil, Check, X, Search, Banknote } from "lucide-react";
 import { toast } from "sonner";
-import { db, type FincaCacheRecord } from "@/lib/offline/db";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { db, type FincaCacheRecord, type PagoLocalRecord } from "@/lib/offline/db";
 import { addToSyncQueue } from "@/lib/offline/sync";
 import { useOnline } from "@/hooks/useOnline";
 import { useSyncQueue } from "@/hooks/useSyncQueue";
@@ -23,11 +25,36 @@ function SyncDot({ status }: { status: string }) {
   return <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0 animate-pulse" />;
 }
 
+function ConnectionBadge({ isOnline, isSyncing }: { isOnline: boolean; isSyncing: boolean }) {
+  if (!isOnline) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-red-600">
+        <span className="h-2 w-2 rounded-full bg-red-500" />
+        Sin conexión
+      </span>
+    );
+  }
+  if (isSyncing) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-600">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        Sincronizando...
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-teal-600">
+      <span className="h-2 w-2 rounded-full bg-teal-500" />
+      Sincronizado
+    </span>
+  );
+}
+
 const OFFLINE_USER_KEY = "offlineUserId";
 
 export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorViewProps) {
   const isOnline = useOnline();
-  const { pendingCount, isSyncing, syncNow } = useSyncQueue();
+  const { pendingCount, isSyncing, syncNow } = useSyncQueue(isOnline);
 
   const [selectedFincaId, setSelectedFincaId] = useState<number | null>(null);
   const [fincaSearch, setFincaSearch] = useState("");
@@ -41,6 +68,8 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
   const [editingLocalId, setEditingLocalId] = useState<number | null>(null);
   const [editLitros, setEditLitros] = useState("");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  const [markingPagoLocalId, setMarkingPagoLocalId] = useState<number | null>(null);
 
   const [today, setToday] = useState(() =>
     new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date())
@@ -104,14 +133,34 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
     []
   );
 
+  // Pagos pendientes con responsable=conductor para la finca seleccionada
+  const pagosPendientes = useLiveQuery(
+    () =>
+      selectedFincaId !== null
+        ? db.pagosLocal
+            .where("finca_id")
+            .equals(selectedFincaId)
+            .filter((p) => p.estado === "pendiente" && p.responsable === "conductor")
+            .toArray()
+        : Promise.resolve([] as PagoLocalRecord[]),
+    [selectedFincaId],
+    [] as PagoLocalRecord[]
+  );
+
   // Cargar datos del servidor al montar (si hay conexión)
   useEffect(() => {
     if (!isOnline) return;
+    // Si isOnline parpadea o "today" cambia (medianoche) antes de que esta respuesta
+    // vuelva, una respuesta vieja podría resolver después de una más nueva y sobreescribir
+    // el caché de fincas/precios con datos obsoletos. `ignore` descarta la respuesta si
+    // el efecto ya se volvió a ejecutar.
+    let ignore = false;
     setIsLoadingCache(true);
 
     fetch("/api/itinerario-data")
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then(async (data) => {
+        if (ignore) return;
         if (!data.itinerario) return;
         const fincasToCache: FincaCacheRecord[] = data.itinerario.fincas.map(
           (f: { id: number; nombre: string; precio_litro: number; orden: number }) => ({
@@ -123,7 +172,7 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
           })
         );
 
-        await db.transaction("rw", [db.fincasCache, db.recoleccionesLocal], async () => {
+        await db.transaction("rw", [db.fincasCache, db.recoleccionesLocal, db.pagosLocal], async () => {
           await db.fincasCache.clear();
           await db.fincasCache.bulkPut(fincasToCache);
 
@@ -155,12 +204,36 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
               });
             }
           }
+
+          // Mergear pagos activos: insertar solo si no existen ya (para no sobreescribir pending)
+          for (const pago of (data.pagosActivos ?? []) as { id: number; finca_id: number; fecha_inicio: string; fecha_fin: string; estado: string; responsable: string }[]) {
+            const existing = await db.pagosLocal.where("serverId").equals(pago.id).first();
+            if (!existing) {
+              await db.pagosLocal.add({
+                serverId: pago.id,
+                finca_id: pago.finca_id,
+                fecha_inicio: pago.fecha_inicio,
+                fecha_fin: pago.fecha_fin,
+                estado: pago.estado as PagoLocalRecord["estado"],
+                responsable: pago.responsable as PagoLocalRecord["responsable"],
+                fechaMarcadoLocal: null,
+                syncStatus: "synced",
+                cachedAt: Date.now(),
+              });
+            }
+          }
         });
       })
       .catch(() => {
         // Silencioso — puede que offline
       })
-      .finally(() => setIsLoadingCache(false));
+      .finally(() => {
+        if (!ignore) setIsLoadingCache(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOnline, today]);
 
@@ -210,6 +283,35 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
     }
   };
 
+  const handleMarcarPago = async (
+    pagoLocalId: number,
+    nuevoEstado: "pagado" | "punto_venta" | "devuelto"
+  ) => {
+    setMarkingPagoLocalId(pagoLocalId);
+    try {
+      const responsable =
+        nuevoEstado === "punto_venta" ? "punto_venta" : ("conductor" as PagoLocalRecord["responsable"]);
+      await db.pagosLocal.update(pagoLocalId, {
+        estado: nuevoEstado,
+        responsable,
+        fechaMarcadoLocal: Date.now(),
+        syncStatus: "pending",
+      });
+      if (isOnline) syncNow();
+      toast.success(
+        nuevoEstado === "pagado"
+          ? "Pago marcado como pagado"
+          : nuevoEstado === "punto_venta"
+          ? "Dejado en punto de venta"
+          : "Devuelto a secretaría"
+      );
+    } catch {
+      toast.error("Error al marcar el pago");
+    } finally {
+      setMarkingPagoLocalId(null);
+    }
+  };
+
   const handleSaveEdit = async (localId: number) => {
     const val = parseFloat(editLitros);
     if (isNaN(val) || val < 0) return;
@@ -225,32 +327,6 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
     } finally {
       setIsSavingEdit(false);
     }
-  };
-
-  // Estado de conexión / sincronización
-  const ConnectionBadge = () => {
-    if (!isOnline) {
-      return (
-        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-red-600">
-          <span className="h-2 w-2 rounded-full bg-red-500" />
-          Sin conexión
-        </span>
-      );
-    }
-    if (isSyncing) {
-      return (
-        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-600">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          Sincronizando...
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-teal-600">
-        <span className="h-2 w-2 rounded-full bg-teal-500" />
-        Sincronizado
-      </span>
-    );
   };
 
   // Pantalla de carga inicial (Dexie aún no respondió)
@@ -285,7 +361,7 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
           <p className="text-xs text-muted-foreground uppercase tracking-wide">Conductor — campo</p>
           <h2 className="text-lg font-semibold">{itinerarioNombre}</h2>
         </div>
-        <ConnectionBadge />
+        <ConnectionBadge isOnline={isOnline} isSyncing={isSyncing} />
       </div>
 
       {/* Banner offline con pendientes */}
@@ -422,6 +498,58 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
               className="text-lg text-center font-semibold h-14"
             />
           </div>
+
+          {/* Bloque de pago — solo si hay pagos pendientes para la finca seleccionada */}
+          {(pagosPendientes ?? []).map((pago) => {
+            const fmtDate = (s: string) =>
+              format(new Date(s + "T12:00:00"), "d MMM", { locale: es });
+            const isMarking = markingPagoLocalId === pago.localId;
+            return (
+              <div
+                key={pago.localId}
+                className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium flex items-center gap-1.5">
+                    <Banknote className="h-4 w-4 text-amber-600" />
+                    Pago período {fmtDate(pago.fecha_inicio)}–{fmtDate(pago.fecha_fin)}
+                  </span>
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-200 text-amber-800">
+                    Pendiente
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">Guíate por el desprendible impreso</p>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => handleMarcarPago(pago.localId!, "pagado")}
+                    disabled={isMarking}
+                  >
+                    {isMarking ? <Loader2 className="h-3 w-3 animate-spin" /> : "Pagado"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => handleMarcarPago(pago.localId!, "punto_venta")}
+                    disabled={isMarking}
+                  >
+                    P. venta
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => handleMarcarPago(pago.localId!, "devuelto")}
+                    disabled={isMarking}
+                  >
+                    Devuelto
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
 
           <Button
             className="w-full"
