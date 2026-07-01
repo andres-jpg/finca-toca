@@ -6,7 +6,7 @@ import { requireRole } from "@/lib/auth/check-permissions";
 import type { FincaCooperativa } from "@/types";
 
 const FINCA_SELECT =
-  "id, nombre, precio_litro, activa, created_at, rutas_fincas(rutas_cooperativa(nombre))";
+  "id, nombre, precio_litro, activa, created_at, metodo_pago, rutas_fincas(rutas_cooperativa(nombre))";
 
 function mapFinca(row: any): FincaCooperativa {
   const rf = row.rutas_fincas;
@@ -24,6 +24,7 @@ function mapFinca(row: any): FincaCooperativa {
     activa: row.activa,
     created_at: row.created_at,
     ruta_nombre: rutaNombre,
+    metodo_pago: row.metodo_pago ?? 'conductor',
   };
 }
 
@@ -53,12 +54,13 @@ export async function createFinca(formData: {
   precio_litro: number;
   activa: boolean;
   ruta_id?: number | null;
+  metodo_pago?: 'conductor' | 'punto_venta' | 'gerente';
 }) {
   await requireRole(["cooperativa_admin"]);
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("fincas_cooperativa")
-    .insert({ nombre: formData.nombre, precio_litro: formData.precio_litro, activa: formData.activa })
+    .insert({ nombre: formData.nombre, precio_litro: formData.precio_litro, activa: formData.activa, metodo_pago: formData.metodo_pago ?? 'conductor' })
     .select("id")
     .single();
   if (error) {
@@ -85,13 +87,14 @@ export async function updateFinca(
     precio_litro: number;
     activa: boolean;
     ruta_id?: number | null;
+    metodo_pago?: 'conductor' | 'punto_venta' | 'gerente';
   }
 ) {
   await requireRole(["cooperativa_admin"]);
   const supabase = await createClient();
   const { error } = await supabase
     .from("fincas_cooperativa")
-    .update({ nombre: formData.nombre, precio_litro: formData.precio_litro, activa: formData.activa })
+    .update({ nombre: formData.nombre, precio_litro: formData.precio_litro, activa: formData.activa, metodo_pago: formData.metodo_pago ?? 'conductor' })
     .eq("id", id);
   if (error) {
     if (error.code === "23505") throw new Error("Ya existe una finca con ese nombre");

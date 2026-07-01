@@ -77,63 +77,38 @@ export default async function DashboardPage({
 
   const supabase = await createClient();
 
-  // Queries de donuts con join a conceptos — filtradas en DB si hay filtro activo
-  const gastosDonutQuery = supabase
-    .from("gastos")
-    .select("valor, subconceptos_gasto(nombre, conceptos_gasto(nombre))");
-  const ingresosDonutQuery = supabase
-    .from("ingresos")
-    .select("valor, subconceptos_ingreso(nombre, conceptos_ingreso(nombre))");
-
+  // Un solo fetch de histórico completo por tabla (con joins de concepto incluidos):
+  // current/prev month, donuts y quincenas se derivan en JS filtrando por fecha en vez
+  // de lanzar una query separada por cada corte — antes eran ~15 queries, varias de ellas
+  // subconjuntos exactos unas de otras.
   const [
-    { data: gastosCurr },
-    { data: gastosLast },
-    { data: ingresosCurr },
-    { data: ingresosLast },
-    // Line chart: solo fecha+valor sin joins (más ligero)
-    { data: gastosLineRaw },
-    { data: ingresosLineRaw },
-    // Donuts: con join a conceptos, rango filtrado en DB cuando hay filtro
-    { data: gastosDonutRaw },
-    { data: ingresosDonutRaw },
+    { data: gastosRaw },
+    { data: ingresosRaw },
     { data: vacasEstados },
-    { data: extMes },
-    { data: ext1 },
-    { data: ext2 },
-    { data: ing1 },
-    { data: ing2 },
+    { data: extraccionesRaw },
     litrosDia,
-    { data: allExtraccionesRaw },
   ] = await Promise.all([
-    supabase.from("gastos").select("valor").gte("fecha", selected.start).lte("fecha", selected.end),
-    supabase.from("gastos").select("valor").gte("fecha", prev.start).lte("fecha", prev.end),
-    supabase.from("ingresos").select("valor").gte("fecha", selected.start).lte("fecha", selected.end),
-    supabase.from("ingresos").select("valor").gte("fecha", prev.start).lte("fecha", prev.end),
-    supabase.from("gastos").select("fecha, valor").order("fecha", { ascending: true }),
-    supabase.from("ingresos").select("fecha, valor").order("fecha", { ascending: true }),
-    hasFilter
-      ? gastosDonutQuery.gte("fecha", selected.start).lte("fecha", selected.end)
-      : gastosDonutQuery,
-    hasFilter
-      ? ingresosDonutQuery.gte("fecha", selected.start).lte("fecha", selected.end)
-      : ingresosDonutQuery,
+    supabase
+      .from("gastos")
+      .select("fecha, valor, subconceptos_gasto(nombre, conceptos_gasto(nombre))")
+      .order("fecha", { ascending: true }),
+    supabase
+      .from("ingresos")
+      .select("fecha, valor, source, subconceptos_ingreso(nombre, conceptos_ingreso(nombre))")
+      .order("fecha", { ascending: true }),
     supabase.from("vacas").select("estado").eq("alta", true),
-    supabase.from("extracciones_leche").select("litros, vacas_en_produccion").gte("fecha", selected.start).lte("fecha", selected.end),
-    supabase.from("extracciones_leche").select("litros")
-      .gte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 1)))
-      .lte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 15))),
-    supabase.from("extracciones_leche").select("litros")
-      .gte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 16)))
-      .lte("fecha", formatDate(new Date(effectiveAnio, effectiveMes, 0))),
-    supabase.from("ingresos").select("valor").eq("source", "leche_extraccion")
-      .gte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 1)))
-      .lte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 15))),
-    supabase.from("ingresos").select("valor").eq("source", "leche_extraccion")
-      .gte("fecha", formatDate(new Date(effectiveAnio, effectiveMes - 1, 16)))
-      .lte("fecha", formatDate(new Date(effectiveAnio, effectiveMes, 0))),
+    supabase
+      .from("extracciones_leche")
+      .select("fecha, litros, vacas_en_produccion")
+      .order("fecha", { ascending: true }),
     getLitrosDiaActual(),
-    supabase.from("extracciones_leche").select("fecha, litros, vacas_en_produccion").order("fecha", { ascending: true }),
   ]);
+
+  const inRange = (fecha: string, start: string, end: string) => fecha >= start && fecha <= end;
+  const q1Start = formatDate(new Date(effectiveAnio, effectiveMes - 1, 1));
+  const q1End = formatDate(new Date(effectiveAnio, effectiveMes - 1, 15));
+  const q2Start = formatDate(new Date(effectiveAnio, effectiveMes - 1, 16));
+  const q2End = formatDate(new Date(effectiveAnio, effectiveMes, 0));
 
   const vacasTotal = (vacasEstados ?? []).length;
   const vacasProduccion = (vacasEstados ?? []).filter((v: any) => v.estado === "produccion").length;
@@ -142,53 +117,76 @@ export default async function DashboardPage({
   const vacasPreJardin = (vacasEstados ?? []).filter((v: any) => v.estado === "pre_jardin").length;
   const vacasJardin = (vacasEstados ?? []).filter((v: any) => v.estado === "jardin").length;
 
-  // Datos para gráfico de líneas: solo fecha + valor (sin concepto)
-  const allGastos = (gastosLineRaw ?? []).map((g: any) => ({
+  // Datos para gráfico de líneas: solo fecha + valor (sin concepto), histórico completo
+  const allGastos = (gastosRaw ?? []).map((g: any) => ({
     fecha: g.fecha as string,
     valor: g.valor as number,
   }));
-  const allIngresos = (ingresosLineRaw ?? []).map((i: any) => ({
+  const allIngresos = (ingresosRaw ?? []).map((i: any) => ({
     fecha: i.fecha as string,
     valor: i.valor as number,
   }));
 
-  // Datos para donuts: concepto + valor (ya filtrados por DB si hay filtro)
-  const donutGastos = (gastosDonutRaw ?? []).map((g: any) => ({
+  // Datos para donuts: concepto + valor — rango filtrado en JS cuando hay filtro activo
+  const gastosDonutRows = hasFilter
+    ? (gastosRaw ?? []).filter((g: any) => inRange(g.fecha, selected.start, selected.end))
+    : (gastosRaw ?? []);
+  const ingresosDonutRows = hasFilter
+    ? (ingresosRaw ?? []).filter((i: any) => inRange(i.fecha, selected.start, selected.end))
+    : (ingresosRaw ?? []);
+  const donutGastos = gastosDonutRows.map((g: any) => ({
     concepto: g.subconceptos_gasto?.conceptos_gasto?.nombre ?? "Otros",
     valor: g.valor as number,
   }));
-  const donutIngresos = (ingresosDonutRaw ?? []).map((i: any) => ({
+  const donutIngresos = ingresosDonutRows.map((i: any) => ({
     concepto: i.subconceptos_ingreso?.conceptos_ingreso?.nombre ?? "Otros",
     valor: i.valor as number,
   }));
 
-  const totalGastos = (gastosCurr ?? []).reduce((s: number, r: { valor: number }) => s + r.valor, 0);
-  const lastGastos = (gastosLast ?? []).reduce((s: number, r: { valor: number }) => s + r.valor, 0);
-  const totalIngresos = (ingresosCurr ?? []).reduce((s: number, r: { valor: number }) => s + r.valor, 0);
-  const lastIngresos = (ingresosLast ?? []).reduce((s: number, r: { valor: number }) => s + r.valor, 0);
+  const totalGastos = (gastosRaw ?? [])
+    .filter((g: any) => inRange(g.fecha, selected.start, selected.end))
+    .reduce((s: number, r: any) => s + r.valor, 0);
+  const lastGastos = (gastosRaw ?? [])
+    .filter((g: any) => inRange(g.fecha, prev.start, prev.end))
+    .reduce((s: number, r: any) => s + r.valor, 0);
+  const totalIngresos = (ingresosRaw ?? [])
+    .filter((i: any) => inRange(i.fecha, selected.start, selected.end))
+    .reduce((s: number, r: any) => s + r.valor, 0);
+  const lastIngresos = (ingresosRaw ?? [])
+    .filter((i: any) => inRange(i.fecha, prev.start, prev.end))
+    .reduce((s: number, r: any) => s + r.valor, 0);
 
   const gastosTrend = calcTrend(totalGastos, lastGastos);
   const ingresosTrend = calcTrend(totalIngresos, lastIngresos);
 
-  const litrosMes = (extMes ?? []).reduce((s: number, r: any) => s + r.litros, 0);
+  const extMes = (extraccionesRaw ?? []).filter((r: any) => inRange(r.fecha, selected.start, selected.end));
+  const litrosMes = extMes.reduce((s: number, r: any) => s + r.litros, 0);
   const litrosPorVacaHoy = vacasProduccion > 0 ? litrosDia / vacasProduccion : 0;
-  const extMesConVacas = (extMes ?? []).filter((r: any) => r.vacas_en_produccion != null && r.vacas_en_produccion > 0);
+  const extMesConVacas = extMes.filter((r: any) => r.vacas_en_produccion != null && r.vacas_en_produccion > 0);
   const litrosPorVacaMes = extMesConVacas.length > 0
     ? extMesConVacas.reduce((s: number, r: any) => s + r.litros / r.vacas_en_produccion, 0) / extMesConVacas.length
     : vacasProduccion > 0 ? litrosMes / vacasProduccion : 0;
   const APORTACION_PCT = 0.0075;
   const quincenas = {
-    q1Litros: (ext1 ?? []).reduce((s, r) => s + r.litros, 0),
-    q1Valor: (ing1 ?? []).reduce((s, r) => s + r.valor, 0),
-    q2Litros: (ext2 ?? []).reduce((s, r) => s + r.litros, 0),
-    q2Valor: (ing2 ?? []).reduce((s, r) => s + r.valor, 0),
+    q1Litros: (extraccionesRaw ?? [])
+      .filter((r: any) => inRange(r.fecha, q1Start, q1End))
+      .reduce((s: number, r: any) => s + r.litros, 0),
+    q1Valor: (ingresosRaw ?? [])
+      .filter((r: any) => r.source === "leche_extraccion" && inRange(r.fecha, q1Start, q1End))
+      .reduce((s: number, r: any) => s + r.valor, 0),
+    q2Litros: (extraccionesRaw ?? [])
+      .filter((r: any) => inRange(r.fecha, q2Start, q2End))
+      .reduce((s: number, r: any) => s + r.litros, 0),
+    q2Valor: (ingresosRaw ?? [])
+      .filter((r: any) => r.source === "leche_extraccion" && inRange(r.fecha, q2Start, q2End))
+      .reduce((s: number, r: any) => s + r.valor, 0),
   };
   const q1Aportacion = quincenas.q1Valor * APORTACION_PCT;
   const q2Aportacion = quincenas.q2Valor * APORTACION_PCT;
   const totalAportacion = q1Aportacion + q2Aportacion;
   const totalIngresosNeto = totalIngresos - totalAportacion;
 
-  const allExtracciones = (allExtraccionesRaw ?? []).map((e: any) => ({
+  const allExtracciones = (extraccionesRaw ?? []).map((e: any) => ({
     fecha: e.fecha as string,
     litros: e.litros as number,
     vacasEnProduccion: (e.vacas_en_produccion as number | null) ?? null,

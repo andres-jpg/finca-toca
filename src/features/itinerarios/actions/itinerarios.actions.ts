@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/check-permissions";
-import { getUserRole } from "@/lib/auth/get-user-role";
+import { getUserRole, getCurrentUser } from "@/lib/auth/get-user-role";
 import type { Itinerario, ItinerarioFinca } from "@/types";
 
 function mapItinerarioRow(row: any): Itinerario {
@@ -43,6 +43,10 @@ const ITINERARIO_SELECT =
   "id, nombre, itinerarios_fincas(finca_id, orden, fincas_cooperativa(id, nombre, precio_litro, activa, created_at, rutas_fincas(rutas_cooperativa(nombre))))";
 
 export async function getItinerarios(): Promise<Itinerario[]> {
+  // get_cooperativa_users() devuelve emails de conductores — restringir a roles cooperativa
+  // (un admin/user/viewer del lado finca no debería poder leer esto llamando la action directo).
+  await requireRole(["admin", "cooperativa_admin", "cooperativa_user"]);
+
   const supabase = await createClient();
   const [{ data, error }, { data: usersData }] = await Promise.all([
     supabase.from("itinerarios").select(ITINERARIO_SELECT).order("id"),
@@ -66,12 +70,10 @@ export async function getItinerarios(): Promise<Itinerario[]> {
 }
 
 export async function getItinerarioAsignado(): Promise<Itinerario | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return null;
 
+  const supabase = await createClient();
   const { data: userIt } = await supabase
     .from("user_itinerarios")
     .select("itinerario_id")
@@ -138,9 +140,7 @@ export async function updateItinerarioFincasOrden(itinerarioId: number, fincaIds
   const supabase = await createClient();
 
   if (role === "cooperativa_user") {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getCurrentUser();
     if (!user) throw new Error("No autorizado");
 
     const { data: userIt } = await supabase

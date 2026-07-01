@@ -32,6 +32,10 @@ export function FincaForm({ finca, rutas, onSuccess }: FincaFormProps) {
 
   const [selectedRutaId, setSelectedRutaId] = useState<number | null>(initialRutaId);
 
+  const [selectedMetodoPago, setSelectedMetodoPago] = useState<'conductor' | 'punto_venta' | 'gerente'>(
+    finca?.metodo_pago ?? 'conductor'
+  );
+
   const {
     register,
     handleSubmit,
@@ -44,6 +48,7 @@ export function FincaForm({ finca, rutas, onSuccess }: FincaFormProps) {
       precio_litro: finca?.precio_litro ?? 0,
       activa: finca?.activa ?? true,
       ruta_id: initialRutaId,
+      metodo_pago: finca?.metodo_pago ?? 'conductor',
     },
   });
 
@@ -103,6 +108,27 @@ export function FincaForm({ finca, rutas, onSuccess }: FincaFormProps) {
                 {r.nombre}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Método de pago</Label>
+        <Select
+          value={selectedMetodoPago}
+          onValueChange={(val) => {
+            const v = val as 'conductor' | 'punto_venta' | 'gerente';
+            setSelectedMetodoPago(v);
+            setValue("metodo_pago", v);
+          }}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="conductor">Conductor</SelectItem>
+            <SelectItem value="punto_venta">Punto de venta</SelectItem>
+            <SelectItem value="gerente">Gerente</SelectItem>
           </SelectContent>
         </Select>
       </div>

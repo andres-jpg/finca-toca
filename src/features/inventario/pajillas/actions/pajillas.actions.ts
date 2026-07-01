@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { formatDate } from "@/lib/utils";
+import { requireRole } from "@/lib/auth/check-permissions";
 import type { Pajilla, PajillaPorToro } from "@/types";
 
 export async function getPajillas(): Promise<Pajilla[]> {
@@ -62,6 +63,7 @@ export async function createPajillas(formData: {
   cantidad: number;
   observaciones?: string;
 }) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
   const { error } = await supabase.from("pajillas").insert({
     toro_nombre: formData.toro_nombre,
@@ -78,6 +80,7 @@ export async function createPajillas(formData: {
 }
 
 export async function usarPajillas(id: string, cantidad: number) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
 
   const { data, error: fetchError } = await supabase
@@ -104,6 +107,7 @@ export async function usarPajillas(id: string, cantidad: number) {
 }
 
 export async function deletePajilla(id: string) {
+  await requireRole(["admin", "user"]);
   const supabase = await createClient();
   const { error } = await supabase.from("pajillas").delete().eq("id", id);
 

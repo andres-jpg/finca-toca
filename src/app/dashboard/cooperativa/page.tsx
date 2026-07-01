@@ -1,22 +1,16 @@
+import { Suspense, cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/utils";
 import { checkRoutePermission } from "@/lib/auth/check-permissions";
 import { Droplets, DollarSign, Building2, TrendingUp } from "lucide-react";
 import { DashboardFilter } from "@/components/dashboard/dashboard-filter";
-import dynamic from "next/dynamic";
-
-const RecoleccionesTrendChart = dynamic(() =>
-  import("@/charts/recolecciones-trend-chart").then((m) => m.RecoleccionesTrendChart)
-);
-const LitrosPorRutaChart = dynamic(() =>
-  import("@/charts/litros-por-ruta-chart").then((m) => m.LitrosPorRutaChart)
-);
-const LitrosPorFincaChart = dynamic(() =>
-  import("@/charts/litros-por-finca-chart").then((m) => m.LitrosPorFincaChart)
-);
-const GastosCooperativaChart = dynamic(() =>
-  import("@/charts/gastos-cooperativa-chart").then((m) => m.GastosCooperativaChart)
-);
+import {
+  RecoleccionesTrendChart,
+  LitrosPorRutaChart,
+  LitrosPorFincaChart,
+  GastosCooperativaChart,
+  LitrosPorDiaSerieChart,
+} from "@/charts/cooperativa-chart-wrappers";
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -29,13 +23,58 @@ function getMonthRange(year: number, month: number) {
   return { start, end };
 }
 
+function ChartSkeleton() {
+  return (
+    <div className="bg-white rounded-xl border border-stone-200 p-6 h-72 animate-pulse" />
+  );
+}
+
+// Histórico completo de recolecciones (sin filtro de fecha), usado solo por los charts de
+// tendencia/gastos — se cachea por request para que TrendChartSection y GastosChartSection
+// (cada uno en su propio Suspense) no dupliquen la misma paginación completa.
+const fetchAllRecCooperativa = cache(async function fetchAllRecCooperativa() {
+  const supabase = await createClient();
+  const PAGE = 1000;
+  const all: any[] = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("recolecciones")
+      .select("fecha, litros, precio_litro")
+      .order("fecha", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error || !data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
+});
+
+async function TrendChartSection({ mes, anio }: { mes: number; anio: number }) {
+  const allRecData = await fetchAllRecCooperativa();
+  const trendData = allRecData.map((r: any) => ({
+    fecha: r.fecha as string,
+    litros: Number(r.litros),
+  }));
+  return <RecoleccionesTrendChart data={trendData} mes={mes} anio={anio} />;
+}
+
+async function GastosChartSection() {
+  const allRecData = await fetchAllRecCooperativa();
+  const gastosData = allRecData.map((r: any) => ({
+    fecha: r.fecha as string,
+    litros: Number(r.litros),
+    precio_litro: Number(r.precio_litro),
+  }));
+  return <GastosCooperativaChart data={gastosData} />;
+}
+
 export default async function CooperativaDashboardPage({
   searchParams,
 }: {
   searchParams: Promise<{ mes?: string; anio?: string }>;
 }) {
-  await checkRoutePermission(["cooperativa_admin"]);
-
   const params = await searchParams;
   const now = new Date();
 
@@ -57,7 +96,9 @@ export default async function CooperativaDashboardPage({
     while (true) {
       const { data, error } = await supabase
         .from("recolecciones")
-        .select("litros, precio_litro, fecha, fincas_cooperativa(nombre, rutas_fincas(rutas_cooperativa(nombre)))")
+        .select(
+          "litros, precio_litro, fecha, fincas_cooperativa(nombre, rutas_fincas(rutas_cooperativa(nombre)), itinerarios_fincas(itinerarios(nombre)))"
+        )
         .gte("fecha", start)
         .lte("fecha", end)
         .range(from, from + PAGE - 1);
@@ -69,32 +110,14 @@ export default async function CooperativaDashboardPage({
     return all;
   }
 
-  async function fetchAllRec() {
-    const PAGE = 1000;
-    const all: any[] = [];
-    let from = 0;
-    while (true) {
-      const { data, error } = await supabase
-        .from("recolecciones")
-        .select("fecha, litros, precio_litro")
-        .order("fecha", { ascending: true })
-        .range(from, from + PAGE - 1);
-      if (error || !data || data.length === 0) break;
-      all.push(...data);
-      if (data.length < PAGE) break;
-      from += PAGE;
-    }
-    return all;
-  }
-
   const [
+    ,
     registros,
-    allRecData,
     { data: fincasActivas },
     { data: rutasData },
   ] = await Promise.all([
+    checkRoutePermission(["cooperativa_admin"]),
     fetchRecMes(),
-    fetchAllRec(),
     supabase.from("fincas_cooperativa").select("id").eq("activa", true),
     supabase.from("rutas_cooperativa").select("id, nombre").order("nombre", { ascending: true }),
   ]);
@@ -184,18 +207,59 @@ export default async function CooperativaDashboardPage({
     rutas: Array.from(d.rutas),
   }));
 
-  // Datos para el trend chart (todos los registros históricos para el mes actual)
-  const trendData = allRecData.map((r: any) => ({
-    fecha: r.fecha as string,
-    litros: Number(r.litros),
-  }));
+  // Litros por día y por ruta / por itinerario, para el mes filtrado
+  function groupByDiaYSerie(getNombres: (finca: any) => string[]) {
+    const diaMap = new Map<number, Map<string, number>>();
+    const seriesSet = new Set<string>();
+    registros.forEach((r: any) => {
+      const dia = parseInt(r.fecha.split("-")[2], 10);
+      const finca = Array.isArray(r.fincas_cooperativa)
+        ? r.fincas_cooperativa[0]
+        : r.fincas_cooperativa;
+      const nombres = getNombres(finca);
+      const dayMap = diaMap.get(dia) ?? new Map<string, number>();
+      nombres.forEach((nombre) => {
+        seriesSet.add(nombre);
+        dayMap.set(nombre, (dayMap.get(nombre) ?? 0) + Number(r.litros));
+      });
+      diaMap.set(dia, dayMap);
+    });
+    const series = Array.from(seriesSet).sort();
+    const data = Array.from(diaMap.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([dia, dayMap]) => {
+        const row: Record<string, number> = { dia };
+        series.forEach((nombre) => {
+          row[nombre] = dayMap.get(nombre) ?? 0;
+        });
+        return row;
+      });
+    return { data, series };
+  }
 
-  // Datos para el chart de gastos mensuales (histórico completo)
-  const gastosData = allRecData.map((r: any) => ({
-    fecha: r.fecha as string,
-    litros: Number(r.litros),
-    precio_litro: Number(r.precio_litro),
-  }));
+  const litrosPorDiaRuta = groupByDiaYSerie((finca: any) => {
+    const rutasFincas = finca?.rutas_fincas;
+    const rutas: any[] = Array.isArray(rutasFincas) ? rutasFincas : rutasFincas ? [rutasFincas] : [];
+    if (rutas.length === 0) return ["Sin ruta"];
+    return rutas.map((rf: any) => {
+      const rutaObj = Array.isArray(rf.rutas_cooperativa) ? rf.rutas_cooperativa[0] : rf.rutas_cooperativa;
+      return rutaObj?.nombre ?? "Sin ruta";
+    });
+  });
+
+  const litrosPorDiaItinerario = groupByDiaYSerie((finca: any) => {
+    const itinerariosFincas = finca?.itinerarios_fincas;
+    const itinerarios: any[] = Array.isArray(itinerariosFincas)
+      ? itinerariosFincas
+      : itinerariosFincas
+      ? [itinerariosFincas]
+      : [];
+    if (itinerarios.length === 0) return ["Sin itinerario"];
+    return itinerarios.map((iff: any) => {
+      const itObj = Array.isArray(iff.itinerarios) ? iff.itinerarios[0] : iff.itinerarios;
+      return itObj?.nombre ?? "Sin itinerario";
+    });
+  });
 
   return (
     <div className="space-y-6">
@@ -361,18 +425,31 @@ export default async function CooperativaDashboardPage({
       </div>
 
       {/* Charts */}
-      <RecoleccionesTrendChart
-        data={trendData}
-        mes={effectiveMes}
-        anio={effectiveAnio}
-      />
+      <Suspense fallback={<ChartSkeleton />}>
+        <TrendChartSection mes={effectiveMes} anio={effectiveAnio} />
+      </Suspense>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <LitrosPorDiaSerieChart
+          title={`Litros por día y ruta — ${mesLabel}`}
+          data={litrosPorDiaRuta.data}
+          series={litrosPorDiaRuta.series}
+        />
+        <LitrosPorDiaSerieChart
+          title={`Litros por día e itinerario — ${mesLabel}`}
+          data={litrosPorDiaItinerario.data}
+          series={litrosPorDiaItinerario.series}
+        />
+      </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <LitrosPorRutaChart data={litrosPorRuta} />
         <LitrosPorFincaChart data={litrosPorFinca} rutas={rutasData ?? []} />
       </div>
 
-      <GastosCooperativaChart data={gastosData} />
+      <Suspense fallback={<ChartSkeleton />}>
+        <GastosChartSection />
+      </Suspense>
     </div>
   );
 }
