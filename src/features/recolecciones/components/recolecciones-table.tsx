@@ -12,6 +12,7 @@ import { RecoleccionForm } from "@/features/recolecciones/components/recoleccion
 import { deleteRecoleccion } from "@/features/recolecciones/actions/recolecciones.actions";
 import { Button } from "@/components/ui/button";
 import { MonthPicker } from "@/components/shared/month-picker";
+import { DatePicker } from "@/components/shared/date-picker";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import type { Recoleccion, FincaCooperativa, RutaCooperativa } from "@/types";
@@ -183,6 +184,11 @@ export function RecoleccionesTable({
 }: RecoleccionesTableProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
+  const [periodMode, setPeriodMode] = useState<"mes" | "rango">("mes");
+  const [fechaDesde, setFechaDesde] = useState<Date | undefined>(undefined);
+  const [fechaHasta, setFechaHasta] = useState<Date | undefined>(undefined);
+  const rangoInvalido = Boolean(fechaDesde && fechaHasta && fechaDesde > fechaHasta);
+  const rangoActivo = periodMode === "rango" && fechaDesde && fechaHasta && !rangoInvalido;
 
   const rutaColorMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -201,11 +207,16 @@ export function RecoleccionesTable({
       const today = formatDate(new Date()); // browser local date
       return recolecciones.filter((r) => r.fecha === today);
     }
+    if (rangoActivo && fechaDesde && fechaHasta) {
+      const desde = formatDate(fechaDesde);
+      const hasta = formatDate(fechaHasta);
+      return recolecciones.filter((r) => r.fecha >= desde && r.fecha <= hasta);
+    }
     const year = selectedMonth.getFullYear();
     const month = String(selectedMonth.getMonth() + 1).padStart(2, "0");
     const prefix = `${year}-${month}`;
     return recolecciones.filter((r) => r.fecha.startsWith(prefix));
-  }, [recolecciones, selectedMonth, todayOnly]);
+  }, [recolecciones, selectedMonth, todayOnly, rangoActivo, fechaDesde, fechaHasta]);
 
   // Fincas disponibles para CREAR: excluye las ya recolectadas hoy (solo para cooperativa_user)
   const fincasParaCrear = useMemo(() => {
@@ -303,7 +314,7 @@ export function RecoleccionesTable({
             Recolecciones
           </h2>
           <p className="text-sm text-gray-500 mt-0.5">
-            {filtered.length} registro(s) este mes
+            {filtered.length} registro(s) {rangoActivo ? "en el rango seleccionado" : "este mes"}
           </p>
         </div>
         {canEdit && (
@@ -320,7 +331,62 @@ export function RecoleccionesTable({
             Recolecciones de hoy
           </span>
         ) : (
-          <MonthPicker value={selectedMonth} onChange={setSelectedMonth} />
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setPeriodMode("mes")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                  periodMode === "mes"
+                    ? "bg-teal-600 text-white border-teal-600"
+                    : "bg-white text-gray-600 border-gray-200 hover:border-teal-300"
+                }`}
+              >
+                Por mes
+              </button>
+              <button
+                type="button"
+                onClick={() => setPeriodMode("rango")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                  periodMode === "rango"
+                    ? "bg-teal-600 text-white border-teal-600"
+                    : "bg-white text-gray-600 border-gray-200 hover:border-teal-300"
+                }`}
+              >
+                Rango libre
+              </button>
+            </div>
+
+            {periodMode === "mes" ? (
+              <MonthPicker value={selectedMonth} onChange={setSelectedMonth} />
+            ) : (
+              <div className="flex flex-col gap-1">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="w-40">
+                    <DatePicker
+                      value={fechaDesde}
+                      onChange={setFechaDesde}
+                      placeholder="Desde"
+                      disableFuture
+                    />
+                  </div>
+                  <div className="w-40">
+                    <DatePicker
+                      value={fechaHasta}
+                      onChange={setFechaHasta}
+                      placeholder="Hasta"
+                      disableFuture
+                    />
+                  </div>
+                </div>
+                {rangoInvalido && (
+                  <span className="text-xs text-red-500">
+                    La fecha inicio debe ser anterior a la fecha fin
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         )}
         {filtered.length > 0 && (
           <div className="flex gap-4 ml-auto text-sm">
