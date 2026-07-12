@@ -2,7 +2,7 @@ import { Suspense, cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/utils";
 import { checkRoutePermission } from "@/lib/auth/check-permissions";
-import { Droplets, DollarSign, Building2, TrendingUp } from "lucide-react";
+import { Droplets, DollarSign, Building2, ListChecks } from "lucide-react";
 import { DashboardFilter } from "@/components/dashboard/dashboard-filter";
 import {
   RecoleccionesTrendChart,
@@ -110,16 +110,22 @@ export default async function CooperativaDashboardPage({
     return all;
   }
 
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
+
   const [
     ,
     registros,
     { data: fincasActivas },
     { data: rutasData },
+    { data: itinerariosData },
+    { data: recoleccionesHoy },
   ] = await Promise.all([
     checkRoutePermission(["cooperativa_admin"]),
     fetchRecMes(),
     supabase.from("fincas_cooperativa").select("id").eq("activa", true),
     supabase.from("rutas_cooperativa").select("id, nombre").order("nombre", { ascending: true }),
+    supabase.from("itinerarios").select("id, nombre, itinerarios_fincas(finca_id)").order("id"),
+    supabase.from("recolecciones").select("finca_id").eq("fecha", today),
   ]);
 
   // KPIs del mes
@@ -151,8 +157,19 @@ export default async function CooperativaDashboardPage({
       return f?.nombre;
     })
   ).size;
-  const promedioPorFinca =
-    fincasConRecoleccion > 0 ? totalLitros / fincasConRecoleccion : 0;
+
+  // Estado de itinerarios hoy: fincas visitadas (con recolección) vs. total de fincas asignadas
+  const fincasVisitadasHoy = new Set((recoleccionesHoy ?? []).map((r: any) => r.finca_id));
+  const estadoItinerarios = (itinerariosData ?? []).map((it: any) => {
+    const fincaIds: number[] = Array.isArray(it.itinerarios_fincas)
+      ? it.itinerarios_fincas.map((iff: any) => iff.finca_id)
+      : [];
+    const total = fincaIds.length;
+    const visitadas = fincaIds.filter((id) => fincasVisitadasHoy.has(id)).length;
+    return { id: it.id, nombre: it.nombre as string, visitadas, total };
+  });
+  const totalFincasItinerarios = estadoItinerarios.reduce((s, it) => s + it.total, 0);
+  const totalVisitadasItinerarios = estadoItinerarios.reduce((s, it) => s + it.visitadas, 0);
 
   // Litros por ruta
   const rutaMap = new Map<string, number>();
@@ -399,27 +416,34 @@ export default async function CooperativaDashboardPage({
           </div>
         </div>
 
-        {/* Promedio por finca */}
+        {/* Estado itinerarios hoy */}
         <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-start justify-between">
             <div className="min-w-0">
               <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">
-                Promedio por finca
+                Estado itinerarios hoy
               </p>
               <p className="text-2xl font-bold text-stone-900 mt-1.5">
-                {promedioPorFinca.toLocaleString("es-CO", { minimumFractionDigits: 1 })}{" "}
-                <span className="text-base font-medium text-stone-400">L</span>
+                {totalVisitadasItinerarios}/{totalFincasItinerarios}{" "}
+                <span className="text-base font-medium text-stone-400">fincas</span>
               </p>
             </div>
             <div
               className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ml-3"
               style={{ backgroundColor: "#f0fdfa" }}
             >
-              <TrendingUp className="h-5 w-5" style={{ color: "#0d9488" }} />
+              <ListChecks className="h-5 w-5" style={{ color: "#0d9488" }} />
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-stone-100">
-            <span className="text-xs text-stone-400">Litros promedio por finca</span>
+          <div className="mt-3 pt-3 border-t border-stone-100 space-y-1">
+            {estadoItinerarios.map((it) => (
+              <div key={it.id} className="flex items-center justify-between">
+                <span className="text-xs text-stone-400">{it.nombre}</span>
+                <span className="text-xs text-stone-500">
+                  {it.visitadas}/{it.total} fincas visitadas
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </div>

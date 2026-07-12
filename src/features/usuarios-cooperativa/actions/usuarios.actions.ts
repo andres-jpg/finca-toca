@@ -16,6 +16,7 @@ export async function getCooperativaUsers(): Promise<UserCooperativa[]> {
   return (data ?? []).map((row: any) => ({
     id: row.user_id as string,
     email: row.email as string,
+    rol: row.rol as UserCooperativa["rol"],
     itinerario_id: row.itinerario_id as number | null,
     itinerario_nombre: row.itinerario_nombre as string | null,
   }));

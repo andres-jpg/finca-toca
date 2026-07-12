@@ -13,6 +13,16 @@ import { useSyncQueue } from "@/hooks/useSyncQueue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 interface RutaConductorViewProps {
   itinerarioId: number;
   itinerarioNombre: string;
@@ -63,6 +73,7 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
   const fincaDropdownRef = useRef<HTMLDivElement>(null);
   const [litros, setLitros] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [isLoadingCache, setIsLoadingCache] = useState(false);
 
   const [editingLocalId, setEditingLocalId] = useState<number | null>(null);
@@ -244,6 +255,7 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
   );
 
   const fincasRestantes = (fincas ?? []).filter((f) => !fincasRegistradas.has(f.id));
+  const selectedFinca = fincas?.find((f) => f.id === selectedFincaId);
   const totalLitros = (recoleccionesHoy ?? []).reduce((sum, r) => sum + r.litros, 0);
   const total = fincas?.length ?? 0;
   const visitadas = fincasRegistradas.size;
@@ -252,7 +264,7 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
 
   const handleSubmit = async () => {
     if (!selectedFincaId || litros === "" || parseFloat(litros) < 0) return;
-    const finca = fincas?.find((f) => f.id === selectedFincaId);
+    const finca = selectedFinca;
     if (!finca) return;
 
     setIsSubmitting(true);
@@ -303,7 +315,7 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
           ? "Pago marcado como pagado"
           : nuevoEstado === "punto_venta"
           ? "Dejado en punto de venta"
-          : "Devuelto a secretaría"
+          : "Marcado como no asignado"
       );
     } catch {
       toast.error("Error al marcar el pago");
@@ -544,7 +556,7 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
                     onClick={() => handleMarcarPago(pago.localId!, "devuelto")}
                     disabled={isMarking}
                   >
-                    Devuelto
+                    No asignado
                   </Button>
                 </div>
               </div>
@@ -553,7 +565,7 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
 
           <Button
             className="w-full"
-            onClick={handleSubmit}
+            onClick={() => setConfirmOpen(true)}
             disabled={isSubmitting || !selectedFincaId || litros === "" || parseFloat(litros) < 0}
           >
             {isSubmitting ? (
@@ -568,6 +580,30 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
               </>
             )}
           </Button>
+
+          <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Confirmar recolección</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {selectedFinca?.nombre}:{" "}
+                  <span className="font-semibold text-foreground">
+                    {parseFloat(litros || "0").toLocaleString("es-CO", { maximumFractionDigits: 2 })} L
+                  </span>
+                  . ¿Confirmas que la cantidad registrada es correcta?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>No, corregir</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-teal-600 text-white hover:bg-teal-700"
+                  onClick={handleSubmit}
+                >
+                  Sí, guardar
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       )}
 
