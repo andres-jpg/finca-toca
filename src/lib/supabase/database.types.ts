@@ -106,6 +106,7 @@ export type Database = {
           activa: boolean
           created_at: string
           id: number
+          metodo_pago: string
           nombre: string
           precio_litro: number
         }
@@ -113,6 +114,7 @@ export type Database = {
           activa?: boolean
           created_at?: string
           id?: number
+          metodo_pago?: string
           nombre: string
           precio_litro?: number
         }
@@ -120,6 +122,7 @@ export type Database = {
           activa?: boolean
           created_at?: string
           id?: number
+          metodo_pago?: string
           nombre?: string
           precio_litro?: number
         }
@@ -289,6 +292,69 @@ export type Database = {
             columns: ["gasto_id"]
             isOneToOne: true
             referencedRelation: "gastos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pagos_finca: {
+        Row: {
+          activado_por: string | null
+          created_at: string | null
+          estado: string
+          fecha_fin: string
+          fecha_inicio: string
+          fecha_marcado: string | null
+          finca_id: number
+          id: number
+          itinerario_id: number | null
+          litros: number
+          marcado_por: string | null
+          responsable: string
+          updated_at: string | null
+        }
+        Insert: {
+          activado_por?: string | null
+          created_at?: string | null
+          estado?: string
+          fecha_fin: string
+          fecha_inicio: string
+          fecha_marcado?: string | null
+          finca_id: number
+          id?: number
+          itinerario_id?: number | null
+          litros?: number
+          marcado_por?: string | null
+          responsable?: string
+          updated_at?: string | null
+        }
+        Update: {
+          activado_por?: string | null
+          created_at?: string | null
+          estado?: string
+          fecha_fin?: string
+          fecha_inicio?: string
+          fecha_marcado?: string | null
+          finca_id?: number
+          id?: number
+          itinerario_id?: number | null
+          litros?: number
+          marcado_por?: string | null
+          responsable?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pagos_finca_finca_id_fkey"
+            columns: ["finca_id"]
+            isOneToOne: false
+            referencedRelation: "fincas_cooperativa"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagos_finca_itinerario_id_fkey"
+            columns: ["itinerario_id"]
+            isOneToOne: false
+            referencedRelation: "itinerarios"
             referencedColumns: ["id"]
           },
         ]
@@ -499,7 +565,7 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "subconceptos_ingreso_concepto_id_fkey"
-            columns: ["subconcepto_id"]
+            columns: ["concepto_id"]
             isOneToOne: false
             referencedRelation: "conceptos_ingreso"
             referencedColumns: ["id"]
@@ -666,6 +732,7 @@ export type Database = {
           email: string
           itinerario_id: number
           itinerario_nombre: string
+          rol: string
           user_id: string
         }[]
       }
@@ -812,7 +879,13 @@ export const Constants = {
   public: {
     Enums: {
       rol: ["admin", "user", "cooperativa_admin", "cooperativa_user", "viewer"],
-      vaca_estado: ["produccion", "secado", "pre_jardin", "jardin", "transicion"],
+      vaca_estado: [
+        "produccion",
+        "secado",
+        "pre_jardin",
+        "jardin",
+        "transicion",
+      ],
       vaca_origen: ["finca", "externa"],
     },
   },

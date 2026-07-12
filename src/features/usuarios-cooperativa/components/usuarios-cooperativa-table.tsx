@@ -56,6 +56,9 @@ interface UsuariosCooperativaTableProps {
 }
 
 export function UsuariosCooperativaTable({ users, itinerarios }: UsuariosCooperativaTableProps) {
+  const totalAdmins = users.filter((u) => u.rol === "cooperativa_admin").length;
+  const totalRecolectores = users.length - totalAdmins;
+
   const itinerarioColorMap = useMemo(() => {
     const map = new Map<string, string>();
     itinerarios.forEach((it, i) => map.set(it.nombre, ITINERARIO_COLORS[i % ITINERARIO_COLORS.length]));
@@ -70,6 +73,23 @@ export function UsuariosCooperativaTable({ users, itinerarios }: UsuariosCoopera
         cell: ({ getValue }) => (
           <span className="font-medium text-gray-800">{getValue<string>()}</span>
         ),
+      },
+      {
+        accessorKey: "rol",
+        header: "Rol",
+        cell: ({ getValue }) => {
+          const rol = getValue<string>();
+          const isAdmin = rol === "cooperativa_admin";
+          return (
+            <span
+              className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${
+                isAdmin ? "bg-amber-100 text-amber-800" : "bg-gray-100 text-gray-700"
+              }`}
+            >
+              {isAdmin ? "Administrador" : "Recolector"}
+            </span>
+          );
+        },
       },
       {
         accessorKey: "itinerario_nombre",
@@ -105,7 +125,7 @@ export function UsuariosCooperativaTable({ users, itinerarios }: UsuariosCoopera
           Usuarios
         </h2>
         <p className="text-sm text-gray-500 mt-0.5">
-          {users.length} usuario(s) con rol recolector
+          {users.length} usuario(s) — {totalAdmins} administrador(es), {totalRecolectores} recolector(es)
         </p>
       </div>
 

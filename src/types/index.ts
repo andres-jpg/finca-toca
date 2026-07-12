@@ -202,6 +202,7 @@ export interface UserWithRole {
 export interface UserCooperativa {
   id: string;
   email: string;
+  rol: "cooperativa_admin" | "cooperativa_user";
   itinerario_id: number | null;
   itinerario_nombre: string | null;
 }
