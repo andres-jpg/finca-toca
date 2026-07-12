@@ -4,6 +4,8 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/auth/get-user-role";
 import { fetchAllRecolecciones, MESES } from "@/lib/cooperativa/recolecciones";
+import { ordenarFincasPorItinerario } from "@/lib/cooperativa/orden-rutas";
+import { getFedeganPct } from "@/lib/cooperativa/fedegan";
 
 const querySchema = z
   .object({
@@ -32,8 +34,6 @@ const querySchema = z
     },
     { message: "Se requiere quincena+mes+anio o fechaDesde+fechaHasta" },
   );
-
-const FEDEGAN_PCT = 0.0075;
 
 // Colors (ARGB)
 const COLOR_HEADER_BG = "FF0D9488"; // teal-600
@@ -186,23 +186,34 @@ export async function GET(req: NextRequest) {
   if (tipo === "finca") {
     const { data, error } = await supabase
       .from("fincas_cooperativa")
-      .select("id, nombre, precio_litro")
+      .select(
+        "id, nombre, precio_litro, rutas_fincas(rutas_cooperativa(nombre))",
+      )
       .eq("id", id)
       .single();
     if (error || !data)
       return new Response("Finca no encontrada", { status: 404 });
+    const rfRaw = data.rutas_fincas;
+    const rfArr: any[] = Array.isArray(rfRaw) ? rfRaw : rfRaw ? [rfRaw] : [];
+    const rutaRaw = rfArr[0]?.rutas_cooperativa;
+    const rutaNombreFinca: string | null = rutaRaw
+      ? Array.isArray(rutaRaw)
+        ? (rutaRaw[0]?.nombre ?? null)
+        : (rutaRaw.nombre ?? null)
+      : null;
     fincas = [
       {
         id: data.id,
         nombre: data.nombre,
         precio_litro: Number(data.precio_litro),
+        ruta_nombre: rutaNombreFinca,
       },
     ];
   } else if (tipo === "ruta") {
     const { data, error } = await supabase
       .from("rutas_cooperativa")
       .select(
-        "nombre, rutas_fincas(fincas_cooperativa(id, nombre, precio_litro))",
+        "nombre, rutas_fincas(orden, fincas_cooperativa(id, nombre, precio_litro, itinerarios_fincas(orden, itinerario_id)))",
       )
       .eq("id", id)
       .single();
@@ -211,20 +222,33 @@ export async function GET(req: NextRequest) {
     const rfList: any[] = Array.isArray(data.rutas_fincas)
       ? data.rutas_fincas
       : [];
-    fincas = rfList
+    const fincasConItinerario = rfList
       .map((rf: any) => {
         const f = Array.isArray(rf.fincas_cooperativa)
           ? rf.fincas_cooperativa[0]
           : rf.fincas_cooperativa;
         if (!f) return null;
+        const itList: any[] = Array.isArray(f.itinerarios_fincas)
+          ? f.itinerarios_fincas
+          : f.itinerarios_fincas
+            ? [f.itinerarios_fincas]
+            : [];
         return {
           id: f.id,
           nombre: f.nombre,
           precio_litro: Number(f.precio_litro),
+          ruta_nombre: data.nombre,
+          rutaOrden: rf.orden ?? 0,
+          itinerarioId: itList[0]?.itinerario_id ?? null,
+          itinerarioOrden: itList[0]?.orden ?? 0,
         };
       })
-      .filter(Boolean) as FincaInfo[];
-    fincas.sort((a, b) => a.nombre.localeCompare(b.nombre));
+      .filter(Boolean) as ((FincaInfo & {
+        rutaOrden: number;
+        itinerarioId: number | null;
+        itinerarioOrden: number;
+      })[]);
+    fincas = ordenarFincasPorItinerario(fincasConItinerario, data.nombre);
   } else if (tipo === "itinerario") {
     const [itResult, usersResult] = await Promise.all([
       supabase
@@ -281,7 +305,7 @@ export async function GET(req: NextRequest) {
     const { data: rutasRaw, error: rutasErr } = await supabase
       .from("rutas_cooperativa")
       .select(
-        "id, nombre, rutas_fincas(orden, fincas_cooperativa(id, nombre, precio_litro))",
+        "id, nombre, rutas_fincas(orden, fincas_cooperativa(id, nombre, precio_litro, itinerarios_fincas(orden, itinerario_id)))",
       )
       .order("nombre");
 
@@ -295,20 +319,35 @@ export async function GET(req: NextRequest) {
         const rfList: any[] = Array.isArray(r.rutas_fincas)
           ? r.rutas_fincas
           : [];
-        const fincasOrdenadas: FincaInfo[] = rfList
-          .sort((a: any, b: any) => (a.orden ?? 0) - (b.orden ?? 0))
+        const fincasConItinerario = rfList
           .map((rf: any) => {
             const f = Array.isArray(rf.fincas_cooperativa)
               ? rf.fincas_cooperativa[0]
               : rf.fincas_cooperativa;
             if (!f) return null;
+            const itList: any[] = Array.isArray(f.itinerarios_fincas)
+              ? f.itinerarios_fincas
+              : f.itinerarios_fincas
+                ? [f.itinerarios_fincas]
+                : [];
             return {
               id: f.id,
               nombre: f.nombre,
               precio_litro: Number(f.precio_litro),
+              rutaOrden: rf.orden ?? 0,
+              itinerarioId: itList[0]?.itinerario_id ?? null,
+              itinerarioOrden: itList[0]?.orden ?? 0,
             };
           })
-          .filter(Boolean) as FincaInfo[];
+          .filter(Boolean) as ((FincaInfo & {
+            rutaOrden: number;
+            itinerarioId: number | null;
+            itinerarioOrden: number;
+          })[]);
+        const fincasOrdenadas = ordenarFincasPorItinerario(
+          fincasConItinerario,
+          r.nombre,
+        );
         return { id: r.id, nombre: r.nombre, fincas: fincasOrdenadas };
       })
       .filter((r: RutaSection) => r.fincas.length > 0);
@@ -409,7 +448,7 @@ export async function GET(req: NextRequest) {
           const rec = dayMap.get(iso);
           return s + (rec ? rec.litros * rec.precio_litro : 0);
         }, 0);
-        const desFedegan = Math.round(precioBruto * FEDEGAN_PCT);
+        const desFedegan = Math.round(precioBruto * getFedeganPct(ruta.nombre));
         const precioNeto = Math.round(precioBruto) - desFedegan;
 
         rutaLitros += totalLitros;
@@ -598,7 +637,7 @@ export async function GET(req: NextRequest) {
         const rec = dayMap.get(iso);
         return s + (rec ? rec.litros * rec.precio_litro : 0);
       }, 0);
-      const desFedegan = Math.round(precioBruto * FEDEGAN_PCT);
+      const desFedegan = Math.round(precioBruto * getFedeganPct(finca.ruta_nombre));
       const precioNeto = Math.round(precioBruto) - desFedegan;
 
       sumLitrosIt += totalLitros;
@@ -736,7 +775,7 @@ export async function GET(req: NextRequest) {
       const rec = dayMap.get(iso);
       return s + (rec ? rec.litros * rec.precio_litro : 0);
     }, 0);
-    const desFedegan = Math.round(precioBruto * FEDEGAN_PCT);
+    const desFedegan = Math.round(precioBruto * getFedeganPct(finca.ruta_nombre));
     const precioNeto = Math.round(precioBruto) - desFedegan;
 
     sumLitros += totalLitros;

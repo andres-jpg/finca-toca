@@ -5,9 +5,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserRole } from "@/lib/auth/get-user-role";
 import {
   fetchAllRecolecciones,
-  FEDEGAN_PCT,
   MESES,
 } from "@/lib/cooperativa/recolecciones";
+import { ordenarFincasPorItinerario } from "@/lib/cooperativa/orden-rutas";
+import { getFedeganPct } from "@/lib/cooperativa/fedegan";
 
 const querySchema = z
   .object({
@@ -289,21 +290,38 @@ export async function GET(req: NextRequest) {
   } else if (tipo === "ruta") {
     const { data, error } = await supabase
       .from("rutas_cooperativa")
-      .select("nombre, rutas_fincas(orden, fincas_cooperativa(id, nombre, precio_litro))")
+      .select("nombre, rutas_fincas(orden, fincas_cooperativa(id, nombre, precio_litro, itinerarios_fincas(orden, itinerario_id)))")
       .eq("id", id!)
       .single();
     if (error || !data)
       return new Response("Ruta no encontrada", { status: 404 });
 
     const rfList: any[] = Array.isArray(data.rutas_fincas) ? data.rutas_fincas : [];
-    fincas = rfList
-      .sort((a: any, b: any) => (a.orden ?? 0) - (b.orden ?? 0))
+    const fincasConItinerario = rfList
       .map((rf: any) => {
         const f = Array.isArray(rf.fincas_cooperativa) ? rf.fincas_cooperativa[0] : rf.fincas_cooperativa;
         if (!f) return null;
-        return { id: f.id, nombre: f.nombre, precio_litro: Number(f.precio_litro), ruta_nombre: data.nombre };
+        const itList: any[] = Array.isArray(f.itinerarios_fincas)
+          ? f.itinerarios_fincas
+          : f.itinerarios_fincas
+            ? [f.itinerarios_fincas]
+            : [];
+        return {
+          id: f.id,
+          nombre: f.nombre,
+          precio_litro: Number(f.precio_litro),
+          ruta_nombre: data.nombre,
+          rutaOrden: rf.orden ?? 0,
+          itinerarioId: itList[0]?.itinerario_id ?? null,
+          itinerarioOrden: itList[0]?.orden ?? 0,
+        };
       })
-      .filter(Boolean) as FincaWithRuta[];
+      .filter(Boolean) as ((FincaWithRuta & {
+        rutaOrden: number;
+        itinerarioId: number | null;
+        itinerarioOrden: number;
+      })[]);
+    fincas = ordenarFincasPorItinerario(fincasConItinerario, data.nombre);
   } else if (tipo === "itinerario") {
     const { data, error } = await supabase
       .from("itinerarios")
@@ -330,21 +348,37 @@ export async function GET(req: NextRequest) {
   } else {
     const { data: rutasRaw, error } = await supabase
       .from("rutas_cooperativa")
-      .select("nombre, rutas_fincas(orden, fincas_cooperativa(id, nombre, precio_litro))")
+      .select("nombre, rutas_fincas(orden, fincas_cooperativa(id, nombre, precio_litro, itinerarios_fincas(orden, itinerario_id)))")
       .order("nombre");
     if (error) return new Response("Error al obtener rutas", { status: 500 });
 
     for (const r of rutasRaw ?? []) {
       const rfList: any[] = Array.isArray(r.rutas_fincas) ? r.rutas_fincas : [];
-      const fincasRuta = rfList
-        .sort((a: any, b: any) => (a.orden ?? 0) - (b.orden ?? 0))
+      const fincasConItinerario = rfList
         .map((rf: any) => {
           const f = Array.isArray(rf.fincas_cooperativa) ? rf.fincas_cooperativa[0] : rf.fincas_cooperativa;
           if (!f) return null;
-          return { id: f.id, nombre: f.nombre, precio_litro: Number(f.precio_litro), ruta_nombre: r.nombre };
+          const itList: any[] = Array.isArray(f.itinerarios_fincas)
+            ? f.itinerarios_fincas
+            : f.itinerarios_fincas
+              ? [f.itinerarios_fincas]
+              : [];
+          return {
+            id: f.id,
+            nombre: f.nombre,
+            precio_litro: Number(f.precio_litro),
+            ruta_nombre: r.nombre,
+            rutaOrden: rf.orden ?? 0,
+            itinerarioId: itList[0]?.itinerario_id ?? null,
+            itinerarioOrden: itList[0]?.orden ?? 0,
+          };
         })
-        .filter(Boolean) as FincaWithRuta[];
-      fincas.push(...fincasRuta);
+        .filter(Boolean) as ((FincaWithRuta & {
+          rutaOrden: number;
+          itinerarioId: number | null;
+          itinerarioOrden: number;
+        })[]);
+      fincas.push(...ordenarFincasPorItinerario(fincasConItinerario, r.nombre));
     }
   }
 
@@ -387,7 +421,7 @@ export async function GET(req: NextRequest) {
         periodo,
         litros: Math.round(totalLitros * 1000) / 1000,
         bruto: Math.round(precioBruto),
-        fedegan: Math.round(precioBruto * FEDEGAN_PCT),
+        fedegan: Math.round(precioBruto * getFedeganPct(finca.ruta_nombre)),
       };
     })
     .filter((v) => v.litros > 0);
