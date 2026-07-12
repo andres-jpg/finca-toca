@@ -39,7 +39,7 @@ const ESTADO_BADGE: Record<string, { label: string; className: string }> = {
   pendiente: { label: "Pendiente", className: "bg-yellow-100 text-yellow-800 border-yellow-200" },
   pagado: { label: "Pagado", className: "bg-green-100 text-green-800 border-green-200" },
   punto_venta: { label: "Punto de venta", className: "bg-blue-100 text-blue-800 border-blue-200" },
-  devuelto: { label: "Devuelto", className: "bg-red-100 text-red-800 border-red-200" },
+  devuelto: { label: "No asignado", className: "bg-red-100 text-red-800 border-red-200" },
 };
 
 const RESPONSABLE_LABELS: Record<string, string> = {
@@ -79,7 +79,7 @@ function EstadoSelector({
         <SelectItem value="pendiente">Pendiente</SelectItem>
         <SelectItem value="pagado">Pagado</SelectItem>
         <SelectItem value="punto_venta">Punto de venta</SelectItem>
-        <SelectItem value="devuelto">Devuelto</SelectItem>
+        <SelectItem value="devuelto">No asignado</SelectItem>
       </SelectContent>
     </Select>
   );
@@ -225,7 +225,7 @@ export function HistorialPagosTable({ initialData, itinerarios }: HistorialPagos
                 <SelectItem value="pendiente">Pendiente</SelectItem>
                 <SelectItem value="pagado">Pagado</SelectItem>
                 <SelectItem value="punto_venta">Punto de venta</SelectItem>
-                <SelectItem value="devuelto">Devuelto</SelectItem>
+                <SelectItem value="devuelto">No asignado</SelectItem>
               </SelectContent>
             </Select>
           </div>
