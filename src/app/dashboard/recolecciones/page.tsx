@@ -3,9 +3,19 @@ import { getCurrentUser } from "@/lib/auth/get-user-role";
 import { getRecolecciones } from "@/features/recolecciones/actions/recolecciones.actions";
 import { getFincasActivas } from "@/features/fincas-cooperativa/actions/fincas.actions";
 import { getRutas } from "@/features/rutas-cooperativa/actions/rutas.actions";
-import { getItinerarioAsignado } from "@/features/itinerarios/actions/itinerarios.actions";
-import { RecoleccionesTable } from "@/features/recolecciones/components/recolecciones-table";
+import {
+  getItinerarioAsignado,
+  getItinerarios,
+} from "@/features/itinerarios/actions/itinerarios.actions";
+import { RecoleccionesView } from "@/features/recolecciones/components/recolecciones-view";
 import { RutaConductorView } from "@/features/recolecciones/components/ruta-conductor-view";
+import { formatDate } from "@/lib/utils";
+
+function getMonthRange(year: number, month: number) {
+  const start = formatDate(new Date(year, month - 1, 1));
+  const end = formatDate(new Date(year, month, 0));
+  return { start, end };
+}
 
 function SinItinerarioAsignado() {
   return (
@@ -19,7 +29,11 @@ function SinItinerarioAsignado() {
   );
 }
 
-export default async function RecoleccionesPage() {
+export default async function RecoleccionesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ desde?: string; hasta?: string }>;
+}) {
   const userRole = await checkRoutePermission(["cooperativa_admin", "cooperativa_user"]);
 
   // Conductores: UI móvil offline-first
@@ -35,24 +49,34 @@ export default async function RecoleccionesPage() {
     );
   }
 
-  // Admin: tabla completa con historial y precios
-  const [recolecciones, rutas, fincasParaForm] = await Promise.all([
-    getRecolecciones(),
+  // Admin: vista con resumen agregado + detalle, acotada al rango de fechas seleccionado
+  const params = await searchParams;
+  const now = new Date();
+  const hasRangoParam = Boolean(params.desde && params.hasta);
+  const { start: desdeMes, end: hastaMes } = getMonthRange(
+    now.getFullYear(),
+    now.getMonth() + 1
+  );
+  const desde = hasRangoParam ? params.desde! : desdeMes;
+  const hasta = hasRangoParam ? params.hasta! : hastaMes;
+
+  const [recolecciones, rutas, itinerarios, fincasParaForm] = await Promise.all([
+    getRecolecciones({ desde, hasta }),
     getRutas(),
+    getItinerarios(),
     getFincasActivas(),
   ]);
 
   return (
-    <RecoleccionesTable
+    <RecoleccionesView
       recolecciones={recolecciones}
       fincas={fincasParaForm}
       rutas={rutas}
+      itinerarios={itinerarios}
+      desde={desde}
+      hasta={hasta}
       canEdit={canWrite(userRole)}
       canDelete={canDelete(userRole)}
-      canViewDetail={true}
-      lockDate={false}
-      todayOnly={false}
-      showPricing={true}
     />
   );
 }

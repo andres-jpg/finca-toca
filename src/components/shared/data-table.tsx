@@ -148,9 +148,27 @@ export function DataTable<TData>({
       </div>
 
       <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-1">
-        <span className="text-xs text-stone-400 order-2 sm:order-1">
-          Página {currentPage} de {totalPages}
-        </span>
+        <div className="flex items-center gap-3 order-2 sm:order-1">
+          <span className="text-xs text-stone-400">
+            Página {currentPage} de {totalPages}
+          </span>
+          <label className="flex items-center gap-1.5 text-xs text-stone-400">
+            Filas
+            <select
+              value={pagination.pageSize}
+              onChange={(e) => {
+                setPagination({ pageIndex: 0, pageSize: Number(e.target.value) });
+              }}
+              className="rounded-md border border-stone-200 bg-white text-stone-600 text-xs px-1.5 py-1 focus:outline-none focus:ring-2 focus:ring-green-600/20 focus:border-green-600"
+            >
+              {[10, 25, 50, 100].map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <div className="flex gap-1.5 order-1 sm:order-2 mt-2">
           <Button
             variant="outline"
