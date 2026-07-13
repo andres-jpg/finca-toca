@@ -266,7 +266,10 @@ export interface Recoleccion {
   id: number;
   finca_id: number;
   finca_nombre: string;
+  ruta_id: number | null;
   ruta_nombre: string | null;
+  itinerario_id: number | null;
+  itinerario_nombre: string | null;
   fecha: string;
   litros: number;
   precio_litro: number;

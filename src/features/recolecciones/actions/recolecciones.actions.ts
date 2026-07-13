@@ -4,9 +4,14 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/check-permissions";
 import { getUserRole, getCurrentUser } from "@/lib/auth/get-user-role";
+import { getItinerarioAsignado } from "@/features/itinerarios/actions/itinerarios.actions";
+import { fechaHaceNDias } from "@/lib/cooperativa/recolecciones";
 import type { Recoleccion } from "@/types";
 
-export async function getRecolecciones(): Promise<Recoleccion[]> {
+export async function getRecolecciones(range: {
+  desde: string;
+  hasta: string;
+}): Promise<Recoleccion[]> {
   const supabase = await createClient();
 
   // Filtrar por ruta asignada si el usuario es cooperativa_user
@@ -44,8 +49,10 @@ export async function getRecolecciones(): Promise<Recoleccion[]> {
     let q = supabase
       .from("recolecciones")
       .select(
-        "id, finca_id, fecha, litros, precio_litro, created_at, fincas_cooperativa(nombre, rutas_fincas(rutas_cooperativa(nombre)))"
+        "id, finca_id, fecha, litros, precio_litro, created_at, fincas_cooperativa(nombre, rutas_fincas(ruta_id, rutas_cooperativa(nombre)), itinerarios_fincas(itinerario_id, itinerarios(nombre)))"
       )
+      .gte("fecha", range.desde)
+      .lte("fecha", range.hasta)
       .order("fecha", { ascending: false })
       .range(from, from + PAGE - 1);
 
@@ -65,24 +72,45 @@ export async function getRecolecciones(): Promise<Recoleccion[]> {
     const finca = Array.isArray(row.fincas_cooperativa)
       ? row.fincas_cooperativa[0]
       : row.fincas_cooperativa;
+
     const rutasFincasRaw = finca?.rutas_fincas;
     const rutasFincas: any[] = Array.isArray(rutasFincasRaw)
       ? rutasFincasRaw
       : rutasFincasRaw
       ? [rutasFincasRaw]
       : [];
-    const primeraRuta = rutasFincas[0]?.rutas_cooperativa;
+    const primeraRutaFinca = rutasFincas[0];
+    const primeraRuta = primeraRutaFinca?.rutas_cooperativa;
     const rutaNombre = primeraRuta
       ? Array.isArray(primeraRuta)
         ? primeraRuta[0]?.nombre ?? null
         : primeraRuta.nombre ?? null
       : null;
+    const rutaId = primeraRutaFinca?.ruta_id ?? null;
+
+    const itinerariosFincasRaw = finca?.itinerarios_fincas;
+    const itinerariosFincas: any[] = Array.isArray(itinerariosFincasRaw)
+      ? itinerariosFincasRaw
+      : itinerariosFincasRaw
+      ? [itinerariosFincasRaw]
+      : [];
+    const primerItinerarioFinca = itinerariosFincas[0];
+    const primerItinerario = primerItinerarioFinca?.itinerarios;
+    const itinerarioNombre = primerItinerario
+      ? Array.isArray(primerItinerario)
+        ? primerItinerario[0]?.nombre ?? null
+        : primerItinerario.nombre ?? null
+      : null;
+    const itinerarioId = primerItinerarioFinca?.itinerario_id ?? null;
 
     return {
       id: row.id,
       finca_id: row.finca_id,
       finca_nombre: finca?.nombre ?? "—",
+      ruta_id: rutaId,
       ruta_nombre: rutaNombre,
+      itinerario_id: itinerarioId,
+      itinerario_nombre: itinerarioNombre,
       fecha: row.fecha,
       litros: Number(row.litros),
       precio_litro: Number(row.precio_litro),

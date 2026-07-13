@@ -14,6 +14,13 @@ export type RecRow = {
   precio_litro: number;
 };
 
+// Fecha (YYYY-MM-DD, America/Bogota) de hace `dias` días — usado para acotar
+// vistas de "últimos N días" (p.ej. historial del conductor) sin paginar.
+export function fechaHaceNDias(dias: number): string {
+  const cutoff = new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(cutoff);
+}
+
 export async function fetchAllRecolecciones(
   supabase: SupabaseClient,
   fincaIds: number[],
