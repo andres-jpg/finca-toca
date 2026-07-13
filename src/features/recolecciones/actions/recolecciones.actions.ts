@@ -8,6 +8,60 @@ import { getItinerarioAsignado } from "@/features/itinerarios/actions/itinerario
 import { fechaHaceNDias } from "@/lib/cooperativa/recolecciones";
 import type { Recoleccion } from "@/types";
 
+const RECOLECCION_SELECT =
+  "id, finca_id, fecha, litros, precio_litro, created_at, fincas_cooperativa(nombre, rutas_fincas(ruta_id, rutas_cooperativa(nombre)), itinerarios_fincas(itinerario_id, itinerarios(nombre)))";
+
+function mapRecoleccionRow(row: any): Recoleccion {
+  const finca = Array.isArray(row.fincas_cooperativa)
+    ? row.fincas_cooperativa[0]
+    : row.fincas_cooperativa;
+
+  const rutasFincasRaw = finca?.rutas_fincas;
+  const rutasFincas: any[] = Array.isArray(rutasFincasRaw)
+    ? rutasFincasRaw
+    : rutasFincasRaw
+    ? [rutasFincasRaw]
+    : [];
+  const primeraRutaFinca = rutasFincas[0];
+  const primeraRuta = primeraRutaFinca?.rutas_cooperativa;
+  const rutaNombre = primeraRuta
+    ? Array.isArray(primeraRuta)
+      ? primeraRuta[0]?.nombre ?? null
+      : primeraRuta.nombre ?? null
+    : null;
+  const rutaId = primeraRutaFinca?.ruta_id ?? null;
+
+  const itinerariosFincasRaw = finca?.itinerarios_fincas;
+  const itinerariosFincas: any[] = Array.isArray(itinerariosFincasRaw)
+    ? itinerariosFincasRaw
+    : itinerariosFincasRaw
+    ? [itinerariosFincasRaw]
+    : [];
+  const primerItinerarioFinca = itinerariosFincas[0];
+  const primerItinerario = primerItinerarioFinca?.itinerarios;
+  const itinerarioNombre = primerItinerario
+    ? Array.isArray(primerItinerario)
+      ? primerItinerario[0]?.nombre ?? null
+      : primerItinerario.nombre ?? null
+    : null;
+  const itinerarioId = primerItinerarioFinca?.itinerario_id ?? null;
+
+  return {
+    id: row.id,
+    finca_id: row.finca_id,
+    finca_nombre: finca?.nombre ?? "—",
+    ruta_id: rutaId,
+    ruta_nombre: rutaNombre,
+    itinerario_id: itinerarioId,
+    itinerario_nombre: itinerarioNombre,
+    fecha: row.fecha,
+    litros: Number(row.litros),
+    precio_litro: Number(row.precio_litro),
+    valor_total: Number(row.litros) * Number(row.precio_litro),
+    created_at: row.created_at,
+  };
+}
+
 export async function getRecolecciones(range: {
   desde: string;
   hasta: string;
@@ -48,9 +102,7 @@ export async function getRecolecciones(range: {
   while (true) {
     let q = supabase
       .from("recolecciones")
-      .select(
-        "id, finca_id, fecha, litros, precio_litro, created_at, fincas_cooperativa(nombre, rutas_fincas(ruta_id, rutas_cooperativa(nombre)), itinerarios_fincas(itinerario_id, itinerarios(nombre)))"
-      )
+      .select(RECOLECCION_SELECT)
       .gte("fecha", range.desde)
       .lte("fecha", range.hasta)
       .order("fecha", { ascending: false })
@@ -68,56 +120,31 @@ export async function getRecolecciones(range: {
     from += PAGE;
   }
 
-  return allRows.map((row: any) => {
-    const finca = Array.isArray(row.fincas_cooperativa)
-      ? row.fincas_cooperativa[0]
-      : row.fincas_cooperativa;
+  return allRows.map(mapRecoleccionRow);
+}
 
-    const rutasFincasRaw = finca?.rutas_fincas;
-    const rutasFincas: any[] = Array.isArray(rutasFincasRaw)
-      ? rutasFincasRaw
-      : rutasFincasRaw
-      ? [rutasFincasRaw]
-      : [];
-    const primeraRutaFinca = rutasFincas[0];
-    const primeraRuta = primeraRutaFinca?.rutas_cooperativa;
-    const rutaNombre = primeraRuta
-      ? Array.isArray(primeraRuta)
-        ? primeraRuta[0]?.nombre ?? null
-        : primeraRuta.nombre ?? null
-      : null;
-    const rutaId = primeraRutaFinca?.ruta_id ?? null;
+// Historial de recolecciones del conductor autenticado, acotado a su propio
+// itinerario y a los últimos 15 días (requisito: sin caché local, siempre en vivo).
+export async function getMisRecolecciones(): Promise<Recoleccion[]> {
+  await requireRole(["cooperativa_user"]);
 
-    const itinerariosFincasRaw = finca?.itinerarios_fincas;
-    const itinerariosFincas: any[] = Array.isArray(itinerariosFincasRaw)
-      ? itinerariosFincasRaw
-      : itinerariosFincasRaw
-      ? [itinerariosFincasRaw]
-      : [];
-    const primerItinerarioFinca = itinerariosFincas[0];
-    const primerItinerario = primerItinerarioFinca?.itinerarios;
-    const itinerarioNombre = primerItinerario
-      ? Array.isArray(primerItinerario)
-        ? primerItinerario[0]?.nombre ?? null
-        : primerItinerario.nombre ?? null
-      : null;
-    const itinerarioId = primerItinerarioFinca?.itinerario_id ?? null;
+  const itinerario = await getItinerarioAsignado();
+  if (!itinerario || itinerario.fincas.length === 0) return [];
+  const fincaIds = itinerario.fincas.map((f) => f.id);
 
-    return {
-      id: row.id,
-      finca_id: row.finca_id,
-      finca_nombre: finca?.nombre ?? "—",
-      ruta_id: rutaId,
-      ruta_nombre: rutaNombre,
-      itinerario_id: itinerarioId,
-      itinerario_nombre: itinerarioNombre,
-      fecha: row.fecha,
-      litros: Number(row.litros),
-      precio_litro: Number(row.precio_litro),
-      valor_total: Number(row.litros) * Number(row.precio_litro),
-      created_at: row.created_at,
-    };
-  });
+  const supabase = await createClient();
+  const desde = fechaHaceNDias(15);
+
+  const { data, error } = await supabase
+    .from("recolecciones")
+    .select(RECOLECCION_SELECT)
+    .in("finca_id", fincaIds)
+    .gte("fecha", desde)
+    .order("fecha", { ascending: false });
+
+  if (error) throw new Error("No se pudo cargar tu historial de recolecciones");
+
+  return (data ?? []).map(mapRecoleccionRow);
 }
 
 export async function createRecoleccion(formData: {
