@@ -4,9 +4,34 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/check-permissions";
 import { getCurrentUser } from "@/lib/auth/get-user-role";
-import { fetchAllRecolecciones } from "@/lib/cooperativa/recolecciones";
+import { fetchAllRecolecciones, fechaHaceNDias } from "@/lib/cooperativa/recolecciones";
+import { getItinerarioAsignado } from "@/features/itinerarios/actions/itinerarios.actions";
 import type { PagoFinca } from "@/types";
 import type { ActivarPagoItem, FincaConLitros, ItinerarioGroup } from "../schemas/pago.schema";
+
+const PAGO_SELECT =
+  "id, finca_id, itinerario_id, fecha_inicio, fecha_fin, litros, estado, responsable, fecha_marcado, activado_por, marcado_por, created_at, fincas_cooperativa(nombre), itinerarios(nombre)";
+
+function mapPagoRow(row: any): PagoFinca {
+  const fc = Array.isArray(row.fincas_cooperativa) ? row.fincas_cooperativa[0] : row.fincas_cooperativa;
+  const it = Array.isArray(row.itinerarios) ? row.itinerarios[0] : row.itinerarios;
+  return {
+    id: row.id,
+    finca_id: row.finca_id,
+    finca_nombre: fc?.nombre ?? `Finca ${row.finca_id}`,
+    itinerario_id: row.itinerario_id,
+    itinerario_nombre: it?.nombre ?? null,
+    fecha_inicio: row.fecha_inicio,
+    fecha_fin: row.fecha_fin,
+    litros: Number(row.litros),
+    estado: row.estado,
+    responsable: row.responsable,
+    fecha_marcado: row.fecha_marcado,
+    activado_por: row.activado_por,
+    marcado_por: row.marcado_por,
+    created_at: row.created_at,
+  };
+}
 
 export async function getFincasConLitrosPorRuta(
   rutaId: number,
@@ -152,9 +177,7 @@ export async function getPagosHistorial(
 
   let query = supabase
     .from("pagos_finca")
-    .select(
-      "id, finca_id, itinerario_id, fecha_inicio, fecha_fin, litros, estado, responsable, fecha_marcado, activado_por, marcado_por, created_at, fincas_cooperativa(nombre), itinerarios(nombre)"
-    )
+    .select(PAGO_SELECT)
     .order("created_at", { ascending: false });
 
   if (filters.finca_id) query = query.eq("finca_id", filters.finca_id);
@@ -167,28 +190,30 @@ export async function getPagosHistorial(
   const { data, error } = await query;
   if (error) throw new Error("No se pudo cargar el historial de pagos");
 
-  return (data ?? []).map((row: any) => {
-    const fc = Array.isArray(row.fincas_cooperativa)
-      ? row.fincas_cooperativa[0]
-      : row.fincas_cooperativa;
-    const it = Array.isArray(row.itinerarios) ? row.itinerarios[0] : row.itinerarios;
-    return {
-      id: row.id,
-      finca_id: row.finca_id,
-      finca_nombre: fc?.nombre ?? `Finca ${row.finca_id}`,
-      itinerario_id: row.itinerario_id,
-      itinerario_nombre: it?.nombre ?? null,
-      fecha_inicio: row.fecha_inicio,
-      fecha_fin: row.fecha_fin,
-      litros: Number(row.litros),
-      estado: row.estado,
-      responsable: row.responsable,
-      fecha_marcado: row.fecha_marcado,
-      activado_por: row.activado_por,
-      marcado_por: row.marcado_por,
-      created_at: row.created_at,
-    };
-  });
+  return (data ?? []).map(mapPagoRow);
+}
+
+// Historial de pagos del conductor autenticado, acotado a su propio itinerario
+// y a los últimos 15 días (requisito: sin caché local, siempre en vivo).
+export async function getMisPagos(): Promise<PagoFinca[]> {
+  await requireRole(["cooperativa_user"]);
+
+  const itinerario = await getItinerarioAsignado();
+  if (!itinerario) return [];
+
+  const supabase = await createClient();
+  const desde = fechaHaceNDias(15);
+
+  const { data, error } = await supabase
+    .from("pagos_finca")
+    .select(PAGO_SELECT)
+    .eq("itinerario_id", itinerario.id)
+    .gte("fecha_fin", desde)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error("No se pudo cargar tu historial de pagos");
+
+  return (data ?? []).map(mapPagoRow);
 }
 
 export async function updateEstadoPago(

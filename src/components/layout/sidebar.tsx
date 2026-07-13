@@ -18,6 +18,7 @@ import {
   Users,
   Route,
   Banknote,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types";
@@ -111,6 +112,12 @@ const navItems: NavItem[] = [
     label: "Recolecciones",
     icon: ClipboardList,
     allowedRoles: ["cooperativa_admin", "cooperativa_user"] as UserRole[],
+  },
+  {
+    href: "/dashboard/mi-historial",
+    label: "Mi historial",
+    icon: History,
+    allowedRoles: ["cooperativa_user"] as UserRole[],
   },
   {
     href: "/dashboard/informes-cooperativa",
