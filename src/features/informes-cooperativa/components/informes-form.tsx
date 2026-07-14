@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { Download, Loader2, Ticket } from "lucide-react";
+import { Download, Eye, Loader2, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FincaCombobox } from "@/components/shared/finca-combobox";
 import { DatePicker } from "@/components/shared/date-picker";
+import { InformePreviewTable } from "./informe-preview-table";
+import type { InformeData } from "@/lib/cooperativa/informe-data";
 import type { FincaCooperativa, Itinerario, RutaCooperativa } from "@/types";
 
 const MESES = [
@@ -33,6 +35,9 @@ export function InformesForm({ fincas, rutas, itinerarios }: InformesFormProps) 
   const [fechaHasta, setFechaHasta] = useState<Date | undefined>();
   const [loading, setLoading] = useState(false);
   const [loadingComp, setLoadingComp] = useState(false);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [previewData, setPreviewData] = useState<InformeData | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   function buildCommonParams() {
     const id =
@@ -109,6 +114,29 @@ export function InformesForm({ fincas, rutas, itinerarios }: InformesFormProps) 
     }
   };
 
+  const handlePreview = async () => {
+    const { id } = buildCommonParams();
+    if (tipo !== "general" && !id) { toast.error("Selecciona una finca, ruta o itinerario"); return; }
+
+    const params = new URLSearchParams({ tipo });
+    if (id) params.set("id", id);
+    if (!buildPeriodoParams(params)) return;
+
+    setLoadingPreview(true);
+    setPreviewError(null);
+    try {
+      const res = await fetch(`/api/informes-cooperativa/preview?${params}`);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error || "Error al generar la previsualización");
+      setPreviewData(body as InformeData);
+    } catch (err) {
+      setPreviewData(null);
+      setPreviewError(err instanceof Error ? err.message : "Error al generar la previsualización");
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
   const handleDownloadComprobantes = async () => {
     const { id } = buildCommonParams();
     if (tipo !== "general" && !id) { toast.error("Selecciona una finca, ruta o itinerario"); return; }
@@ -137,7 +165,8 @@ export function InformesForm({ fincas, rutas, itinerarios }: InformesFormProps) 
   };
 
   return (
-    <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-sm max-w-lg space-y-5">
+    <div className="flex flex-col lg:flex-row gap-6 items-start">
+    <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-sm w-full max-w-lg lg:shrink-0 space-y-5">
       {/* Tipo */}
       <div>
         <p className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-2">Tipo de informe</p>
@@ -287,8 +316,21 @@ export function InformesForm({ fincas, rutas, itinerarios }: InformesFormProps) 
       {/* Botones */}
       <div className="flex flex-col gap-2">
         <Button
+          onClick={handlePreview}
+          disabled={loading || loadingComp || loadingPreview}
+          variant="outline"
+          className="w-full border-teal-600 text-teal-700 hover:bg-teal-50 disabled:opacity-50"
+        >
+          {loadingPreview ? (
+            <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Cargando informe…</>
+          ) : (
+            <><Eye className="h-4 w-4 mr-2" />Ver informe</>
+          )}
+        </Button>
+
+        <Button
           onClick={handleDownload}
-          disabled={loading || loadingComp}
+          disabled={loading || loadingComp || loadingPreview}
           className="w-full bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50"
         >
           {loading ? (
@@ -300,7 +342,7 @@ export function InformesForm({ fincas, rutas, itinerarios }: InformesFormProps) 
 
         <Button
           onClick={handleDownloadComprobantes}
-          disabled={loading || loadingComp}
+          disabled={loading || loadingComp || loadingPreview}
           variant="outline"
           className="w-full border-teal-600 text-teal-700 hover:bg-teal-50"
         >
@@ -311,6 +353,24 @@ export function InformesForm({ fincas, rutas, itinerarios }: InformesFormProps) 
           )}
         </Button>
       </div>
+    </div>
+
+    {(loadingPreview || previewError || previewData) && (
+      <div className="flex-1 min-w-0 w-full space-y-3">
+        {loadingPreview && (
+          <div className="flex items-center gap-2 text-sm text-stone-500 py-6 justify-center">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Cargando informe…
+          </div>
+        )}
+        {!loadingPreview && previewError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {previewError}
+          </div>
+        )}
+        {!loadingPreview && previewData && <InformePreviewTable data={previewData} />}
+      </div>
+    )}
     </div>
   );
 }
