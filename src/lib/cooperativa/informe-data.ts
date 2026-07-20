@@ -122,6 +122,9 @@ export type InformeFilaSimple = {
   totalLitros: number;
   precioBruto: number;
   desFedegan: number;
+  // Porcentaje usado para desFedegan (0 para rutas exentas) — expuesto para que el
+  // Excel pueda escribir la fórmula de Des. Fedegan con el mismo % por fila.
+  fedeganPct: number;
   precioNeto: number;
 };
 
@@ -137,6 +140,7 @@ export type InformeTotales = {
 
 export type InformeSimpleData = {
   kind: "finca" | "ruta";
+  titulo: string;
   periodoLabel: string;
   dayLabels: (number | string)[];
   filas: InformeFilaSimple[];
@@ -212,8 +216,9 @@ function buildFilaSimple(
     const rec = dayMap.get(iso);
     return s + (rec ? rec.litros * rec.precio_litro : 0);
   }, 0);
+  const fedeganPct = getFedeganPct(fedeganRutaNombre);
   const precioBruto = Math.round(precioBrutoRaw);
-  const desFedegan = Math.round(precioBrutoRaw * getFedeganPct(fedeganRutaNombre));
+  const desFedegan = Math.round(precioBrutoRaw * fedeganPct);
   const precioNeto = precioBruto - desFedegan;
 
   return {
@@ -224,6 +229,7 @@ function buildFilaSimple(
     totalLitros,
     precioBruto,
     desFedegan,
+    fedeganPct,
     precioNeto,
   };
 }
@@ -482,7 +488,9 @@ async function buildInformeSimple(
     return fila;
   });
 
-  return { kind: tipo, periodoLabel: periodo.periodoLabel, dayLabels: periodo.dayLabels, filas, totales };
+  const titulo = tipo === "finca" ? fincas[0].nombre : (fincas[0].ruta_nombre ?? "Ruta");
+
+  return { kind: tipo, titulo, periodoLabel: periodo.periodoLabel, dayLabels: periodo.dayLabels, filas, totales };
 }
 
 export async function buildInformeData(
