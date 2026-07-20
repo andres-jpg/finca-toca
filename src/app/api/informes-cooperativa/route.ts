@@ -11,6 +11,7 @@ import {
   type InformeGeneralData,
   type InformeItinerarioData,
   type InformeSimpleData,
+  type InformeFilaSimple,
 } from "@/lib/cooperativa/informe-data";
 
 // Colors (ARGB)
@@ -21,6 +22,16 @@ const COLOR_TOTALS_BG = "FF0F766E"; // teal-800
 const COLOR_ROUTE_HDR_BG = "FF1E4E79"; // blue-900
 const COLOR_GRAND_TOT_BG = "FF134E4A"; // teal-950
 const FMT_COP = '"$"#,##0';
+
+function colLetter(col: number): string {
+  let s = "";
+  while (col > 0) {
+    const rem = (col - 1) % 26;
+    s = String.fromCharCode(65 + rem) + s;
+    col = Math.floor((col - 1) / 26);
+  }
+  return s;
+}
 
 function styleHeader(cell: ExcelJS.Cell) {
   cell.font = { bold: true, color: { argb: COLOR_HEADER_FG } };
@@ -75,257 +86,510 @@ function styleGrandTotal(cell: ExcelJS.Cell, isCurrency = false) {
   if (isCurrency) cell.numFmt = FMT_COP;
 }
 
-function buildWorkbookGeneral(
-  informe: InformeGeneralData,
-  dates: string[],
-  isSameMonth: boolean,
-): ExcelJS.Workbook {
-  const wbGen = new ExcelJS.Workbook();
-  wbGen.creator = "Toca Lácteos";
-  const wsGen = wbGen.addWorksheet(informe.periodoLabel.slice(0, 31));
+// Layout de columnas de la Hoja 1 (resumen). "Ruta" solo aplica al tipo itinerario
+// (una finca puede pertenecer a distintas rutas dentro de un mismo itinerario);
+// finca/ruta/general no la necesitan porque el contexto ya es una única ruta o
+// está agrupado por secciones de ruta.
+type ColLayout = {
+  colId: number;
+  colFinca: number;
+  colRuta: number | null;
+  firstDayCol: number;
+  lastDayCol: number;
+  colPrecioL: number;
+  colTotalLitros: number;
+  colPrecioBruto: number;
+  colDesFedegan: number;
+  colDescuentoAlmacen: number;
+  colPrecioNeto: number;
+  totalCols: number;
+};
 
-  wsGen.views = [{ state: "frozen", xSplit: 0, ySplit: 1 }];
+function computeColLayout(numDates: number, hasRutaCol: boolean): ColLayout {
+  const colId = 1;
+  const colFinca = 2;
+  const colRuta = hasRutaCol ? 3 : null;
+  const firstDayCol = hasRutaCol ? 4 : 3;
+  const lastDayCol = firstDayCol + numDates - 1;
+  const colPrecioL = lastDayCol + 1;
+  const colTotalLitros = colPrecioL + 1;
+  const colPrecioBruto = colTotalLitros + 1;
+  const colDesFedegan = colPrecioBruto + 1;
+  const colDescuentoAlmacen = colDesFedegan + 1;
+  const colPrecioNeto = colDescuentoAlmacen + 1;
+  return {
+    colId,
+    colFinca,
+    colRuta,
+    firstDayCol,
+    lastDayCol,
+    colPrecioL,
+    colTotalLitros,
+    colPrecioBruto,
+    colDesFedegan,
+    colDescuentoAlmacen,
+    colPrecioNeto,
+    totalCols: colPrecioNeto,
+  };
+}
 
-  const totalColsGen = 1 + dates.length + 5;
-  const colPrecioBrutoG = totalColsGen - 2;
-  const colDesFedeganG = totalColsGen - 1;
-  const colPrecioNetoG = totalColsGen;
-  const colTotalLitrosG = dates.length + 3;
+function setColumnWidths(ws: ExcelJS.Worksheet, layout: ColLayout, isSameMonth: boolean) {
+  ws.getColumn(layout.colId).width = 6;
+  ws.getColumn(layout.colFinca).width = 28;
+  if (layout.colRuta) ws.getColumn(layout.colRuta).width = 20;
+  for (let c = layout.firstDayCol; c <= layout.lastDayCol; c++) ws.getColumn(c).width = isSameMonth ? 8 : 10;
+  ws.getColumn(layout.colPrecioL).width = 12;
+  ws.getColumn(layout.colTotalLitros).width = 14;
+  ws.getColumn(layout.colPrecioBruto).width = 16;
+  ws.getColumn(layout.colDesFedegan).width = 15;
+  ws.getColumn(layout.colDescuentoAlmacen).width = 16;
+  ws.getColumn(layout.colPrecioNeto).width = 14;
+}
 
-  wsGen.getColumn(1).width = 28;
-  for (let i = 2; i <= dates.length + 1; i++) wsGen.getColumn(i).width = isSameMonth ? 8 : 10;
-  wsGen.getColumn(dates.length + 2).width = 12;
-  wsGen.getColumn(dates.length + 3).width = 14;
-  wsGen.getColumn(colPrecioBrutoG).width = 16;
-  wsGen.getColumn(colDesFedeganG).width = 15;
-  wsGen.getColumn(colPrecioNetoG).width = 14;
+// Título (finca/ruta/itinerario) + período generado, arriba a la izquierda — Hoja 1,
+// filas 1-2 fusionadas en las columnas ID+Finca. La Hoja 2 referencia $A$2 de esta
+// hoja para el período de cada comprobante.
+function writeTituloPeriodo(ws: ExcelJS.Worksheet, titulo: string, periodoLabel: string) {
+  ws.mergeCells(1, 1, 1, 2);
+  const tituloCell = ws.getRow(1).getCell(1);
+  tituloCell.value = titulo;
+  styleHeader(tituloCell);
+  styleHeader(ws.getRow(1).getCell(2));
 
-  const headerGen = [
-    "Finca",
-    ...informe.dayLabels,
-    "Precio/L",
-    "Total Litros",
-    "Precio Bruto",
-    "Des. Fedegan",
-    "Precio Neto",
-  ];
-  const headerRowGen = wsGen.addRow(headerGen);
-  headerRowGen.height = 20;
-  headerRowGen.eachCell((cell) => styleHeader(cell));
+  ws.mergeCells(2, 1, 2, 2);
+  const periodoCell = ws.getRow(2).getCell(1);
+  periodoCell.value = periodoLabel;
+  styleHeader(periodoCell);
+  styleHeader(ws.getRow(2).getCell(2));
+}
 
-  for (const ruta of informe.rutas) {
-    const rutaHeaderRow = wsGen.addRow([`RUTA: ${ruta.nombre}`, ...Array(totalColsGen - 1).fill("")]);
-    rutaHeaderRow.height = 22;
-    wsGen.mergeCells(rutaHeaderRow.number, 1, rutaHeaderRow.number, totalColsGen);
-    rutaHeaderRow.eachCell((cell) => styleRouteHeader(cell));
+function writeHeaderRow(
+  ws: ExcelJS.Worksheet,
+  layout: ColLayout,
+  dayLabels: (number | string)[],
+  hasRutaCol: boolean,
+) {
+  const row = ws.getRow(3);
+  row.height = 20;
+  row.getCell(layout.colId).value = "ID";
+  row.getCell(layout.colFinca).value = "Finca";
+  if (hasRutaCol && layout.colRuta) row.getCell(layout.colRuta).value = "Ruta";
+  dayLabels.forEach((d, i) => {
+    row.getCell(layout.firstDayCol + i).value = d;
+  });
+  row.getCell(layout.colPrecioL).value = "Precio/L";
+  row.getCell(layout.colTotalLitros).value = "Total Litros";
+  row.getCell(layout.colPrecioBruto).value = "Precio Bruto";
+  row.getCell(layout.colDesFedegan).value = "Des. Fedegan";
+  row.getCell(layout.colDescuentoAlmacen).value = "Descuento almacén";
+  row.getCell(layout.colPrecioNeto).value = "Precio Neto";
+  for (let c = 1; c <= layout.totalCols; c++) styleHeader(row.getCell(c));
+}
 
-    for (const finca of ruta.filas) {
-      const row = wsGen.addRow([
-        finca.nombre,
-        ...finca.dias,
-        finca.precioLitro,
-        finca.totalLitros,
-        finca.precioBruto,
-        finca.desFedegan,
-        finca.precioNeto,
-      ]);
-      row.getCell(1).font = { bold: true };
-      row.getCell(1).alignment = { vertical: "middle" };
-      row.getCell(dates.length + 2).numFmt = FMT_COP;
-      styleSummary(row.getCell(colPrecioBrutoG));
-      styleSummary(row.getCell(colDesFedeganG));
-      styleSummary(row.getCell(colPrecioNetoG));
+// Escribe una fila de finca. Solo los días y "Descuento almacén" son datos crudos
+// editables; Total Litros/Precio Bruto/Des. Fedegan/Precio Neto son fórmulas que se
+// recalculan solas si se corrige un litro a mano (criterio de aceptación FIN-71).
+function writeFilaFinca(
+  ws: ExcelJS.Worksheet,
+  layout: ColLayout,
+  rowNum: number,
+  id: number,
+  fila: InformeFilaSimple,
+  rutaNombre?: string | null,
+) {
+  const row = ws.getRow(rowNum);
+  row.getCell(layout.colId).value = id;
+
+  const cFinca = row.getCell(layout.colFinca);
+  cFinca.value = fila.nombre;
+  cFinca.font = { bold: true };
+  cFinca.alignment = { vertical: "middle" };
+
+  if (layout.colRuta) row.getCell(layout.colRuta).value = rutaNombre ?? "";
+
+  fila.dias.forEach((v, i) => {
+    row.getCell(layout.firstDayCol + i).value = v;
+  });
+
+  const lPrecioL = colLetter(layout.colPrecioL);
+  const lTotalLitros = colLetter(layout.colTotalLitros);
+  const lPrecioBruto = colLetter(layout.colPrecioBruto);
+  const lDesFedegan = colLetter(layout.colDesFedegan);
+  const lDescuentoAlmacen = colLetter(layout.colDescuentoAlmacen);
+  const lDayFrom = colLetter(layout.firstDayCol);
+  const lDayTo = colLetter(layout.lastDayCol);
+
+  const cPrecioL = row.getCell(layout.colPrecioL);
+  cPrecioL.value = fila.precioLitro;
+  cPrecioL.numFmt = FMT_COP;
+
+  row.getCell(layout.colTotalLitros).value = { formula: `SUM(${lDayFrom}${rowNum}:${lDayTo}${rowNum})` };
+
+  const cBruto = row.getCell(layout.colPrecioBruto);
+  cBruto.value = { formula: `${lPrecioL}${rowNum}*${lTotalLitros}${rowNum}` };
+  styleSummary(cBruto);
+
+  const cFedegan = row.getCell(layout.colDesFedegan);
+  cFedegan.value = { formula: `${lPrecioBruto}${rowNum}*${fila.fedeganPct}` };
+  styleSummary(cFedegan);
+
+  const cDescuento = row.getCell(layout.colDescuentoAlmacen);
+  cDescuento.value = 0;
+  styleSummary(cDescuento);
+
+  const cNeto = row.getCell(layout.colPrecioNeto);
+  cNeto.value = { formula: `${lPrecioBruto}${rowNum}-${lDesFedegan}${rowNum}-${lDescuentoAlmacen}${rowNum}` };
+  styleSummary(cNeto);
+}
+
+function rangeFormula(from: number, to: number) {
+  return (col: number) => `SUM(${colLetter(col)}${from}:${colLetter(col)}${to})`;
+}
+
+function rowsFormula(rows: number[]) {
+  return (col: number) => `SUM(${rows.map((r) => `${colLetter(col)}${r}`).join(",")})`;
+}
+
+// Fila de TOTAL / Subtotal por ruta / TOTAL GENERAL — siempre fórmulas (SUM sobre el
+// rango de filas de datos, o sobre las filas de subtotal para el gran total).
+function writeSummaryRow(
+  ws: ExcelJS.Worksheet,
+  layout: ColLayout,
+  rowNum: number,
+  label: string,
+  formulaForCol: (col: number) => string,
+  tier: "total" | "subtotal" | "grand-total",
+  hasRutaCol: boolean,
+) {
+  const row = ws.getRow(rowNum);
+  row.height = tier === "subtotal" ? 18 : 20;
+
+  const applyTierStyle = (cell: ExcelJS.Cell, isCurrency: boolean) => {
+    if (tier === "grand-total") styleGrandTotal(cell, isCurrency);
+    else styleTotal(cell, isCurrency);
+  };
+
+  const labelCols = hasRutaCol && layout.colRuta
+    ? [layout.colId, layout.colFinca, layout.colRuta]
+    : [layout.colId, layout.colFinca];
+  labelCols.forEach((c) => {
+    const cell = row.getCell(c);
+    if (tier === "subtotal") {
+      cell.font = { bold: true };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_SUMMARY_BG } };
+    } else {
+      applyTierStyle(cell, false);
     }
+    cell.alignment = { horizontal: "left" };
+  });
+  row.getCell(layout.colFinca).value = label;
 
-    const subtotalRow = wsGen.addRow([
-      "Subtotal " + ruta.nombre,
-      ...ruta.subtotales.dias,
-      "",
-      ruta.subtotales.totalLitros,
-      ruta.subtotales.precioBruto,
-      ruta.subtotales.desFedegan,
-      ruta.subtotales.precioNeto,
-    ]);
-    subtotalRow.height = 18;
-    subtotalRow.getCell(1).font = { bold: true };
-    subtotalRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_SUMMARY_BG } };
-    subtotalRow.getCell(1).alignment = { horizontal: "left" };
-    for (let i = 2; i <= dates.length + 1; i++) styleTotal(subtotalRow.getCell(i));
-    styleTotal(subtotalRow.getCell(colTotalLitrosG));
-    styleTotal(subtotalRow.getCell(colPrecioBrutoG), true);
-    styleTotal(subtotalRow.getCell(colDesFedeganG), true);
-    styleTotal(subtotalRow.getCell(colPrecioNetoG), true);
-
-    wsGen.addRow([]);
+  for (let c = layout.firstDayCol; c <= layout.lastDayCol; c++) {
+    const cell = row.getCell(c);
+    cell.value = { formula: formulaForCol(c) };
+    applyTierStyle(cell, false);
   }
 
-  const g = informe.granTotales;
-  const grandRow = wsGen.addRow(["TOTAL GENERAL", ...g.dias, "", g.totalLitros, g.precioBruto, g.desFedegan, g.precioNeto]);
-  grandRow.height = 22;
-  grandRow.getCell(1).font = { bold: true, color: { argb: COLOR_HEADER_FG }, size: 11 };
-  grandRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_GRAND_TOT_BG } };
-  grandRow.getCell(1).alignment = { horizontal: "left" };
-  for (let i = 2; i <= dates.length + 1; i++) styleGrandTotal(grandRow.getCell(i));
-  styleGrandTotal(grandRow.getCell(colTotalLitrosG));
-  styleGrandTotal(grandRow.getCell(colPrecioBrutoG), true);
-  styleGrandTotal(grandRow.getCell(colDesFedeganG), true);
-  styleGrandTotal(grandRow.getCell(colPrecioNetoG), true);
+  const cPrecioL = row.getCell(layout.colPrecioL);
+  cPrecioL.value = "";
+  applyTierStyle(cPrecioL, false);
 
-  return wbGen;
-}
-
-function buildWorkbookItinerario(
-  informe: InformeItinerarioData,
-  dates: string[],
-  isSameMonth: boolean,
-): ExcelJS.Workbook {
-  const wbIt = new ExcelJS.Workbook();
-  wbIt.creator = "Toca Lácteos";
-  const wsIt = wbIt.addWorksheet(informe.periodoLabel.slice(0, 31));
-
-  const totalColsIt = 2 + dates.length + 5;
-  const colPrecioBrutoIt = totalColsIt - 2;
-  const colDesFedeganIt = totalColsIt - 1;
-  const colPrecioNetoIt = totalColsIt;
-  const colTotalLitrosIt = dates.length + 4;
-
-  wsIt.getColumn(1).width = 26;
-  wsIt.getColumn(2).width = 20;
-  for (let i = 3; i <= dates.length + 2; i++) wsIt.getColumn(i).width = isSameMonth ? 8 : 10;
-  wsIt.getColumn(dates.length + 3).width = 12;
-  wsIt.getColumn(dates.length + 4).width = 14;
-  wsIt.getColumn(colPrecioBrutoIt).width = 16;
-  wsIt.getColumn(colDesFedeganIt).width = 15;
-  wsIt.getColumn(colPrecioNetoIt).width = 14;
-
-  const conductorRow = wsIt.addRow(["CONDUCTOR", informe.conductorName ?? "", ...Array(totalColsIt - 2).fill("")]);
-  wsIt.mergeCells(1, 2, 1, totalColsIt);
-  conductorRow.height = 22;
-  conductorRow.getCell(1).font = { bold: true };
-  conductorRow.getCell(1).alignment = { vertical: "middle" };
-  conductorRow.getCell(2).font = { bold: true, size: 12 };
-  conductorRow.getCell(2).alignment = { vertical: "middle", horizontal: "left" };
-
-  wsIt.views = [{ state: "frozen", xSplit: 0, ySplit: 2 }];
-
-  const headerIt = [
-    "Finca",
-    "Ruta",
-    ...informe.dayLabels,
-    "Precio/L",
-    "Total Litros",
-    "Precio Bruto",
-    "Des. Fedegan",
-    "Precio Neto",
+  const moneyCols: [number, boolean][] = [
+    [layout.colTotalLitros, false],
+    [layout.colPrecioBruto, true],
+    [layout.colDesFedegan, true],
+    [layout.colDescuentoAlmacen, true],
+    [layout.colPrecioNeto, true],
   ];
-  const headerRowIt = wsIt.addRow(headerIt);
-  headerRowIt.height = 20;
-  headerRowIt.eachCell((cell) => styleHeader(cell));
-
-  for (const finca of informe.filas) {
-    const row = wsIt.addRow([
-      finca.nombre,
-      finca.rutaNombre ?? "",
-      ...finca.dias,
-      finca.precioLitro,
-      finca.totalLitros,
-      finca.precioBruto,
-      finca.desFedegan,
-      finca.precioNeto,
-    ]);
-    row.getCell(1).font = { bold: true };
-    row.getCell(1).alignment = { vertical: "middle" };
-    row.getCell(dates.length + 3).numFmt = FMT_COP;
-    styleSummary(row.getCell(colPrecioBrutoIt));
-    styleSummary(row.getCell(colDesFedeganIt));
-    styleSummary(row.getCell(colPrecioNetoIt));
-  }
-
-  const t = informe.totales;
-  const totalsRowIt = wsIt.addRow(["TOTAL", "", ...t.dias, "", t.totalLitros, t.precioBruto, t.desFedegan, t.precioNeto]);
-  totalsRowIt.height = 20;
-  totalsRowIt.getCell(1).font = { bold: true, color: { argb: COLOR_HEADER_FG } };
-  totalsRowIt.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_TOTALS_BG } };
-  totalsRowIt.getCell(1).alignment = { horizontal: "left" };
-  totalsRowIt.getCell(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_TOTALS_BG } };
-  for (let i = 3; i <= dates.length + 2; i++) styleTotal(totalsRowIt.getCell(i));
-  styleTotal(totalsRowIt.getCell(colTotalLitrosIt));
-  styleTotal(totalsRowIt.getCell(colPrecioBrutoIt), true);
-  styleTotal(totalsRowIt.getCell(colDesFedeganIt), true);
-  styleTotal(totalsRowIt.getCell(colPrecioNetoIt), true);
-
-  return wbIt;
+  moneyCols.forEach(([c, isCurrency]) => {
+    const cell = row.getCell(c);
+    cell.value = { formula: formulaForCol(c) };
+    applyTierStyle(cell, isCurrency);
+  });
 }
 
-function buildWorkbookSimple(
+function buildSheet1Simple(
+  wb: ExcelJS.Workbook,
   informe: InformeSimpleData,
   dates: string[],
   isSameMonth: boolean,
-): ExcelJS.Workbook {
-  const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Toca Lácteos";
-  const ws = workbook.addWorksheet(informe.periodoLabel.slice(0, 31));
+): { ws: ExcelJS.Worksheet; voucherRows: number[]; layout: ColLayout } {
+  const layout = computeColLayout(dates.length, false);
+  const ws = wb.addWorksheet(informe.periodoLabel.slice(0, 31));
+  ws.views = [{ state: "frozen", xSplit: 0, ySplit: 3, topLeftCell: "A4" }];
 
-  ws.views = [{ state: "frozen", xSplit: 0, ySplit: 1 }];
+  setColumnWidths(ws, layout, isSameMonth);
+  writeTituloPeriodo(ws, informe.titulo, informe.periodoLabel);
+  writeHeaderRow(ws, layout, informe.dayLabels, false);
 
-  const totalCols = 1 + dates.length + 5;
-  const colPrecioBruto = totalCols - 2;
-  const colDesFedegan = totalCols - 1;
-  const colPrecioNeto = totalCols;
-  const colTotalLitros = dates.length + 3;
+  const voucherRows: number[] = [];
+  let rowNum = 4;
+  informe.filas.forEach((fila, idx) => {
+    writeFilaFinca(ws, layout, rowNum, idx + 1, fila);
+    voucherRows.push(rowNum);
+    rowNum++;
+  });
 
-  ws.getColumn(1).width = 26;
-  for (let i = 2; i <= dates.length + 1; i++) ws.getColumn(i).width = isSameMonth ? 8 : 10;
-  ws.getColumn(dates.length + 2).width = 12;
-  ws.getColumn(dates.length + 3).width = 14;
-  ws.getColumn(colPrecioBruto).width = 16;
-  ws.getColumn(colDesFedegan).width = 15;
-  ws.getColumn(colPrecioNeto).width = 14;
-
-  const header = [
-    "Finca",
-    ...informe.dayLabels,
-    "Precio/L",
-    "Total Litros",
-    "Precio Bruto",
-    "Des. Fedegan",
-    "Precio Neto",
-  ];
-  const headerRow = ws.addRow(header);
-  headerRow.height = 20;
-  headerRow.eachCell((cell) => styleHeader(cell));
-
-  for (const finca of informe.filas) {
-    const row = ws.addRow([
-      finca.nombre,
-      ...finca.dias,
-      finca.precioLitro,
-      finca.totalLitros,
-      finca.precioBruto,
-      finca.desFedegan,
-      finca.precioNeto,
-    ]);
-    row.getCell(1).font = { bold: true };
-    row.getCell(1).alignment = { vertical: "middle" };
-    row.getCell(dates.length + 2).numFmt = FMT_COP;
-    styleSummary(row.getCell(colPrecioBruto));
-    styleSummary(row.getCell(colDesFedegan));
-    styleSummary(row.getCell(colPrecioNeto));
+  if (informe.filas.length > 0) {
+    writeSummaryRow(ws, layout, rowNum, "TOTAL", rangeFormula(4, rowNum - 1), "total", false);
   }
 
-  const t = informe.totales;
-  const totalsRow = ws.addRow(["TOTAL", ...t.dias, "", t.totalLitros, t.precioBruto, t.desFedegan, t.precioNeto]);
-  totalsRow.height = 20;
-  totalsRow.getCell(1).font = { bold: true, color: { argb: COLOR_HEADER_FG } };
-  totalsRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_TOTALS_BG } };
-  totalsRow.getCell(1).alignment = { horizontal: "left" };
-  for (let i = 2; i <= dates.length + 1; i++) styleTotal(totalsRow.getCell(i));
-  styleTotal(totalsRow.getCell(colTotalLitros));
-  styleTotal(totalsRow.getCell(colPrecioBruto), true);
-  styleTotal(totalsRow.getCell(colDesFedegan), true);
-  styleTotal(totalsRow.getCell(colPrecioNeto), true);
+  return { ws, voucherRows, layout };
+}
 
-  return workbook;
+function buildSheet1Itinerario(
+  wb: ExcelJS.Workbook,
+  informe: InformeItinerarioData,
+  dates: string[],
+  isSameMonth: boolean,
+): { ws: ExcelJS.Worksheet; voucherRows: number[]; layout: ColLayout } {
+  const layout = computeColLayout(dates.length, true);
+  const ws = wb.addWorksheet(informe.periodoLabel.slice(0, 31));
+  ws.views = [{ state: "frozen", xSplit: 0, ySplit: 3, topLeftCell: "A4" }];
+
+  setColumnWidths(ws, layout, isSameMonth);
+  const titulo = informe.itinerarioNombre ?? "Itinerario";
+  const periodoTexto = informe.conductorName
+    ? `${informe.periodoLabel} · Conductor: ${informe.conductorName}`
+    : informe.periodoLabel;
+  writeTituloPeriodo(ws, titulo, periodoTexto);
+  writeHeaderRow(ws, layout, informe.dayLabels, true);
+
+  const voucherRows: number[] = [];
+  let rowNum = 4;
+  informe.filas.forEach((fila, idx) => {
+    writeFilaFinca(ws, layout, rowNum, idx + 1, fila, fila.rutaNombre);
+    voucherRows.push(rowNum);
+    rowNum++;
+  });
+
+  if (informe.filas.length > 0) {
+    writeSummaryRow(ws, layout, rowNum, "TOTAL", rangeFormula(4, rowNum - 1), "total", true);
+  }
+
+  return { ws, voucherRows, layout };
+}
+
+function buildSheet1General(
+  wb: ExcelJS.Workbook,
+  informe: InformeGeneralData,
+  dates: string[],
+  isSameMonth: boolean,
+): { ws: ExcelJS.Worksheet; voucherRows: number[]; layout: ColLayout } {
+  const layout = computeColLayout(dates.length, false);
+  const ws = wb.addWorksheet(informe.periodoLabel.slice(0, 31));
+  ws.views = [{ state: "frozen", xSplit: 0, ySplit: 3, topLeftCell: "A4" }];
+
+  setColumnWidths(ws, layout, isSameMonth);
+  writeTituloPeriodo(ws, "INFORME GENERAL", informe.periodoLabel);
+  writeHeaderRow(ws, layout, informe.dayLabels, false);
+
+  const voucherRows: number[] = [];
+  const subtotalRows: number[] = [];
+  let rowNum = 4;
+  let globalId = 1;
+
+  for (const ruta of informe.rutas) {
+    ws.mergeCells(rowNum, 1, rowNum, layout.totalCols);
+    const headerRow = ws.getRow(rowNum);
+    headerRow.height = 22;
+    headerRow.getCell(1).value = `RUTA: ${ruta.nombre}`;
+    for (let c = 1; c <= layout.totalCols; c++) styleRouteHeader(headerRow.getCell(c));
+    rowNum++;
+
+    const dataFrom = rowNum;
+    for (const fila of ruta.filas) {
+      writeFilaFinca(ws, layout, rowNum, globalId, fila);
+      voucherRows.push(rowNum);
+      globalId++;
+      rowNum++;
+    }
+    const dataTo = rowNum - 1;
+
+    writeSummaryRow(ws, layout, rowNum, `Subtotal ${ruta.nombre}`, rangeFormula(dataFrom, dataTo), "subtotal", false);
+    subtotalRows.push(rowNum);
+    rowNum++;
+
+    rowNum++; // fila en blanco de separación entre rutas
+  }
+
+  if (subtotalRows.length > 0) {
+    writeSummaryRow(ws, layout, rowNum, "TOTAL GENERAL", rowsFormula(subtotalRows), "grand-total", false);
+  }
+
+  return { ws, voucherRows, layout };
+}
+
+// --- Hoja 2: comprobantes de pago ---
+// Grilla compacta de 6 comprobantes por franja horizontal x 10 filas cada uno, sin
+// separación entre franjas — mismas dimensiones que "Formato Reportes y Pagos.xlsx"
+// (el formato anterior, más chico, que reemplaza al de comprobantes-pago independiente).
+// Cada comprobante se alimenta con fórmulas que referencian la Hoja 1 directamente,
+// así que un descuento de almacén o litro corregido en la Hoja 1 también actualiza el
+// comprobante sin regenerar el informe.
+const VOUCHER_ROWS = 10;
+const VOUCHERS_PER_BAND = 6;
+const VALUE_COL_WIDTH = 19.5;
+const LABEL_COL_WIDTH = 15.14;
+const VOUCHER_ROW_HEIGHT = 21;
+const LITROS_FMT = "#,##0";
+const LABEL_FONT = { size: 9, italic: true, color: { argb: "FF666666" } } as const;
+
+type Sheet1ColRefs = {
+  lId: string;
+  lFinca: string;
+  lTotalLitros: string;
+  lPrecioBruto: string;
+  lDesFedegan: string;
+  lDescuentoAlmacen: string;
+};
+
+function writeVoucher(
+  ws: ExcelJS.Worksheet,
+  rowStart: number,
+  colValue: number,
+  colLabel: number,
+  sheet1Name: string,
+  sheet1Row: number,
+  cols: Sheet1ColRefs,
+) {
+  const ref = (cellAddr: string) => `'${sheet1Name}'!${cellAddr}`;
+  const cell = (r: number, c: number) => ws.getRow(r).getCell(c);
+  const addr = (r: number, c: number) => `${colLetter(c)}${r}`;
+
+  const mergedCell = (rOffset: number) => {
+    const r = rowStart + rOffset;
+    ws.mergeCells(r, colValue, r, colLabel);
+    return cell(r, colValue);
+  };
+
+  const idCell = mergedCell(0);
+  idCell.value = { formula: ref(`${cols.lId}${sheet1Row}`) };
+  idCell.font = { size: 11 };
+  idCell.alignment = { horizontal: "center", vertical: "middle" };
+
+  const fincaCell = mergedCell(1);
+  fincaCell.value = { formula: ref(`${cols.lFinca}${sheet1Row}`) };
+  fincaCell.font = { size: 11, bold: true };
+  fincaCell.alignment = { horizontal: "center", vertical: "middle" };
+
+  const periodoCell = mergedCell(2);
+  periodoCell.value = { formula: ref("$A$2") };
+  periodoCell.font = { size: 9, color: { argb: "FF555555" } };
+  periodoCell.alignment = { horizontal: "center", vertical: "middle" };
+
+  const rLitros = rowStart + 3;
+  const litrosCell = cell(rLitros, colValue);
+  litrosCell.value = { formula: ref(`${cols.lTotalLitros}${sheet1Row}`) };
+  litrosCell.numFmt = LITROS_FMT;
+  litrosCell.alignment = { horizontal: "right" };
+  const litrosLabel = cell(rLitros, colLabel);
+  litrosLabel.value = "Ltrs";
+  litrosLabel.font = LABEL_FONT;
+
+  const rBruto = rowStart + 4;
+  const brutoCell = cell(rBruto, colValue);
+  brutoCell.value = { formula: ref(`${cols.lPrecioBruto}${sheet1Row}`) };
+  brutoCell.numFmt = FMT_COP;
+  brutoCell.alignment = { horizontal: "right" };
+
+  const rDescuento = rowStart + 5;
+  const descuentoCell = cell(rDescuento, colValue);
+  descuentoCell.value = { formula: ref(`${cols.lDescuentoAlmacen}${sheet1Row}`) };
+  descuentoCell.numFmt = FMT_COP;
+  descuentoCell.alignment = { horizontal: "right" };
+  const descuentoLabel = cell(rDescuento, colLabel);
+  descuentoLabel.value = "Descuento";
+  descuentoLabel.font = LABEL_FONT;
+
+  const rSubtotal = rowStart + 6;
+  const subtotalCell = cell(rSubtotal, colValue);
+  subtotalCell.value = { formula: `${addr(rBruto, colValue)}-${addr(rDescuento, colValue)}` };
+  subtotalCell.numFmt = FMT_COP;
+  subtotalCell.alignment = { horizontal: "right" };
+
+  const rFedegan = rowStart + 7;
+  const fedeganCell = cell(rFedegan, colValue);
+  fedeganCell.value = { formula: ref(`${cols.lDesFedegan}${sheet1Row}`) };
+  fedeganCell.numFmt = FMT_COP;
+  fedeganCell.alignment = { horizontal: "right" };
+  const fedeganLabel = cell(rFedegan, colLabel);
+  fedeganLabel.value = "Fedegan";
+  fedeganLabel.font = LABEL_FONT;
+
+  const rSaldo = rowStart + 8;
+  const saldoCell = cell(rSaldo, colValue);
+  saldoCell.value = 0;
+  saldoCell.numFmt = FMT_COP;
+  saldoCell.alignment = { horizontal: "right" };
+  const saldoLabel = cell(rSaldo, colLabel);
+  saldoLabel.value = "Sald. Ant.";
+  saldoLabel.font = LABEL_FONT;
+
+  const rTotal = rowStart + 9;
+  const totalCell = cell(rTotal, colValue);
+  totalCell.value = { formula: `${addr(rSubtotal, colValue)}-${addr(rFedegan, colValue)}-${addr(rSaldo, colValue)}` };
+  totalCell.numFmt = FMT_COP;
+  totalCell.font = { bold: true };
+  totalCell.alignment = { horizontal: "right" };
+  const totalLabel = cell(rTotal, colLabel);
+  totalLabel.value = "Total";
+  totalLabel.font = { bold: true };
+
+  const rowEnd = rowStart + VOUCHER_ROWS - 1;
+  for (let r = rowStart; r <= rowEnd; r++) {
+    for (let c = colValue; c <= colLabel; c++) {
+      const existing = ws.getRow(r).getCell(c).border ?? {};
+      const b: Partial<ExcelJS.Borders> = { ...existing };
+      if (r === rowStart) b.top = { style: "medium" };
+      if (r === rowEnd) b.bottom = { style: "medium" };
+      if (c === colValue) b.left = { style: "medium" };
+      if (c === colLabel) b.right = { style: "medium" };
+      ws.getRow(r).getCell(c).border = b;
+    }
+  }
+}
+
+function buildSheet2Comprobantes(
+  wb: ExcelJS.Workbook,
+  sheet1Name: string,
+  voucherRows: number[],
+  layout: ColLayout,
+  periodoLabel: string,
+) {
+  const sheetName = `Comprobantes ${periodoLabel}`.slice(0, 31);
+  const ws = wb.addWorksheet(sheetName);
+  ws.pageSetup.paperSize = 9;
+  ws.pageSetup.orientation = "landscape";
+  ws.pageSetup.fitToPage = false;
+
+  for (let slot = 0; slot < VOUCHERS_PER_BAND; slot++) {
+    const colValue = slot * 2 + 1;
+    const colLabel = colValue + 1;
+    ws.getColumn(colValue).width = VALUE_COL_WIDTH;
+    ws.getColumn(colLabel).width = LABEL_COL_WIDTH;
+  }
+
+  const cols: Sheet1ColRefs = {
+    lId: colLetter(layout.colId),
+    lFinca: colLetter(layout.colFinca),
+    lTotalLitros: colLetter(layout.colTotalLitros),
+    lPrecioBruto: colLetter(layout.colPrecioBruto),
+    lDesFedegan: colLetter(layout.colDesFedegan),
+    lDescuentoAlmacen: colLetter(layout.colDescuentoAlmacen),
+  };
+
+  voucherRows.forEach((sheet1Row, idx) => {
+    const band = Math.floor(idx / VOUCHERS_PER_BAND);
+    const slot = idx % VOUCHERS_PER_BAND;
+    const rowStart = band * VOUCHER_ROWS + 1;
+    const colValue = slot * 2 + 1;
+    const colLabel = colValue + 1;
+    writeVoucher(ws, rowStart, colValue, colLabel, sheet1Name, sheet1Row, cols);
+  });
+
+  const totalRows = Math.ceil(voucherRows.length / VOUCHERS_PER_BAND) * VOUCHER_ROWS;
+  for (let r = 1; r <= totalRows; r++) ws.getRow(r).height = VOUCHER_ROW_HEIGHT;
 }
 
 export async function GET(req: NextRequest) {
@@ -368,42 +632,37 @@ export async function GET(req: NextRequest) {
     throw err;
   }
 
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Toca Lácteos";
+
+  const built =
+    informe.kind === "general"
+      ? buildSheet1General(wb, informe, dates, isSameMonth)
+      : informe.kind === "itinerario"
+        ? buildSheet1Itinerario(wb, informe, dates, isSameMonth)
+        : buildSheet1Simple(wb, informe, dates, isSameMonth);
+
+  buildSheet2Comprobantes(wb, built.ws.name, built.voucherRows, built.layout, informe.periodoLabel);
+
+  const buffer = await wb.xlsx.writeBuffer();
+
+  let filename: string;
   if (informe.kind === "general") {
-    const wbGen = buildWorkbookGeneral(informe, dates, isSameMonth);
-    const bufferGen = await wbGen.xlsx.writeBuffer();
-    const filenameGen =
+    filename =
       quincena && mes !== undefined && anio !== undefined
         ? `informe_general_Q${quincena}_${MESES[mes - 1]}_${anio}.xlsx`
         : `informe_general_${startDate}_${endDate}.xlsx`;
-    return new Response(bufferGen as ArrayBuffer, {
-      headers: {
-        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="${filenameGen}"`,
-      },
-    });
-  }
-
-  if (informe.kind === "itinerario") {
-    const wbIt = buildWorkbookItinerario(informe, dates, isSameMonth);
-    const bufferIt = await wbIt.xlsx.writeBuffer();
-    const filenameIt =
+  } else if (informe.kind === "itinerario") {
+    filename =
       quincena && mes !== undefined && anio !== undefined
         ? `informe_Q${quincena}_${MESES[mes - 1]}_${anio}_${informe.itinerarioNombre ?? id}.xlsx`
         : `informe_${startDate}_${endDate}_${informe.itinerarioNombre ?? id}.xlsx`;
-    return new Response(bufferIt as ArrayBuffer, {
-      headers: {
-        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="${filenameIt}"`,
-      },
-    });
+  } else {
+    filename =
+      quincena && mes !== undefined && anio !== undefined
+        ? `informe_Q${quincena}_${MESES[mes - 1]}_${anio}.xlsx`
+        : `informe_${startDate}_${endDate}.xlsx`;
   }
-
-  const workbook = buildWorkbookSimple(informe, dates, isSameMonth);
-  const buffer = await workbook.xlsx.writeBuffer();
-  const filename =
-    quincena && mes !== undefined && anio !== undefined
-      ? `informe_Q${quincena}_${MESES[mes - 1]}_${anio}.xlsx`
-      : `informe_${startDate}_${endDate}.xlsx`;
 
   return new Response(buffer as ArrayBuffer, {
     headers: {

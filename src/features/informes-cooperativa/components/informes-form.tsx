@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { Download, Eye, Loader2, Ticket } from "lucide-react";
+import { Download, Eye, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FincaCombobox } from "@/components/shared/finca-combobox";
 import { DatePicker } from "@/components/shared/date-picker";
@@ -34,7 +34,6 @@ export function InformesForm({ fincas, rutas, itinerarios }: InformesFormProps) 
   const [fechaDesde, setFechaDesde] = useState<Date | undefined>();
   const [fechaHasta, setFechaHasta] = useState<Date | undefined>();
   const [loading, setLoading] = useState(false);
-  const [loadingComp, setLoadingComp] = useState(false);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [previewData, setPreviewData] = useState<InformeData | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -134,33 +133,6 @@ export function InformesForm({ fincas, rutas, itinerarios }: InformesFormProps) 
       setPreviewError(err instanceof Error ? err.message : "Error al generar la previsualización");
     } finally {
       setLoadingPreview(false);
-    }
-  };
-
-  const handleDownloadComprobantes = async () => {
-    const { id } = buildCommonParams();
-    if (tipo !== "general" && !id) { toast.error("Selecciona una finca, ruta o itinerario"); return; }
-
-    const params = new URLSearchParams({ tipo });
-    if (id) params.set("id", id);
-    if (!buildPeriodoParams(params)) return;
-
-    setLoadingComp(true);
-    try {
-      const res = await fetch(`/api/comprobantes-pago?${params}`);
-      if (!res.ok) throw new Error((await res.text()) || "Error al generar los comprobantes");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = buildFilename("comprobantes", "xlsx");
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("Comprobantes descargados");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al generar los comprobantes");
-    } finally {
-      setLoadingComp(false);
     }
   };
 
@@ -317,7 +289,7 @@ export function InformesForm({ fincas, rutas, itinerarios }: InformesFormProps) 
       <div className="flex flex-col gap-2">
         <Button
           onClick={handlePreview}
-          disabled={loading || loadingComp || loadingPreview}
+          disabled={loading || loadingPreview}
           variant="outline"
           className="w-full border-teal-600 text-teal-700 hover:bg-teal-50 disabled:opacity-50"
         >
@@ -330,26 +302,13 @@ export function InformesForm({ fincas, rutas, itinerarios }: InformesFormProps) 
 
         <Button
           onClick={handleDownload}
-          disabled={loading || loadingComp || loadingPreview}
+          disabled={loading || loadingPreview}
           className="w-full bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50"
         >
           {loading ? (
             <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Generando informe…</>
           ) : (
             <><Download className="h-4 w-4 mr-2" />Descargar informe Excel</>
-          )}
-        </Button>
-
-        <Button
-          onClick={handleDownloadComprobantes}
-          disabled={loading || loadingComp || loadingPreview}
-          variant="outline"
-          className="w-full border-teal-600 text-teal-700 hover:bg-teal-50"
-        >
-          {loadingComp ? (
-            <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Generando comprobantes…</>
-          ) : (
-            <><Ticket className="h-4 w-4 mr-2" />Descargar comprobantes de pago</>
           )}
         </Button>
       </div>
