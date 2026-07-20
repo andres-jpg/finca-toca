@@ -2,6 +2,7 @@
 
 import { ItinerarioPanel } from "./itinerario-panel";
 import { ItinerarioFincasEditor } from "./itinerario-fincas-editor";
+import { EstadoItinerarioPanel } from "./estado-itinerario-panel";
 import type { Itinerario, FincaCooperativa } from "@/types";
 
 interface ItinerariosViewAdminProps {
@@ -18,6 +19,8 @@ export function ItinerariosViewAdmin({ itinerarios, fincasDisponibles }: Itinera
           Organiza las fincas por conductor. Arrastra para reordenar.
         </p>
       </div>
+
+      <EstadoItinerarioPanel itinerarios={itinerarios} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {itinerarios.map((it) => (

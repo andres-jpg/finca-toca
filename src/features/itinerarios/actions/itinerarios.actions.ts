@@ -92,6 +92,74 @@ export async function getItinerarioAsignado(): Promise<Itinerario | null> {
   return mapItinerarioRow(data);
 }
 
+export type EstadoItinerarioFinca = { id: number; nombre: string };
+
+export type EstadoItinerarioResult = {
+  itinerarioId: number;
+  itinerarioNombre: string;
+  fecha: string;
+  total: number;
+  visitadas: EstadoItinerarioFinca[];
+  faltantes: EstadoItinerarioFinca[];
+  completado: boolean;
+};
+
+// Estado de un itinerario en una fecha puntual: qué fincas tienen recolección
+// registrada ese día y cuáles no. Una finca inactiva sin registro ese día no
+// cuenta como pendiente (ya no se visita), pero si tiene registro sí se refleja
+// — mismo criterio que el filtro de fincas inactivas en los informes.
+export async function getEstadoItinerarioPorFecha(
+  itinerarioId: number,
+  fecha: string,
+): Promise<EstadoItinerarioResult> {
+  await requireRole(["cooperativa_admin"]);
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("itinerarios")
+    .select("nombre, itinerarios_fincas(orden, fincas_cooperativa(id, nombre, activa))")
+    .eq("id", itinerarioId)
+    .single();
+  if (error || !data) throw new Error("Itinerario no encontrado");
+
+  const ifList: any[] = Array.isArray(data.itinerarios_fincas) ? data.itinerarios_fincas : [];
+  const fincas = ifList
+    .sort((a: any, b: any) => (a.orden ?? 0) - (b.orden ?? 0))
+    .map((iff: any) => {
+      const f = Array.isArray(iff.fincas_cooperativa) ? iff.fincas_cooperativa[0] : iff.fincas_cooperativa;
+      return f ? { id: f.id as number, nombre: f.nombre as string, activa: Boolean(f.activa) } : null;
+    })
+    .filter(Boolean) as { id: number; nombre: string; activa: boolean }[];
+
+  if (fincas.length === 0) {
+    return { itinerarioId, itinerarioNombre: data.nombre, fecha, total: 0, visitadas: [], faltantes: [], completado: false };
+  }
+
+  const fincaIds = fincas.map((f) => f.id);
+  const { data: recs, error: recsErr } = await supabase
+    .from("recolecciones")
+    .select("finca_id")
+    .eq("fecha", fecha)
+    .in("finca_id", fincaIds);
+  if (recsErr) throw new Error("No se pudieron cargar las recolecciones");
+
+  const visitadasIds = new Set((recs ?? []).map((r) => r.finca_id as number));
+  const fincasRelevantes = fincas.filter((f) => f.activa || visitadasIds.has(f.id));
+
+  const visitadas = fincasRelevantes.filter((f) => visitadasIds.has(f.id)).map(({ id, nombre }) => ({ id, nombre }));
+  const faltantes = fincasRelevantes.filter((f) => !visitadasIds.has(f.id)).map(({ id, nombre }) => ({ id, nombre }));
+
+  return {
+    itinerarioId,
+    itinerarioNombre: data.nombre,
+    fecha,
+    total: fincasRelevantes.length,
+    visitadas,
+    faltantes,
+    completado: fincasRelevantes.length > 0 && faltantes.length === 0,
+  };
+}
+
 export async function addFincaToItinerario(itinerarioId: number, fincaId: number) {
   await requireRole(["cooperativa_admin"]);
   const supabase = await createClient();

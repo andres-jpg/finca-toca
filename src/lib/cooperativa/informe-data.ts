@@ -116,7 +116,8 @@ export function resolveInformePeriodo(params: InformePeriodoParams): InformePeri
 export type InformeFilaSimple = {
   fincaId: number;
   nombre: string;
-  dias: number[];
+  // null = sin registro ese día (conductor no pasó por la finca); 0 = registro con 0 litros
+  dias: (number | null)[];
   precioLitro: number;
   totalLitros: number;
   precioBruto: number;
@@ -174,9 +175,25 @@ type FincaInfo = {
   nombre: string;
   precio_litro: number;
   ruta_nombre?: string | null;
+  activa: boolean;
 };
 
 type DayRec = { litros: number; precio_litro: number };
+
+// Fincas inactivas se excluyen del informe salvo que tengan al menos una
+// extracción registrada dentro del rango — así no desaparece historial real,
+// pero tampoco se listan fincas dadas de baja sin datos en el período.
+function fincaTieneDatosEnRango(fincaId: number, recMap: Map<number, Map<string, DayRec>>): boolean {
+  const dayMap = recMap.get(fincaId);
+  return !!dayMap && dayMap.size > 0;
+}
+
+function filtrarFincasVisibles<T extends { id: number; activa: boolean }>(
+  fincas: T[],
+  recMap: Map<number, Map<string, DayRec>>,
+): T[] {
+  return fincas.filter((f) => f.activa || fincaTieneDatosEnRango(f.id, recMap));
+}
 
 function emptyTotales(numDates: number): InformeTotales {
   return { dias: new Array(numDates).fill(0), totalLitros: 0, precioBruto: 0, desFedegan: 0, precioNeto: 0 };
@@ -189,8 +206,8 @@ function buildFilaSimple(
   fedeganRutaNombre: string | null | undefined,
 ): InformeFilaSimple {
   const dayMap = recMap.get(finca.id) ?? new Map<string, DayRec>();
-  const dias = dates.map((iso) => dayMap.get(iso)?.litros ?? 0);
-  const totalLitros = dias.reduce((s, v) => s + v, 0);
+  const dias = dates.map((iso) => dayMap.get(iso)?.litros ?? null);
+  const totalLitros = dias.reduce((s: number, v) => s + (v ?? 0), 0);
   const precioBrutoRaw = dates.reduce((s, iso) => {
     const rec = dayMap.get(iso);
     return s + (rec ? rec.litros * rec.precio_litro : 0);
@@ -211,9 +228,12 @@ function buildFilaSimple(
   };
 }
 
-function acumularTotales(totales: InformeTotales, fuente: InformeTotales) {
+function acumularTotales(
+  totales: InformeTotales,
+  fuente: { dias: (number | null)[]; totalLitros: number; precioBruto: number; desFedegan: number; precioNeto: number },
+) {
   fuente.dias.forEach((v, i) => {
-    totales.dias[i] += v;
+    totales.dias[i] += v ?? 0;
   });
   totales.totalLitros += fuente.totalLitros;
   totales.precioBruto += fuente.precioBruto;
@@ -224,7 +244,7 @@ function acumularTotales(totales: InformeTotales, fuente: InformeTotales) {
 async function resolveFincasFinca(supabase: SupabaseClient, id: number): Promise<FincaInfo[]> {
   const { data, error } = await supabase
     .from("fincas_cooperativa")
-    .select("id, nombre, precio_litro, rutas_fincas(rutas_cooperativa(nombre))")
+    .select("id, nombre, precio_litro, activa, rutas_fincas(rutas_cooperativa(nombre))")
     .eq("id", id)
     .single();
   if (error || !data) throw new InformeDataError("Finca no encontrada", 404);
@@ -242,6 +262,7 @@ async function resolveFincasFinca(supabase: SupabaseClient, id: number): Promise
       nombre: data.nombre,
       precio_litro: Number(data.precio_litro),
       ruta_nombre: rutaNombreFinca,
+      activa: data.activa,
     },
   ];
 }
@@ -250,7 +271,7 @@ async function resolveFincasRuta(supabase: SupabaseClient, id: number): Promise<
   const { data, error } = await supabase
     .from("rutas_cooperativa")
     .select(
-      "nombre, rutas_fincas(orden, fincas_cooperativa(id, nombre, precio_litro, itinerarios_fincas(orden, itinerario_id)))",
+      "nombre, rutas_fincas(orden, fincas_cooperativa(id, nombre, precio_litro, activa, itinerarios_fincas(orden, itinerario_id)))",
     )
     .eq("id", id)
     .single();
@@ -270,6 +291,7 @@ async function resolveFincasRuta(supabase: SupabaseClient, id: number): Promise<
         nombre: f.nombre,
         precio_litro: Number(f.precio_litro),
         ruta_nombre: data.nombre,
+        activa: f.activa,
         rutaOrden: rf.orden ?? 0,
         itinerarioId: itList[0]?.itinerario_id ?? null,
         itinerarioOrden: itList[0]?.orden ?? 0,
@@ -287,7 +309,7 @@ async function resolveFincasItinerario(
     supabase
       .from("itinerarios")
       .select(
-        "nombre, itinerarios_fincas(orden, fincas_cooperativa(id, nombre, precio_litro, rutas_fincas(rutas_cooperativa(nombre))))",
+        "nombre, itinerarios_fincas(orden, fincas_cooperativa(id, nombre, precio_litro, activa, rutas_fincas(rutas_cooperativa(nombre))))",
       )
       .eq("id", id)
       .single(),
@@ -315,6 +337,7 @@ async function resolveFincasItinerario(
         nombre: f.nombre,
         precio_litro: Number(f.precio_litro),
         ruta_nombre: rutaNombre,
+        activa: f.activa,
       };
     })
     .filter(Boolean) as FincaInfo[];
@@ -330,7 +353,7 @@ async function buildInformeGeneral(
 ): Promise<InformeGeneralData> {
   const { data: rutasRaw, error: rutasErr } = await supabase
     .from("rutas_cooperativa")
-    .select("id, nombre, rutas_fincas(orden, fincas_cooperativa(id, nombre, precio_litro, itinerarios_fincas(orden, itinerario_id)))")
+    .select("id, nombre, rutas_fincas(orden, fincas_cooperativa(id, nombre, precio_litro, activa, itinerarios_fincas(orden, itinerario_id)))")
     .order("nombre");
 
   if (rutasErr) throw new InformeDataError("Error al obtener rutas", 500);
@@ -353,6 +376,7 @@ async function buildInformeGeneral(
             id: f.id,
             nombre: f.nombre,
             precio_litro: Number(f.precio_litro),
+            activa: f.activa,
             rutaOrden: rf.orden ?? 0,
             itinerarioId: itList[0]?.itinerario_id ?? null,
             itinerarioOrden: itList[0]?.orden ?? 0,
@@ -377,16 +401,19 @@ async function buildInformeGeneral(
   }
 
   const granTotales = emptyTotales(periodo.dates.length);
-  const rutasSecciones: InformeRutaSeccion[] = rutas.map((ruta) => {
-    const subtotales = emptyTotales(periodo.dates.length);
-    const filas = ruta.fincas.map((finca) => {
-      const fila = buildFilaSimple(finca, recMapGen, periodo.dates, ruta.nombre);
-      acumularTotales(subtotales, fila);
-      return fila;
-    });
-    acumularTotales(granTotales, subtotales);
-    return { id: ruta.id, nombre: ruta.nombre, filas, subtotales };
-  });
+  const rutasSecciones: InformeRutaSeccion[] = rutas
+    .map((ruta) => {
+      const fincasVisibles = filtrarFincasVisibles(ruta.fincas, recMapGen);
+      const subtotales = emptyTotales(periodo.dates.length);
+      const filas = fincasVisibles.map((finca) => {
+        const fila = buildFilaSimple(finca, recMapGen, periodo.dates, ruta.nombre);
+        acumularTotales(subtotales, fila);
+        return fila;
+      });
+      acumularTotales(granTotales, subtotales);
+      return { id: ruta.id, nombre: ruta.nombre, filas, subtotales };
+    })
+    .filter((r) => r.filas.length > 0);
 
   return { kind: "general", periodoLabel: periodo.periodoLabel, dayLabels: periodo.dayLabels, rutas: rutasSecciones, granTotales };
 }
@@ -409,8 +436,9 @@ async function buildInformeItinerario(
     recMap.get(rec.finca_id)!.set(fecha, { litros: Number(rec.litros), precio_litro: Number(rec.precio_litro) });
   }
 
+  const fincasVisibles = filtrarFincasVisibles(fincas, recMap);
   const totales = emptyTotales(periodo.dates.length);
-  const filas: InformeFilaItinerario[] = fincas.map((finca) => {
+  const filas: InformeFilaItinerario[] = fincasVisibles.map((finca) => {
     const fila = buildFilaSimple(finca, recMap, periodo.dates, finca.ruta_nombre);
     acumularTotales(totales, fila);
     return { ...fila, rutaNombre: finca.ruta_nombre ?? null };
@@ -446,8 +474,9 @@ async function buildInformeSimple(
     recMap.get(rec.finca_id)!.set(fecha, { litros: Number(rec.litros), precio_litro: Number(rec.precio_litro) });
   }
 
+  const fincasVisibles = filtrarFincasVisibles(fincas, recMap);
   const totales = emptyTotales(periodo.dates.length);
-  const filas = fincas.map((finca) => {
+  const filas = fincasVisibles.map((finca) => {
     const fila = buildFilaSimple(finca, recMap, periodo.dates, finca.ruta_nombre);
     acumularTotales(totales, fila);
     return fila;

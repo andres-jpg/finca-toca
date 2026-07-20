@@ -18,7 +18,7 @@ function FilaSimple({ fila }: { fila: InformeFilaSimple }) {
       </td>
       {fila.dias.map((v, i) => (
         <td key={i} className="px-2 py-2 text-sm text-stone-600 text-right tabular-nums">
-          {v || ""}
+          {v === null ? "" : v}
         </td>
       ))}
       <td className="px-3 py-2 text-sm text-stone-600 text-right tabular-nums">{cop(fila.precioLitro)}</td>
@@ -53,7 +53,7 @@ function FilaTotales({
       {incluyeRuta && <td className="px-3 py-2 text-sm" />}
       {totales.dias.map((v, i) => (
         <td key={i} className="px-2 py-2 text-sm text-right tabular-nums">
-          {v || ""}
+          {v}
         </td>
       ))}
       {/* Placeholder de la columna Precio/L, que no aplica a la fila de totales */}
@@ -106,7 +106,7 @@ function FilaItinerario({ fila }: { fila: InformeFilaItinerario }) {
       <td className="px-3 py-2 text-sm text-stone-600 whitespace-nowrap">{fila.rutaNombre ?? ""}</td>
       {fila.dias.map((v, i) => (
         <td key={i} className="px-2 py-2 text-sm text-stone-600 text-right tabular-nums">
-          {v || ""}
+          {v === null ? "" : v}
         </td>
       ))}
       <td className="px-3 py-2 text-sm text-stone-600 text-right tabular-nums">{cop(fila.precioLitro)}</td>
