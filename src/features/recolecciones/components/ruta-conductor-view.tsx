@@ -245,7 +245,6 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
     return () => {
       ignore = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOnline, today]);
 
   const fincasRegistradas = new Set(

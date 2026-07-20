@@ -7,11 +7,9 @@ import { es } from "date-fns/locale";
 import {
   ColumnDef,
   getCoreRowModel,
-  getFilteredRowModel,
   getPaginationRowModel,
   useReactTable,
   flexRender,
-  ColumnFiltersState,
 } from "@tanstack/react-table";
 import {
   Table,
@@ -90,9 +88,12 @@ interface HistorialPagosTableProps {
   itinerarios: Pick<Itinerario, "id" | "nombre">[];
 }
 
+const toISO = (d: Date) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(d);
+
 export function HistorialPagosTable({ initialData, itinerarios }: HistorialPagosTableProps) {
   const [data, setData] = useState<PagoFinca[]>(initialData);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
 
   // Filtros locales
   const [filterItinerario, setFilterItinerario] = useState("todos");
@@ -101,21 +102,25 @@ export function HistorialPagosTable({ initialData, itinerarios }: HistorialPagos
   const [filterDesde, setFilterDesde] = useState<Date | undefined>();
   const [filterHasta, setFilterHasta] = useState<Date | undefined>();
 
-  const toISO = (d: Date) =>
-    new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(d);
+  const filtered = useMemo(() => {
+    const desdeStr = filterDesde ? toISO(filterDesde) : null;
+    const hastaStr = filterHasta ? toISO(filterHasta) : null;
 
-  const filtered = data.filter((p) => {
-    if (filterItinerario !== "todos" && String(p.itinerario_id ?? "__none__") !== filterItinerario) return false;
-    if (filterEstado !== "todos" && p.estado !== filterEstado) return false;
-    if (filterResponsable !== "todos" && p.responsable !== filterResponsable) return false;
-    if (filterDesde && p.fecha_inicio < toISO(filterDesde)) return false;
-    if (filterHasta && p.fecha_fin > toISO(filterHasta)) return false;
-    return true;
-  });
+    return data.filter((p) => {
+      if (filterItinerario !== "todos" && String(p.itinerario_id ?? "__none__") !== filterItinerario) return false;
+      if (filterEstado !== "todos" && p.estado !== filterEstado) return false;
+      if (filterResponsable !== "todos" && p.responsable !== filterResponsable) return false;
+      if (desdeStr && p.fecha_inicio < desdeStr) return false;
+      if (hastaStr && p.fecha_fin > hastaStr) return false;
+      return true;
+    });
+  }, [data, filterItinerario, filterEstado, filterResponsable, filterDesde, filterHasta]);
 
   const handleUpdated = useCallback((id: number, estado: PagoFinca["estado"]) => {
     setData((prev) => prev.map((p) => (p.id === id ? { ...p, estado } : p)));
   }, []);
+
+  const resetPagination = () => setPagination((prev) => ({ ...prev, pageIndex: 0 }));
 
   const columns: ColumnDef<PagoFinca>[] = useMemo(() => [
     {
@@ -183,12 +188,10 @@ export function HistorialPagosTable({ initialData, itinerarios }: HistorialPagos
   const table = useReactTable({
     data: filtered,
     columns,
-    state: { columnFilters },
-    onColumnFiltersChange: setColumnFilters,
+    state: { pagination },
+    onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    initialState: { pagination: { pageSize: 20 } },
   });
 
   return (
@@ -199,7 +202,13 @@ export function HistorialPagosTable({ initialData, itinerarios }: HistorialPagos
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Itinerario</Label>
-            <Select value={filterItinerario} onValueChange={setFilterItinerario}>
+            <Select
+              value={filterItinerario}
+              onValueChange={(val) => {
+                setFilterItinerario(val);
+                resetPagination();
+              }}
+            >
               <SelectTrigger className="h-8 text-sm">
                 <SelectValue />
               </SelectTrigger>
@@ -216,7 +225,13 @@ export function HistorialPagosTable({ initialData, itinerarios }: HistorialPagos
 
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Estado</Label>
-            <Select value={filterEstado} onValueChange={setFilterEstado}>
+            <Select
+              value={filterEstado}
+              onValueChange={(val) => {
+                setFilterEstado(val);
+                resetPagination();
+              }}
+            >
               <SelectTrigger className="h-8 text-sm">
                 <SelectValue />
               </SelectTrigger>
@@ -232,7 +247,13 @@ export function HistorialPagosTable({ initialData, itinerarios }: HistorialPagos
 
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Responsable</Label>
-            <Select value={filterResponsable} onValueChange={setFilterResponsable}>
+            <Select
+              value={filterResponsable}
+              onValueChange={(val) => {
+                setFilterResponsable(val);
+                resetPagination();
+              }}
+            >
               <SelectTrigger className="h-8 text-sm">
                 <SelectValue />
               </SelectTrigger>
@@ -249,7 +270,10 @@ export function HistorialPagosTable({ initialData, itinerarios }: HistorialPagos
             <Label className="text-xs text-muted-foreground">Desde</Label>
             <DatePicker
               value={filterDesde}
-              onChange={setFilterDesde}
+              onChange={(d) => {
+                setFilterDesde(d);
+                resetPagination();
+              }}
               placeholder="Fecha inicio"
             />
           </div>
@@ -258,7 +282,10 @@ export function HistorialPagosTable({ initialData, itinerarios }: HistorialPagos
             <Label className="text-xs text-muted-foreground">Hasta</Label>
             <DatePicker
               value={filterHasta}
-              onChange={setFilterHasta}
+              onChange={(d) => {
+                setFilterHasta(d);
+                resetPagination();
+              }}
               placeholder="Fecha fin"
             />
           </div>
@@ -274,6 +301,7 @@ export function HistorialPagosTable({ initialData, itinerarios }: HistorialPagos
               setFilterResponsable("todos");
               setFilterDesde(undefined);
               setFilterHasta(undefined);
+              resetPagination();
             }}
           >
             Limpiar filtros
