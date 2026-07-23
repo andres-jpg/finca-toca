@@ -124,7 +124,7 @@ export async function getRecolecciones(range: {
 }
 
 // Historial de recolecciones del conductor autenticado, acotado a su propio
-// itinerario y a los últimos 15 días (requisito: sin caché local, siempre en vivo).
+// itinerario y a los últimos 30 días (requisito: sin caché local, siempre en vivo).
 export async function getMisRecolecciones(): Promise<Recoleccion[]> {
   await requireRole(["cooperativa_user"]);
 
@@ -133,18 +133,31 @@ export async function getMisRecolecciones(): Promise<Recoleccion[]> {
   const fincaIds = itinerario.fincas.map((f) => f.id);
 
   const supabase = await createClient();
-  const desde = fechaHaceNDias(15);
+  const desde = fechaHaceNDias(30);
 
-  const { data, error } = await supabase
-    .from("recolecciones")
-    .select(RECOLECCION_SELECT)
-    .in("finca_id", fincaIds)
-    .gte("fecha", desde)
-    .order("fecha", { ascending: false });
+  // Paginado para no toparse con el max_rows de PostgREST (1000): un itinerario
+  // grande a 30 días puede superarlo fácilmente, y sin paginar se trunca por
+  // fecha (se pierden los días más antiguos de la ventana, no solo el exceso).
+  const PAGE = 1000;
+  const allRows: any[] = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("recolecciones")
+      .select(RECOLECCION_SELECT)
+      .in("finca_id", fincaIds)
+      .gte("fecha", desde)
+      .order("fecha", { ascending: false })
+      .range(from, from + PAGE - 1);
 
-  if (error) throw new Error("No se pudo cargar tu historial de recolecciones");
+    if (error) throw new Error("No se pudo cargar tu historial de recolecciones");
+    if (!data || data.length === 0) break;
+    allRows.push(...data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
 
-  return (data ?? []).map(mapRecoleccionRow);
+  return allRows.map(mapRecoleccionRow);
 }
 
 export async function createRecoleccion(formData: {

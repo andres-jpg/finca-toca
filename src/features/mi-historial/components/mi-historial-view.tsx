@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { WifiOff, Loader2, RefreshCw } from "lucide-react";
+import { WifiOff, Loader2, RefreshCw, X } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { DatePicker } from "@/components/shared/date-picker";
 import {
   Select,
   SelectContent,
@@ -13,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { useOnline } from "@/hooks/useOnline";
 import { getMisRecolecciones } from "@/features/recolecciones/actions/recolecciones.actions";
 import { getMisPagos } from "@/features/pagos-cooperativa/actions/pagos.actions";
@@ -40,6 +41,9 @@ export function MiHistorialView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [filterFincaId, setFilterFincaId] = useState<string>("todas");
+  const [fechaDesde, setFechaDesde] = useState<Date | undefined>(undefined);
+  const [fechaHasta, setFechaHasta] = useState<Date | undefined>(undefined);
+  const rangoInvalido = Boolean(fechaDesde && fechaHasta && fechaDesde > fechaHasta);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -72,17 +76,39 @@ export function MiHistorialView() {
 
   const recoleccionesFiltradas = useMemo(() => {
     if (!recolecciones) return [];
-    if (filterFincaId === "todas") return recolecciones;
-    const fid = Number(filterFincaId);
-    return recolecciones.filter((r) => r.finca_id === fid);
-  }, [recolecciones, filterFincaId]);
+    let result = recolecciones;
+    if (filterFincaId !== "todas") {
+      const fid = Number(filterFincaId);
+      result = result.filter((r) => r.finca_id === fid);
+    }
+    if (!rangoInvalido) {
+      const desde = fechaDesde ? formatDate(fechaDesde) : null;
+      const hasta = fechaHasta ? formatDate(fechaHasta) : null;
+      if (desde || hasta) {
+        result = result.filter((r) => (!desde || r.fecha >= desde) && (!hasta || r.fecha <= hasta));
+      }
+    }
+    return result;
+  }, [recolecciones, filterFincaId, fechaDesde, fechaHasta, rangoInvalido]);
 
   const pagosFiltrados = useMemo(() => {
     if (!pagos) return [];
-    if (filterFincaId === "todas") return pagos;
-    const fid = Number(filterFincaId);
-    return pagos.filter((p) => p.finca_id === fid);
-  }, [pagos, filterFincaId]);
+    let result = pagos;
+    if (filterFincaId !== "todas") {
+      const fid = Number(filterFincaId);
+      result = result.filter((p) => p.finca_id === fid);
+    }
+    if (!rangoInvalido) {
+      const desde = fechaDesde ? formatDate(fechaDesde) : null;
+      const hasta = fechaHasta ? formatDate(fechaHasta) : null;
+      if (desde || hasta) {
+        // Un pago cubre un período (fecha_inicio..fecha_fin); se incluye si ese
+        // período se solapa con el rango seleccionado.
+        result = result.filter((p) => (!desde || p.fecha_fin >= desde) && (!hasta || p.fecha_inicio <= hasta));
+      }
+    }
+    return result;
+  }, [pagos, filterFincaId, fechaDesde, fechaHasta, rangoInvalido]);
 
   if (!isOnline) {
     return (
@@ -121,13 +147,14 @@ export function MiHistorialView() {
     );
   }
 
+  const filtroFechaActivo = Boolean(fechaDesde || fechaHasta);
   const totalLitros = recoleccionesFiltradas.reduce((sum, r) => sum + r.litros, 0);
 
   return (
     <div className="max-w-md mx-auto space-y-4 pb-8">
       <div>
         <p className="text-xs text-muted-foreground uppercase tracking-wide">Conductor</p>
-        <h2 className="text-lg font-semibold">Mi historial (últimos 15 días)</h2>
+        <h2 className="text-lg font-semibold">Mi historial (últimos 30 días)</h2>
       </div>
 
       {/* Selector de Finca */}
@@ -148,6 +175,32 @@ export function MiHistorialView() {
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      {/* Filtro de fecha */}
+      <div className="space-y-1.5">
+        <div className="grid grid-cols-2 gap-2">
+          <DatePicker value={fechaDesde} onChange={setFechaDesde} placeholder="Desde" disableFuture />
+          <DatePicker value={fechaHasta} onChange={setFechaHasta} placeholder="Hasta" disableFuture />
+        </div>
+        {rangoInvalido && (
+          <span className="text-xs text-red-500">
+            La fecha inicio debe ser anterior a la fecha fin
+          </span>
+        )}
+        {filtroFechaActivo && !rangoInvalido && (
+          <button
+            type="button"
+            onClick={() => {
+              setFechaDesde(undefined);
+              setFechaHasta(undefined);
+            }}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-3 w-3" />
+            Limpiar filtro de fecha
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -192,9 +245,9 @@ export function MiHistorialView() {
 
           {recoleccionesFiltradas.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
-              {filterFincaId !== "todas"
-                ? "Sin recolecciones para esta finca en los últimos 15 días."
-                : "Sin recolecciones en los últimos 15 días."}
+              {filterFincaId !== "todas" || filtroFechaActivo
+                ? "Sin recolecciones para el filtro seleccionado."
+                : "Sin recolecciones en los últimos 30 días."}
             </p>
           ) : (
             <div className="space-y-2">
@@ -219,9 +272,9 @@ export function MiHistorialView() {
         <div className="space-y-2">
           {pagosFiltrados.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
-              {filterFincaId !== "todas"
-                ? "Sin pagos para esta finca en los últimos 15 días."
-                : "Sin pagos en los últimos 15 días."}
+              {filterFincaId !== "todas" || filtroFechaActivo
+                ? "Sin pagos para el filtro seleccionado."
+                : "Sin pagos en los últimos 30 días."}
             </p>
           ) : (
             pagosFiltrados.map((p) => {
