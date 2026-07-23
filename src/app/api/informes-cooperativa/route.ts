@@ -313,7 +313,7 @@ function buildSheet1Simple(
   informe: InformeSimpleData,
   dates: string[],
   isSameMonth: boolean,
-): { ws: ExcelJS.Worksheet; voucherRows: number[]; layout: ColLayout } {
+): { ws: ExcelJS.Worksheet; voucherRows: VoucherRowInfo[]; layout: ColLayout } {
   const layout = computeColLayout(dates.length, false);
   const ws = wb.addWorksheet(informe.periodoLabel.slice(0, 31));
   ws.views = [{ state: "frozen", xSplit: 0, ySplit: 3, topLeftCell: "A4" }];
@@ -322,11 +322,11 @@ function buildSheet1Simple(
   writeTituloPeriodo(ws, informe.titulo, informe.periodoLabel);
   writeHeaderRow(ws, layout, informe.dayLabels, false);
 
-  const voucherRows: number[] = [];
+  const voucherRows: VoucherRowInfo[] = [];
   let rowNum = 4;
   informe.filas.forEach((fila, idx) => {
     writeFilaFinca(ws, layout, rowNum, idx + 1, fila);
-    voucherRows.push(rowNum);
+    voucherRows.push({ row: rowNum, hasFedegan: fila.fedeganPct > 0 });
     rowNum++;
   });
 
@@ -342,7 +342,7 @@ function buildSheet1Itinerario(
   informe: InformeItinerarioData,
   dates: string[],
   isSameMonth: boolean,
-): { ws: ExcelJS.Worksheet; voucherRows: number[]; layout: ColLayout } {
+): { ws: ExcelJS.Worksheet; voucherRows: VoucherRowInfo[]; layout: ColLayout } {
   const layout = computeColLayout(dates.length, true);
   const ws = wb.addWorksheet(informe.periodoLabel.slice(0, 31));
   ws.views = [{ state: "frozen", xSplit: 0, ySplit: 3, topLeftCell: "A4" }];
@@ -355,11 +355,11 @@ function buildSheet1Itinerario(
   writeTituloPeriodo(ws, titulo, periodoTexto);
   writeHeaderRow(ws, layout, informe.dayLabels, true);
 
-  const voucherRows: number[] = [];
+  const voucherRows: VoucherRowInfo[] = [];
   let rowNum = 4;
   informe.filas.forEach((fila, idx) => {
     writeFilaFinca(ws, layout, rowNum, idx + 1, fila, fila.rutaNombre);
-    voucherRows.push(rowNum);
+    voucherRows.push({ row: rowNum, hasFedegan: fila.fedeganPct > 0 });
     rowNum++;
   });
 
@@ -375,7 +375,7 @@ function buildSheet1General(
   informe: InformeGeneralData,
   dates: string[],
   isSameMonth: boolean,
-): { ws: ExcelJS.Worksheet; voucherRows: number[]; layout: ColLayout } {
+): { ws: ExcelJS.Worksheet; voucherRows: VoucherRowInfo[]; layout: ColLayout } {
   const layout = computeColLayout(dates.length, false);
   const ws = wb.addWorksheet(informe.periodoLabel.slice(0, 31));
   ws.views = [{ state: "frozen", xSplit: 0, ySplit: 3, topLeftCell: "A4" }];
@@ -384,7 +384,7 @@ function buildSheet1General(
   writeTituloPeriodo(ws, "INFORME GENERAL", informe.periodoLabel);
   writeHeaderRow(ws, layout, informe.dayLabels, false);
 
-  const voucherRows: number[] = [];
+  const voucherRows: VoucherRowInfo[] = [];
   const subtotalRows: number[] = [];
   let rowNum = 4;
   let globalId = 1;
@@ -400,7 +400,7 @@ function buildSheet1General(
     const dataFrom = rowNum;
     for (const fila of ruta.filas) {
       writeFilaFinca(ws, layout, rowNum, globalId, fila);
-      voucherRows.push(rowNum);
+      voucherRows.push({ row: rowNum, hasFedegan: fila.fedeganPct > 0 });
       globalId++;
       rowNum++;
     }
@@ -421,19 +421,28 @@ function buildSheet1General(
 }
 
 // --- Hoja 2: comprobantes de pago ---
-// Grilla compacta de 6 comprobantes por franja horizontal x 10 filas cada uno, sin
-// separación entre franjas — mismas dimensiones que "Formato Reportes y Pagos.xlsx"
-// (el formato anterior, más chico, que reemplaza al de comprobantes-pago independiente).
-// Cada comprobante se alimenta con fórmulas que referencian la Hoja 1 directamente,
-// así que un descuento de almacén o litro corregido en la Hoja 1 también actualiza el
-// comprobante sin regenerar el informe.
+// Grilla compacta de 7 comprobantes por franja horizontal x 10 filas cada uno, sin
+// separación entre franjas. Cada comprobante se alimenta con fórmulas que referencian
+// la Hoja 1 directamente, así que un descuento de almacén o litro corregido en la
+// Hoja 1 también actualiza el comprobante sin regenerar el informe.
 const VOUCHER_ROWS = 10;
-const VOUCHERS_PER_BAND = 6;
-const VALUE_COL_WIDTH = 19.5;
-const LABEL_COL_WIDTH = 15.14;
-const VOUCHER_ROW_HEIGHT = 21;
+const VOUCHERS_PER_BAND = 7;
+const COL_WIDTH = 14;
+const VOUCHER_ROW_HEIGHT = 25;
 const LITROS_FMT = "#,##0";
-const LABEL_FONT = { size: 9, italic: true, color: { argb: "FF666666" } } as const;
+const VOUCHER_FONT_NAME = "Calibri";
+const VOUCHER_FONT_SIZE = 14;
+const VOUCHER_FONT = { name: VOUCHER_FONT_NAME, size: VOUCHER_FONT_SIZE } as const;
+const LABEL_FONT = {
+  name: VOUCHER_FONT_NAME,
+  size: VOUCHER_FONT_SIZE,
+  italic: true,
+  color: { argb: "FF666666" },
+} as const;
+
+// Filas del desprendible que llevan borde grueso: Consecutivo, Finca, Periodo
+// (las tres primeras) y Total / valor neto a pagar (la última).
+const THICK_BORDER_ROW_OFFSETS = [0, 1, 2, VOUCHER_ROWS - 1];
 
 type Sheet1ColRefs = {
   lId: string;
@@ -444,6 +453,11 @@ type Sheet1ColRefs = {
   lDescuentoAlmacen: string;
 };
 
+// Rutas exentas de descuento Fedegan (Centro Arriba, Centro Arriba II, Tuaneca —
+// ver lib/cooperativa/fedegan.ts) no muestran la fila "Fedegan" en su comprobante,
+// ya que el valor siempre sería 0.
+type VoucherRowInfo = { row: number; hasFedegan: boolean };
+
 function writeVoucher(
   ws: ExcelJS.Worksheet,
   rowStart: number,
@@ -452,6 +466,7 @@ function writeVoucher(
   sheet1Name: string,
   sheet1Row: number,
   cols: Sheet1ColRefs,
+  hasFedegan: boolean,
 ) {
   const ref = (cellAddr: string) => `'${sheet1Name}'!${cellAddr}`;
   const cell = (r: number, c: number) => ws.getRow(r).getCell(c);
@@ -465,23 +480,24 @@ function writeVoucher(
 
   const idCell = mergedCell(0);
   idCell.value = { formula: ref(`${cols.lId}${sheet1Row}`) };
-  idCell.font = { size: 11 };
+  idCell.font = VOUCHER_FONT;
   idCell.alignment = { horizontal: "center", vertical: "middle" };
 
   const fincaCell = mergedCell(1);
   fincaCell.value = { formula: ref(`${cols.lFinca}${sheet1Row}`) };
-  fincaCell.font = { size: 11, bold: true };
+  fincaCell.font = { ...VOUCHER_FONT, bold: true };
   fincaCell.alignment = { horizontal: "center", vertical: "middle" };
 
   const periodoCell = mergedCell(2);
   periodoCell.value = { formula: ref("$A$2") };
-  periodoCell.font = { size: 9, color: { argb: "FF555555" } };
+  periodoCell.font = { ...VOUCHER_FONT, color: { argb: "FF555555" } };
   periodoCell.alignment = { horizontal: "center", vertical: "middle" };
 
   const rLitros = rowStart + 3;
   const litrosCell = cell(rLitros, colValue);
   litrosCell.value = { formula: ref(`${cols.lTotalLitros}${sheet1Row}`) };
   litrosCell.numFmt = LITROS_FMT;
+  litrosCell.font = VOUCHER_FONT;
   litrosCell.alignment = { horizontal: "right" };
   const litrosLabel = cell(rLitros, colLabel);
   litrosLabel.value = "Ltrs";
@@ -491,12 +507,14 @@ function writeVoucher(
   const brutoCell = cell(rBruto, colValue);
   brutoCell.value = { formula: ref(`${cols.lPrecioBruto}${sheet1Row}`) };
   brutoCell.numFmt = FMT_COP;
+  brutoCell.font = VOUCHER_FONT;
   brutoCell.alignment = { horizontal: "right" };
 
   const rDescuento = rowStart + 5;
   const descuentoCell = cell(rDescuento, colValue);
   descuentoCell.value = { formula: ref(`${cols.lDescuentoAlmacen}${sheet1Row}`) };
   descuentoCell.numFmt = FMT_COP;
+  descuentoCell.font = VOUCHER_FONT;
   descuentoCell.alignment = { horizontal: "right" };
   const descuentoLabel = cell(rDescuento, colLabel);
   descuentoLabel.value = "Descuento";
@@ -506,21 +524,28 @@ function writeVoucher(
   const subtotalCell = cell(rSubtotal, colValue);
   subtotalCell.value = { formula: `${addr(rBruto, colValue)}-${addr(rDescuento, colValue)}` };
   subtotalCell.numFmt = FMT_COP;
+  subtotalCell.font = VOUCHER_FONT;
   subtotalCell.alignment = { horizontal: "right" };
 
+  // Rutas exentas (hasFedegan = false) dejan esta fila en blanco por completo —
+  // ni etiqueta ni valor — en vez de mostrar un descuento que siempre sería 0.
   const rFedegan = rowStart + 7;
-  const fedeganCell = cell(rFedegan, colValue);
-  fedeganCell.value = { formula: ref(`${cols.lDesFedegan}${sheet1Row}`) };
-  fedeganCell.numFmt = FMT_COP;
-  fedeganCell.alignment = { horizontal: "right" };
-  const fedeganLabel = cell(rFedegan, colLabel);
-  fedeganLabel.value = "Fedegan";
-  fedeganLabel.font = LABEL_FONT;
+  if (hasFedegan) {
+    const fedeganCell = cell(rFedegan, colValue);
+    fedeganCell.value = { formula: ref(`${cols.lDesFedegan}${sheet1Row}`) };
+    fedeganCell.numFmt = FMT_COP;
+    fedeganCell.font = VOUCHER_FONT;
+    fedeganCell.alignment = { horizontal: "right" };
+    const fedeganLabel = cell(rFedegan, colLabel);
+    fedeganLabel.value = "Fedegan";
+    fedeganLabel.font = LABEL_FONT;
+  }
 
   const rSaldo = rowStart + 8;
   const saldoCell = cell(rSaldo, colValue);
   saldoCell.value = 0;
   saldoCell.numFmt = FMT_COP;
+  saldoCell.font = VOUCHER_FONT;
   saldoCell.alignment = { horizontal: "right" };
   const saldoLabel = cell(rSaldo, colLabel);
   saldoLabel.value = "Sald. Ant.";
@@ -528,32 +553,46 @@ function writeVoucher(
 
   const rTotal = rowStart + 9;
   const totalCell = cell(rTotal, colValue);
-  totalCell.value = { formula: `${addr(rSubtotal, colValue)}-${addr(rFedegan, colValue)}-${addr(rSaldo, colValue)}` };
+  const fedeganTerm = hasFedegan ? `-${addr(rFedegan, colValue)}` : "";
+  totalCell.value = { formula: `${addr(rSubtotal, colValue)}${fedeganTerm}-${addr(rSaldo, colValue)}` };
   totalCell.numFmt = FMT_COP;
-  totalCell.font = { bold: true };
+  totalCell.font = { ...VOUCHER_FONT, bold: true };
   totalCell.alignment = { horizontal: "right" };
   const totalLabel = cell(rTotal, colLabel);
   totalLabel.value = "Total";
-  totalLabel.font = { bold: true };
+  totalLabel.font = { ...VOUCHER_FONT, bold: true };
 
+  // Recuadro fino alrededor de todo el comprobante.
   const rowEnd = rowStart + VOUCHER_ROWS - 1;
   for (let r = rowStart; r <= rowEnd; r++) {
     for (let c = colValue; c <= colLabel; c++) {
       const existing = ws.getRow(r).getCell(c).border ?? {};
       const b: Partial<ExcelJS.Borders> = { ...existing };
-      if (r === rowStart) b.top = { style: "medium" };
-      if (r === rowEnd) b.bottom = { style: "medium" };
-      if (c === colValue) b.left = { style: "medium" };
-      if (c === colLabel) b.right = { style: "medium" };
+      if (r === rowStart) b.top = { style: "thin" };
+      if (r === rowEnd) b.bottom = { style: "thin" };
+      if (c === colValue) b.left = { style: "thin" };
+      if (c === colLabel) b.right = { style: "thin" };
       ws.getRow(r).getCell(c).border = b;
     }
   }
+
+  // Borde grueso en Consecutivo, Finca, Periodo y Total (valor neto a pagar).
+  THICK_BORDER_ROW_OFFSETS.forEach((rOffset) => {
+    const r = rowStart + rOffset;
+    for (let c = colValue; c <= colLabel; c++) {
+      const existing = ws.getRow(r).getCell(c).border ?? {};
+      const b: Partial<ExcelJS.Borders> = { ...existing, top: { style: "thick" }, bottom: { style: "thick" } };
+      if (c === colValue) b.left = { style: "thick" };
+      if (c === colLabel) b.right = { style: "thick" };
+      ws.getRow(r).getCell(c).border = b;
+    }
+  });
 }
 
 function buildSheet2Comprobantes(
   wb: ExcelJS.Workbook,
   sheet1Name: string,
-  voucherRows: number[],
+  voucherRows: VoucherRowInfo[],
   layout: ColLayout,
   periodoLabel: string,
 ) {
@@ -566,8 +605,8 @@ function buildSheet2Comprobantes(
   for (let slot = 0; slot < VOUCHERS_PER_BAND; slot++) {
     const colValue = slot * 2 + 1;
     const colLabel = colValue + 1;
-    ws.getColumn(colValue).width = VALUE_COL_WIDTH;
-    ws.getColumn(colLabel).width = LABEL_COL_WIDTH;
+    ws.getColumn(colValue).width = COL_WIDTH;
+    ws.getColumn(colLabel).width = COL_WIDTH;
   }
 
   const cols: Sheet1ColRefs = {
@@ -579,13 +618,13 @@ function buildSheet2Comprobantes(
     lDescuentoAlmacen: colLetter(layout.colDescuentoAlmacen),
   };
 
-  voucherRows.forEach((sheet1Row, idx) => {
+  voucherRows.forEach(({ row: sheet1Row, hasFedegan }, idx) => {
     const band = Math.floor(idx / VOUCHERS_PER_BAND);
     const slot = idx % VOUCHERS_PER_BAND;
     const rowStart = band * VOUCHER_ROWS + 1;
     const colValue = slot * 2 + 1;
     const colLabel = colValue + 1;
-    writeVoucher(ws, rowStart, colValue, colLabel, sheet1Name, sheet1Row, cols);
+    writeVoucher(ws, rowStart, colValue, colLabel, sheet1Name, sheet1Row, cols, hasFedegan);
   });
 
   const totalRows = Math.ceil(voucherRows.length / VOUCHERS_PER_BAND) * VOUCHER_ROWS;
