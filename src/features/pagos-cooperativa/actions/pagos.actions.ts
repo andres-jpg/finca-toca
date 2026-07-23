@@ -194,7 +194,7 @@ export async function getPagosHistorial(
 }
 
 // Historial de pagos del conductor autenticado, acotado a su propio itinerario
-// y a los últimos 15 días (requisito: sin caché local, siempre en vivo).
+// y a los últimos 30 días (requisito: sin caché local, siempre en vivo).
 export async function getMisPagos(): Promise<PagoFinca[]> {
   await requireRole(["cooperativa_user"]);
 
@@ -202,18 +202,30 @@ export async function getMisPagos(): Promise<PagoFinca[]> {
   if (!itinerario) return [];
 
   const supabase = await createClient();
-  const desde = fechaHaceNDias(15);
+  const desde = fechaHaceNDias(30);
 
-  const { data, error } = await supabase
-    .from("pagos_finca")
-    .select(PAGO_SELECT)
-    .eq("itinerario_id", itinerario.id)
-    .gte("fecha_fin", desde)
-    .order("created_at", { ascending: false });
+  // Paginado por la misma razón que getMisRecolecciones: evitar el max_rows
+  // de PostgREST truncando la ventana de 30 días en itinerarios grandes.
+  const PAGE = 1000;
+  const allRows: any[] = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("pagos_finca")
+      .select(PAGO_SELECT)
+      .eq("itinerario_id", itinerario.id)
+      .gte("fecha_fin", desde)
+      .order("created_at", { ascending: false })
+      .range(from, from + PAGE - 1);
 
-  if (error) throw new Error("No se pudo cargar tu historial de pagos");
+    if (error) throw new Error("No se pudo cargar tu historial de pagos");
+    if (!data || data.length === 0) break;
+    allRows.push(...data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
 
-  return (data ?? []).map(mapPagoRow);
+  return allRows.map(mapPagoRow);
 }
 
 export async function updateEstadoPago(
