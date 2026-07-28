@@ -82,17 +82,27 @@ export interface ExtraccionLecheFormData {
   litros: number;
 }
 
-// ===== VACAS =====
+// ===== ANIMALES =====
 export type VacaOrigen = "finca" | "externa";
-export type VacaEstado = "produccion" | "secado" | "pre_jardin" | "jardin" | "transicion";
+export type AnimalSexo = "hembra" | "macho";
+export type AnimalRaza = "holstein" | "jersey" | "jerholm" | "normando";
+export type AnimalEstado =
+  | "produccion"
+  | "secado"
+  | "pre_jardin"
+  | "jardin"
+  | "transicion"
+  | "reproductor";
 
-export interface Vaca {
+export interface Animal {
   id: string;
   created_at: string | null;
-  vaca_id: string;
+  identificador: string;
   nombre: string;
+  sexo: AnimalSexo;
+  raza: AnimalRaza | null;
   origen: VacaOrigen | null;
-  estado: VacaEstado | null;
+  estado: AnimalEstado | null;
   fecha_compra: string | null;
   fecha_nacimiento: string | null;
   numero_registro: string | null;
@@ -101,26 +111,6 @@ export interface Vaca {
   padre_id: string | null;
   padre_nombre: string | null;
   padre_pajilla_nombre: string | null;
-  alta: boolean;
-}
-
-// ===== TOROS =====
-export type ToroEstado = "jardin" | "reproductor";
-
-export interface Toro {
-  id: string;
-  created_at: string | null;
-  toro_id: number;
-  nombre: string;
-  origen: VacaOrigen | null;
-  estado: ToroEstado | null;
-  fecha_compra: string | null;
-  fecha_nacimiento: string | null;
-  numero_registro: string | null;
-  madre_id: string | null;
-  madre_nombre: string | null;
-  padre_id: string | null;
-  padre_nombre: string | null;
   alta: boolean;
 }
 
@@ -151,22 +141,16 @@ export interface EventoAnimal {
 // ===== FICHAS (detalle) =====
 export interface CriaAnimal {
   id: string;
-  tipo: "vaca" | "toro";
-  animal_id: string | number;
+  sexo: AnimalSexo;
+  identificador: string;
   nombre: string;
   estado: string | null;
   alta: boolean;
 }
 
-export interface VacaDetalle extends Vaca {
-  padre: { id: string; toro_id: number; nombre: string } | null;
-  madre: { id: string; vaca_id: string; nombre: string } | null;
-  crias: CriaAnimal[];
-}
-
-export interface ToroDetalle extends Toro {
-  padre: { id: string; toro_id: number; nombre: string } | null;
-  madre: { id: string; vaca_id: string; nombre: string } | null;
+export interface AnimalDetalle extends Animal {
+  padre: { id: string; identificador: string; nombre: string } | null;
+  madre: { id: string; identificador: string; nombre: string } | null;
   crias: CriaAnimal[];
 }
 

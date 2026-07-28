@@ -13,7 +13,7 @@ import { deleteIngreso } from "@/features/ingresos/actions/ingresos.actions";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { MonthPicker } from "@/components/shared/month-picker";
-import type { Ingreso, ConceptoIngreso, Vaca, Toro } from "@/types";
+import type { Ingreso, ConceptoIngreso, Animal } from "@/types";
 
 function RowActions({
   ingreso,
@@ -24,8 +24,8 @@ function RowActions({
 }: {
   ingreso: Ingreso;
   conceptos: ConceptoIngreso[];
-  vacas: Vaca[];
-  toros: Toro[];
+  vacas: Animal[];
+  toros: Animal[];
   canEdit: boolean;
 }) {
   const [editOpen, setEditOpen] = useState(false);
@@ -96,8 +96,8 @@ function RowActions({
 interface IngresosTableProps {
   ingresos: Ingreso[];
   conceptos: ConceptoIngreso[];
-  vacas: Vaca[];
-  toros: Toro[];
+  vacas: Animal[];
+  toros: Animal[];
   canEdit: boolean;
 }
 

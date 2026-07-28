@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/shared/date-picker";
 import { toast } from "sonner";
-import type { Ingreso, ConceptoIngreso, Vaca, Toro } from "@/types";
+import type { Ingreso, ConceptoIngreso, Animal } from "@/types";
 
 interface FormValues {
   fecha: Date;
@@ -31,8 +31,8 @@ interface FormValues {
 interface IngresoFormProps {
   ingreso?: Ingreso;
   conceptos: ConceptoIngreso[];
-  vacas?: Vaca[];
-  toros?: Toro[];
+  vacas?: Animal[];
+  toros?: Animal[];
   onSuccess: () => void;
 }
 
@@ -184,7 +184,7 @@ export function IngresoForm({ ingreso, conceptos, vacas = [], toros = [], onSucc
             <SelectContent>
               {vacas.map((v) => (
                 <SelectItem key={v.id} value={v.id}>
-                  #{v.vaca_id} — {v.nombre}
+                  #{v.identificador} — {v.nombre}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -222,7 +222,7 @@ export function IngresoForm({ ingreso, conceptos, vacas = [], toros = [], onSucc
             <SelectContent>
               {toros.map((t) => (
                 <SelectItem key={t.id} value={t.id}>
-                  #{t.toro_id} — {t.nombre}
+                  #{t.identificador} — {t.nombre}
                 </SelectItem>
               ))}
             </SelectContent>

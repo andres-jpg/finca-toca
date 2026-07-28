@@ -70,20 +70,20 @@ export async function createIngreso(formData: {
 
   if (formData.vacaIdToSell) {
     const { error: vacaError } = await supabase
-      .from("vacas")
+      .from("animales")
       .update({ alta: false })
       .eq("id", formData.vacaIdToSell);
     if (vacaError) throw new Error("No se pudo actualizar el estado de la vaca");
-    revalidatePath("/dashboard/vacas");
+    revalidatePath("/dashboard/animales");
   }
 
   if (formData.toroIdToSell) {
     const { error: toroError } = await supabase
-      .from("toros")
+      .from("animales")
       .update({ alta: false })
       .eq("id", formData.toroIdToSell);
     if (toroError) throw new Error("No se pudo actualizar el estado del toro");
-    revalidatePath("/dashboard/toros");
+    revalidatePath("/dashboard/animales");
   }
 
   revalidatePath("/dashboard/ingresos");
