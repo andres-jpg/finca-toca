@@ -93,8 +93,9 @@ export async function createExtraccion(formData: {
   const supabase = await createClient();
 
   const { data: vacasRows } = await supabase
-    .from("vacas")
+    .from("animales")
     .select("id")
+    .eq("sexo", "hembra")
     .eq("estado", "produccion")
     .eq("alta", true);
 
@@ -131,8 +132,9 @@ export async function updateExtraccion(
     .single();
 
   const { data: vacasRows } = await supabase
-    .from("vacas")
+    .from("animales")
     .select("id")
+    .eq("sexo", "hembra")
     .eq("estado", "produccion")
     .eq("alta", true);
 

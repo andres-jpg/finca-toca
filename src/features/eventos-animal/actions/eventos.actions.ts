@@ -43,11 +43,7 @@ export async function createEventoAnimal(formData: {
 
   if (error) throw new Error("No se pudo registrar el evento");
 
-  const path =
-    formData.animal_tipo === "vaca"
-      ? `/dashboard/vacas/${formData.animal_id}`
-      : `/dashboard/toros/${formData.animal_id}`;
-  revalidatePath(path);
+  revalidatePath(`/dashboard/animales/${formData.animal_id}`);
 }
 
 export async function updateEventoAnimal(
@@ -75,9 +71,5 @@ export async function updateEventoAnimal(
 
   if (error) throw new Error("No se pudo actualizar el evento");
 
-  const path =
-    formData.animal_tipo === "vaca"
-      ? `/dashboard/vacas/${formData.animal_id}`
-      : `/dashboard/toros/${formData.animal_id}`;
-  revalidatePath(path);
+  revalidatePath(`/dashboard/animales/${formData.animal_id}`);
 }

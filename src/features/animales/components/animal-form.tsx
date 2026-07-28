@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { vacaSchema } from "@/features/vacas/schemas/vaca.schema";
-import { createVaca, updateVaca } from "@/features/vacas/actions/vacas.actions";
+import { animalSchema } from "@/features/animales/schemas/animal.schema";
+import { createAnimal, updateAnimal } from "@/features/animales/actions/animales.actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,28 +17,48 @@ import {
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/shared/date-picker";
 import { toast } from "sonner";
-import type { Vaca, Toro, PajillaPorToro } from "@/types";
+import type { Animal, AnimalEstado, AnimalRaza, AnimalSexo, PajillaPorToro } from "@/types";
+
+const SEXO_LABELS: Record<AnimalSexo, string> = {
+  hembra: "Hembra",
+  macho: "Macho",
+};
+
+const RAZA_LABELS: Record<AnimalRaza, string> = {
+  holstein: "Holstein",
+  jersey: "Jersey",
+  jerholm: "Jerholm",
+  normando: "Normando",
+};
 
 const ORIGEN_LABELS: Record<string, string> = {
   finca: "Finca",
   externa: "Externa",
 };
 
-const ESTADO_LABELS: Record<string, string> = {
+const ESTADO_LABELS: Record<AnimalEstado, string> = {
   produccion: "Producción",
   secado: "Secado",
   pre_jardin: "Pre-jardín",
   jardin: "Jardín",
   transicion: "Transición",
+  reproductor: "Reproductor",
 };
 
-type PadreTipo = "none" | "toro" | "pajilla";
+const ESTADOS_POR_SEXO: Record<AnimalSexo, AnimalEstado[]> = {
+  hembra: ["produccion", "secado", "pre_jardin", "jardin", "transicion"],
+  macho: ["jardin", "reproductor"],
+};
+
+type PadreTipo = "none" | "animal" | "pajilla";
 
 interface FormValues {
-  vaca_id: string;
+  identificador: string;
   nombre: string;
+  sexo: AnimalSexo;
+  raza: AnimalRaza;
   origen: "finca" | "externa";
-  estado: "produccion" | "secado" | "pre_jardin" | "jardin" | "transicion";
+  estado?: string | null;
   fecha_compra?: Date | null;
   fecha_nacimiento?: Date | null;
   numero_registro?: string;
@@ -46,19 +66,18 @@ interface FormValues {
   padre_id?: string | null;
 }
 
-interface VacaFormProps {
-  vaca?: Vaca;
-  vacas: Vaca[];
-  toros: Toro[];
+interface AnimalFormProps {
+  animal?: Animal;
+  animales: Animal[];
   pajillasPorToro: PajillaPorToro[];
   onSuccess: () => void;
 }
 
-export function VacaForm({ vaca, vacas, toros, pajillasPorToro, onSuccess }: VacaFormProps) {
+export function AnimalForm({ animal, animales, pajillasPorToro, onSuccess }: AnimalFormProps) {
   const getInitialPadreTipo = (): PadreTipo => {
-    if (!vaca) return "none";
-    if (vaca.padre_id) return "toro";
-    if (vaca.padre_pajilla_nombre) return "pajilla";
+    if (!animal) return "none";
+    if (animal.padre_id) return "animal";
+    if (animal.padre_pajilla_nombre) return "pajilla";
     return "none";
   };
 
@@ -74,27 +93,46 @@ export function VacaForm({ vaca, vacas, toros, pajillasPorToro, onSuccess }: Vac
     watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    resolver: zodResolver(vacaSchema) as any,
+    resolver: zodResolver(animalSchema) as any,
     defaultValues: {
-      vaca_id: vaca?.vaca_id ?? "",
-      nombre: vaca?.nombre ?? "",
-      origen: vaca?.origen ?? undefined,
-      estado: vaca?.estado ?? undefined,
-      fecha_compra: vaca?.fecha_compra ? new Date(vaca.fecha_compra + "T00:00:00") : null,
-      fecha_nacimiento: vaca?.fecha_nacimiento ? new Date(vaca.fecha_nacimiento + "T00:00:00") : null,
-      numero_registro: vaca?.numero_registro ?? "",
-      madre_id: vaca?.madre_id ?? null,
-      padre_id: vaca?.padre_id ?? null,
+      identificador: animal?.identificador ?? "",
+      nombre: animal?.nombre ?? "",
+      sexo: animal?.sexo ?? undefined,
+      raza: animal?.raza ?? undefined,
+      origen: animal?.origen ?? undefined,
+      estado: animal?.estado ?? undefined,
+      fecha_compra: animal?.fecha_compra ? new Date(animal.fecha_compra + "T00:00:00") : null,
+      fecha_nacimiento: animal?.fecha_nacimiento
+        ? new Date(animal.fecha_nacimiento + "T00:00:00")
+        : null,
+      numero_registro: animal?.numero_registro ?? "",
+      madre_id: animal?.madre_id ?? null,
+      padre_id: animal?.padre_id ?? null,
     },
   });
 
+  const sexoValue = watch("sexo");
   const origenValue = watch("origen");
+  const estadoValue = watch("estado");
   const fechaCompraValue = watch("fecha_compra");
   const fechaNacimientoValue = watch("fecha_nacimiento");
   const madreIdValue = watch("madre_id");
   const padreIdValue = watch("padre_id");
 
-  const vacasDisponibles = vacas.filter((v) => v.id !== vaca?.id);
+  const madresDisponibles = animales.filter((a) => a.sexo === "hembra" && a.id !== animal?.id);
+  const padresDisponibles = animales.filter((a) => a.sexo === "macho" && a.id !== animal?.id);
+  const estadosDisponibles = sexoValue ? ESTADOS_POR_SEXO[sexoValue] : [];
+
+  useEffect(() => {
+    if (sexoValue && estadoValue && !ESTADOS_POR_SEXO[sexoValue].includes(estadoValue as AnimalEstado)) {
+      setValue("estado", null);
+    }
+    if (sexoValue === "macho" && padreTipo === "pajilla") {
+      setPadreTipo("none");
+      setValue("padre_id", null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sexoValue]);
 
   const handlePadreTipoChange = (tipo: PadreTipo) => {
     setPadreTipo(tipo);
@@ -105,33 +143,35 @@ export function VacaForm({ vaca, vacas, toros, pajillasPorToro, onSuccess }: Vac
   const onSubmit = async (data: FormValues) => {
     try {
       const base = {
-        vaca_id: data.vaca_id,
+        identificador: data.identificador,
         nombre: data.nombre,
+        sexo: data.sexo,
+        raza: data.raza,
         origen: data.origen,
-        estado: data.estado,
+        estado: (data.estado || null) as AnimalEstado | null,
         fecha_compra: data.origen === "externa" ? data.fecha_compra : null,
         fecha_nacimiento: data.fecha_nacimiento || null,
         numero_registro: data.origen === "externa" ? data.numero_registro : undefined,
         madre_id: data.madre_id || null,
-        padre_id: padreTipo === "toro" ? (data.padre_id || null) : null,
+        padre_id: padreTipo === "animal" ? (data.padre_id || null) : null,
         padre_pajilla_toro_ref_id:
           padreTipo === "pajilla" && selectedPajillaToro ? selectedPajillaToro : null,
         padre_pajilla_nombre_keep:
           padreTipo === "pajilla" && !selectedPajillaToro
-            ? (vaca?.padre_pajilla_nombre ?? null)
+            ? (animal?.padre_pajilla_nombre ?? null)
             : null,
       };
 
-      if (vaca) {
-        await updateVaca(vaca.id, base);
-        toast.success("Vaca actualizada");
+      if (animal) {
+        await updateAnimal(animal.id, base);
+        toast.success("Animal actualizado");
       } else {
         if (padreTipo === "pajilla" && !selectedPajillaToro) {
           toast.error("Selecciona una pajilla para el padre");
           return;
         }
-        await createVaca(base);
-        toast.success("Vaca creada");
+        await createAnimal(base);
+        toast.success("Animal creado");
       }
       onSuccess();
     } catch (error) {
@@ -143,29 +183,64 @@ export function VacaForm({ vaca, vacas, toros, pajillasPorToro, onSuccess }: Vac
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="vaca_id">ID de la Vaca</Label>
+          <Label>Sexo</Label>
+          <Select
+            value={sexoValue ?? ""}
+            onValueChange={(val) => setValue("sexo", val as AnimalSexo)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Seleccionar sexo" />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(SEXO_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {errors.sexo && <p className="text-sm text-red-500">{errors.sexo.message}</p>}
+        </div>
+
+        <div className="space-y-2">
+          <Label>Raza</Label>
+          <Select
+            value={watch("raza") ?? ""}
+            onValueChange={(val) => setValue("raza", val as AnimalRaza)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Seleccionar raza" />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(RAZA_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {errors.raza && <p className="text-sm text-red-500">{errors.raza.message}</p>}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="identificador">Identificador</Label>
           <Input
-            id="vaca_id"
+            id="identificador"
             type="text"
             placeholder="Ej: 123, A-01, VL-007"
-            {...register("vaca_id")}
+            {...register("identificador")}
           />
-          {errors.vaca_id && (
-            <p className="text-sm text-red-500">{errors.vaca_id.message}</p>
+          {errors.identificador && (
+            <p className="text-sm text-red-500">{errors.identificador.message}</p>
           )}
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="nombre">Nombre</Label>
-          <Input
-            id="nombre"
-            type="text"
-            placeholder="Ej: Vanessa"
-            {...register("nombre")}
-          />
-          {errors.nombre && (
-            <p className="text-sm text-red-500">{errors.nombre.message}</p>
-          )}
+          <Input id="nombre" type="text" placeholder="Ej: Vanessa" {...register("nombre")} />
+          {errors.nombre && <p className="text-sm text-red-500">{errors.nombre.message}</p>}
         </div>
       </div>
 
@@ -187,36 +262,28 @@ export function VacaForm({ vaca, vacas, toros, pajillasPorToro, onSuccess }: Vac
               ))}
             </SelectContent>
           </Select>
-          {errors.origen && (
-            <p className="text-sm text-red-500">{errors.origen.message}</p>
-          )}
+          {errors.origen && <p className="text-sm text-red-500">{errors.origen.message}</p>}
         </div>
 
         <div className="space-y-2">
           <Label>Estado</Label>
           <Select
-            value={watch("estado") ?? ""}
-            onValueChange={(val) =>
-              setValue(
-                "estado",
-                val as "produccion" | "secado" | "pre_jardin" | "jardin" | "transicion"
-              )
-            }
+            value={estadoValue ?? ""}
+            onValueChange={(val) => setValue("estado", val)}
+            disabled={!sexoValue}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Seleccionar estado" />
+              <SelectValue placeholder={sexoValue ? "Seleccionar estado" : "Primero selecciona el sexo"} />
             </SelectTrigger>
             <SelectContent>
-              {Object.entries(ESTADO_LABELS).map(([value, label]) => (
+              {estadosDisponibles.map((value) => (
                 <SelectItem key={value} value={value}>
-                  {label}
+                  {ESTADO_LABELS[value]}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {errors.estado && (
-            <p className="text-sm text-red-500">{errors.estado.message}</p>
-          )}
+          {errors.estado && <p className="text-sm text-red-500">{errors.estado.message}</p>}
         </div>
       </div>
 
@@ -265,9 +332,9 @@ export function VacaForm({ vaca, vacas, toros, pajillasPorToro, onSuccess }: Vac
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Sin madre registrada</SelectItem>
-                {vacasDisponibles.map((v) => (
-                  <SelectItem key={v.id} value={v.id}>
-                    #{v.vaca_id} — {v.nombre}
+                {madresDisponibles.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    #{m.identificador} — {m.nombre}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -278,40 +345,42 @@ export function VacaForm({ vaca, vacas, toros, pajillasPorToro, onSuccess }: Vac
           <div className="space-y-2">
             <Label>Padre</Label>
             <div className="flex gap-2">
-              {(["none", "toro", "pajilla"] as PadreTipo[]).map((tipo) => (
-                <button
-                  key={tipo}
-                  type="button"
-                  onClick={() => handlePadreTipoChange(tipo)}
-                  className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${
-                    padreTipo === tipo
-                      ? "bg-gray-900 text-white border-gray-900"
-                      : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
-                  }`}
-                >
-                  {tipo === "none" && "Sin padre"}
-                  {tipo === "toro" && "Toro de finca"}
-                  {tipo === "pajilla" && "Pajilla"}
-                </button>
-              ))}
+              {(["none", "animal", "pajilla"] as PadreTipo[])
+                .filter((tipo) => tipo !== "pajilla" || sexoValue === "hembra")
+                .map((tipo) => (
+                  <button
+                    key={tipo}
+                    type="button"
+                    onClick={() => handlePadreTipoChange(tipo)}
+                    className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                      padreTipo === tipo
+                        ? "bg-gray-900 text-white border-gray-900"
+                        : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                    }`}
+                  >
+                    {tipo === "none" && "Sin padre"}
+                    {tipo === "animal" && "Macho de finca"}
+                    {tipo === "pajilla" && "Pajilla"}
+                  </button>
+                ))}
             </div>
           </div>
 
-          {/* Toro de finca */}
-          {padreTipo === "toro" && (
+          {/* Macho de finca */}
+          {padreTipo === "animal" && (
             <div className="space-y-2">
               <Select
                 value={padreIdValue ?? "none"}
                 onValueChange={(val) => setValue("padre_id", val === "none" ? null : val)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar toro" />
+                  <SelectValue placeholder="Seleccionar padre" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Sin toro seleccionado</SelectItem>
-                  {toros.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      #{t.toro_id} — {t.nombre}
+                  <SelectItem value="none">Sin padre seleccionado</SelectItem>
+                  {padresDisponibles.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      #{p.identificador} — {p.nombre}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -319,13 +388,13 @@ export function VacaForm({ vaca, vacas, toros, pajillasPorToro, onSuccess }: Vac
             </div>
           )}
 
-          {/* Pajilla */}
+          {/* Pajilla (solo disponible para hembras) */}
           {padreTipo === "pajilla" && (
             <div className="space-y-2">
-              {vaca?.padre_pajilla_nombre && !selectedPajillaToro && (
+              {animal?.padre_pajilla_nombre && !selectedPajillaToro && (
                 <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
                   <p className="text-xs text-blue-600 font-medium">Padre actual por pajilla</p>
-                  <p className="text-sm text-blue-800 font-semibold">{vaca.padre_pajilla_nombre}</p>
+                  <p className="text-sm text-blue-800 font-semibold">{animal.padre_pajilla_nombre}</p>
                   <p className="text-xs text-blue-500 mt-0.5">
                     Selecciona otra pajilla abajo para cambiarlo (descontará del inventario)
                   </p>
@@ -340,14 +409,12 @@ export function VacaForm({ vaca, vacas, toros, pajillasPorToro, onSuccess }: Vac
               ) : (
                 <Select
                   value={selectedPajillaToro || "none"}
-                  onValueChange={(val) =>
-                    setSelectedPajillaToro(val === "none" ? "" : val)
-                  }
+                  onValueChange={(val) => setSelectedPajillaToro(val === "none" ? "" : val)}
                 >
                   <SelectTrigger>
                     <SelectValue
                       placeholder={
-                        vaca?.padre_pajilla_nombre
+                        animal?.padre_pajilla_nombre
                           ? "Cambiar pajilla (opcional)..."
                           : "Seleccionar toro de la pajilla"
                       }
@@ -355,7 +422,7 @@ export function VacaForm({ vaca, vacas, toros, pajillasPorToro, onSuccess }: Vac
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">
-                      {vaca?.padre_pajilla_nombre ? "Mantener actual" : "Sin selección"}
+                      {animal?.padre_pajilla_nombre ? "Mantener actual" : "Sin selección"}
                     </SelectItem>
                     {pajillasDisponibles.map((p) => (
                       <SelectItem key={p.toro_ref_id} value={p.toro_ref_id}>
@@ -375,7 +442,7 @@ export function VacaForm({ vaca, vacas, toros, pajillasPorToro, onSuccess }: Vac
 
       <div className="flex gap-2 pt-4">
         <Button type="submit" className="flex-1" disabled={isSubmitting}>
-          {isSubmitting ? "Guardando..." : vaca ? "Actualizar" : "Crear"}
+          {isSubmitting ? "Guardando..." : animal ? "Actualizar" : "Crear"}
         </Button>
       </div>
     </form>

@@ -14,6 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
+      animales: {
+        Row: {
+          alta: boolean
+          created_at: string | null
+          estado: string | null
+          fecha_compra: string | null
+          fecha_nacimiento: string | null
+          id: string
+          identificador: string
+          madre_id: string | null
+          nombre: string
+          numero_registro: string | null
+          origen: Database["public"]["Enums"]["vaca_origen"] | null
+          padre_id: string | null
+          padre_pajilla_nombre: string | null
+          raza: Database["public"]["Enums"]["animal_raza"] | null
+          sexo: Database["public"]["Enums"]["animal_sexo"]
+        }
+        Insert: {
+          alta?: boolean
+          created_at?: string | null
+          estado?: string | null
+          fecha_compra?: string | null
+          fecha_nacimiento?: string | null
+          id?: string
+          identificador: string
+          madre_id?: string | null
+          nombre: string
+          numero_registro?: string | null
+          origen?: Database["public"]["Enums"]["vaca_origen"] | null
+          padre_id?: string | null
+          padre_pajilla_nombre?: string | null
+          raza?: Database["public"]["Enums"]["animal_raza"] | null
+          sexo: Database["public"]["Enums"]["animal_sexo"]
+        }
+        Update: {
+          alta?: boolean
+          created_at?: string | null
+          estado?: string | null
+          fecha_compra?: string | null
+          fecha_nacimiento?: string | null
+          id?: string
+          identificador?: string
+          madre_id?: string | null
+          nombre?: string
+          numero_registro?: string | null
+          origen?: Database["public"]["Enums"]["vaca_origen"] | null
+          padre_id?: string | null
+          padre_pajilla_nombre?: string | null
+          raza?: Database["public"]["Enums"]["animal_raza"] | null
+          sexo?: Database["public"]["Enums"]["animal_sexo"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "animales_madre_id_fkey"
+            columns: ["madre_id"]
+            isOneToOne: false
+            referencedRelation: "animales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "animales_padre_id_fkey"
+            columns: ["padre_id"]
+            isOneToOne: false
+            referencedRelation: "animales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conceptos_gasto: {
         Row: {
           id: number
@@ -572,7 +641,7 @@ export type Database = {
           },
         ]
       }
-      toros: {
+      toros_legacy: {
         Row: {
           alta: boolean
           created_at: string | null
@@ -620,14 +689,14 @@ export type Database = {
             foreignKeyName: "toros_madre_id_fkey"
             columns: ["madre_id"]
             isOneToOne: false
-            referencedRelation: "vacas"
+            referencedRelation: "vacas_legacy"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "toros_padre_id_fkey"
             columns: ["padre_id"]
             isOneToOne: false
-            referencedRelation: "toros"
+            referencedRelation: "toros_legacy"
             referencedColumns: ["id"]
           },
         ]
@@ -658,7 +727,7 @@ export type Database = {
           },
         ]
       }
-      vacas: {
+      vacas_legacy: {
         Row: {
           alta: boolean
           created_at: string | null
@@ -709,14 +778,14 @@ export type Database = {
             foreignKeyName: "vacas_madre_id_fkey"
             columns: ["madre_id"]
             isOneToOne: false
-            referencedRelation: "vacas"
+            referencedRelation: "vacas_legacy"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "vacas_padre_id_fkey"
             columns: ["padre_id"]
             isOneToOne: false
-            referencedRelation: "toros"
+            referencedRelation: "toros_legacy"
             referencedColumns: ["id"]
           },
         ]
@@ -738,6 +807,8 @@ export type Database = {
       }
     }
     Enums: {
+      animal_raza: "holstein" | "jersey" | "jerholm" | "normando"
+      animal_sexo: "hembra" | "macho"
       rol:
         | "admin"
         | "user"
@@ -878,6 +949,8 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      animal_raza: ["holstein", "jersey", "jerholm", "normando"],
+      animal_sexo: ["hembra", "macho"],
       rol: ["admin", "user", "cooperativa_admin", "cooperativa_user", "viewer"],
       vaca_estado: [
         "produccion",

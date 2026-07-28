@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types";
-import { GiBull, GiCheeseWedge } from "react-icons/gi";
+import { GiCheeseWedge } from "react-icons/gi";
 import { PiCow } from "react-icons/pi";
 
 type NavItem = {
@@ -59,15 +59,9 @@ const navItems: NavItem[] = [
     allowedRoles: ["admin", "viewer", "user"] as UserRole[],
   },
   {
-    href: "/dashboard/vacas",
-    label: "Vacas",
+    href: "/dashboard/animales",
+    label: "Animales",
     icon: PiCow,
-    allowedRoles: ["admin", "viewer"] as UserRole[],
-  },
-  {
-    href: "/dashboard/toros",
-    label: "Toros",
-    icon: GiBull,
     allowedRoles: ["admin", "viewer"] as UserRole[],
   },
   {

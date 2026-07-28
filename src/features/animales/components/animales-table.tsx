@@ -7,37 +7,52 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/shared/data-table";
 import { EntityModal } from "@/components/shared/entity-modal";
 import { DeleteConfirmationDialog } from "@/components/shared/delete-confirmation-dialog";
-import { ToroForm } from "@/features/toros/components/toro-form";
-import { venderToro } from "@/features/toros/actions/toros.actions";
+import { AnimalForm } from "@/features/animales/components/animal-form";
+import { venderAnimal } from "@/features/animales/actions/animales.actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import type { Toro, Vaca } from "@/types";
+import type { Animal, AnimalSexo, PajillaPorToro } from "@/types";
+
+const ESTADO_LABELS: Record<string, string> = {
+  produccion: "Producción",
+  secado: "Secado",
+  pre_jardin: "Pre-jardín",
+  jardin: "Jardín",
+  transicion: "Transición",
+  reproductor: "Reproductor",
+};
+
+const ESTADO_COLORS: Record<string, string> = {
+  produccion: "bg-green-100 text-green-700 hover:bg-green-100",
+  secado: "bg-yellow-100 text-yellow-700 hover:bg-yellow-100",
+  pre_jardin: "bg-blue-100 text-blue-700 hover:bg-blue-100",
+  jardin: "bg-purple-100 text-purple-700 hover:bg-purple-100",
+  transicion: "bg-orange-100 text-orange-700 hover:bg-orange-100",
+  reproductor: "bg-green-100 text-green-700 hover:bg-green-100",
+};
 
 const ORIGEN_LABELS: Record<string, string> = {
   finca: "Finca",
   externa: "Externa",
 };
 
-const ESTADO_LABELS: Record<string, string> = {
-  jardin: "Jardín",
-  reproductor: "Reproductor",
-};
-
-const ESTADO_COLORS: Record<string, string> = {
-  jardin: "bg-purple-100 text-purple-700 hover:bg-purple-100",
-  reproductor: "bg-green-100 text-green-700 hover:bg-green-100",
-};
+const SEXO_FILTROS: { value: "todos" | AnimalSexo; label: string }[] = [
+  { value: "todos", label: "Todos" },
+  { value: "hembra", label: "Hembras" },
+  { value: "macho", label: "Machos" },
+];
 
 function RowActions({
-  toro,
-  vacas,
-  toros,
+  animal,
+  animales,
+  pajillasPorToro,
   canEdit,
 }: {
-  toro: Toro;
-  vacas: Vaca[];
-  toros: Toro[];
+  animal: Animal;
+  animales: Animal[];
+  pajillasPorToro: PajillaPorToro[];
   canEdit: boolean;
 }) {
   const router = useRouter();
@@ -46,11 +61,11 @@ function RowActions({
 
   const handleDelete = async () => {
     try {
-      await venderToro(toro.id);
-      toast.success("Toro dado de baja");
+      await venderAnimal(animal.id);
+      toast.success("Animal dado de baja");
       setDeleteOpen(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "No se pudo dar de baja el toro");
+      toast.error(error instanceof Error ? error.message : "No se pudo dar de baja el animal");
     }
   };
 
@@ -58,7 +73,7 @@ function RowActions({
     <>
       <div className="flex items-center gap-1">
         <button
-          onClick={() => router.push(`/dashboard/toros/${toro.id}`)}
+          onClick={() => router.push(`/dashboard/animales/${animal.id}`)}
           className="p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
           title="Ver ficha"
         >
@@ -73,7 +88,7 @@ function RowActions({
             >
               <Pencil className="h-3.5 w-3.5" />
             </button>
-            {toro.alta && (
+            {animal.alta && (
               <button
                 onClick={() => setDeleteOpen(true)}
                 className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
@@ -87,8 +102,13 @@ function RowActions({
       </div>
 
       {canEdit && (
-        <EntityModal open={editOpen} onClose={() => setEditOpen(false)} title="Editar toro">
-          <ToroForm toro={toro} vacas={vacas} toros={toros} onSuccess={() => setEditOpen(false)} />
+        <EntityModal open={editOpen} onClose={() => setEditOpen(false)} title="Editar animal">
+          <AnimalForm
+            animal={animal}
+            animales={animales}
+            pajillasPorToro={pajillasPorToro}
+            onSuccess={() => setEditOpen(false)}
+          />
         </EntityModal>
       )}
 
@@ -96,49 +116,66 @@ function RowActions({
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         onConfirm={handleDelete}
-        title="¿Dar de baja este toro?"
-        description={`"${toro.nombre} (#${toro.toro_id})" pasará a la lista de bajas. Podrás consultarlo desde "Ver de baja".`}
+        title="¿Dar de baja este animal?"
+        description={`"${animal.nombre} (#${animal.identificador})" pasará a la lista de bajas. Podrás consultarlo desde "Ver de baja".`}
         confirmLabel="Dar de baja"
       />
     </>
   );
 }
 
-interface TorosTableProps {
-  toros: Toro[];
-  vacas: Vaca[];
+interface AnimalesTableProps {
+  animales: Animal[];
+  pajillasPorToro: PajillaPorToro[];
   canEdit: boolean;
 }
 
-export function TorosTable({ toros, vacas, canEdit }: TorosTableProps) {
+export function AnimalesTable({ animales, pajillasPorToro, canEdit }: AnimalesTableProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [mostrarDeBaja, setMostrarDeBaja] = useState(false);
+  const [sexoFiltro, setSexoFiltro] = useState<"todos" | AnimalSexo>("todos");
 
-  const torosDeAlta = useMemo(() => toros.filter((t) => t.alta), [toros]);
-  const torosDeBaja = useMemo(() => toros.filter((t) => !t.alta), [toros]);
-  const torosMostrados = mostrarDeBaja ? torosDeBaja : torosDeAlta;
+  const animalesDeAlta = useMemo(() => animales.filter((a) => a.alta), [animales]);
+  const animalesDeBaja = useMemo(() => animales.filter((a) => !a.alta), [animales]);
+  const animalesBase = mostrarDeBaja ? animalesDeBaja : animalesDeAlta;
+  const animalesMostrados = useMemo(
+    () =>
+      sexoFiltro === "todos" ? animalesBase : animalesBase.filter((a) => a.sexo === sexoFiltro),
+    [animalesBase, sexoFiltro]
+  );
 
-  const columns: ColumnDef<Toro>[] = useMemo(
+  const columns: ColumnDef<Animal>[] = useMemo(
     () => [
       {
-        accessorKey: "toro_id",
+        accessorKey: "identificador",
         header: "ID",
         cell: ({ getValue }) => (
-          <span className="font-mono text-gray-500">#{getValue<number>()}</span>
+          <span className="font-mono text-gray-500">#{getValue<string>()}</span>
         ),
       },
       { accessorKey: "nombre", header: "Nombre" },
+      {
+        accessorKey: "sexo",
+        header: "Sexo",
+        cell: ({ getValue }) => {
+          const val = getValue<AnimalSexo>();
+          return (
+            <Badge
+              variant="outline"
+              className={val === "hembra" ? "text-pink-600 border-pink-300" : "text-sky-600 border-sky-300"}
+            >
+              {val === "hembra" ? "Hembra" : "Macho"}
+            </Badge>
+          );
+        },
+      },
       {
         accessorKey: "estado",
         header: "Estado",
         cell: ({ getValue }) => {
           const val = getValue<string | null>();
           if (!val) return <span className="text-gray-400">—</span>;
-          return (
-            <Badge className={ESTADO_COLORS[val] ?? ""}>
-              {ESTADO_LABELS[val] ?? val}
-            </Badge>
-          );
+          return <Badge className={ESTADO_COLORS[val] ?? ""}>{ESTADO_LABELS[val] ?? val}</Badge>;
         },
       },
       {
@@ -166,22 +203,27 @@ export function TorosTable({ toros, vacas, canEdit }: TorosTableProps) {
         id: "actions",
         header: "Acciones",
         cell: ({ row }) => (
-          <RowActions toro={row.original} vacas={vacas} toros={torosDeAlta} canEdit={canEdit} />
+          <RowActions
+            animal={row.original}
+            animales={animalesDeAlta}
+            pajillasPorToro={pajillasPorToro}
+            canEdit={canEdit}
+          />
         ),
       },
     ],
-    [canEdit, vacas, torosDeAlta]
+    [canEdit, animalesDeAlta, pajillasPorToro]
   );
 
   return (
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-800 tracking-tight">Toros</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-800 tracking-tight">Animales</h2>
           <p className="text-sm text-gray-500 mt-0.5">
             {mostrarDeBaja
-              ? `${torosDeBaja.length} toro(s) de baja`
-              : `${torosDeAlta.length} toro(s) de alta`}
+              ? `${animalesMostrados.length} animal(es) de baja`
+              : `${animalesMostrados.length} animal(es) de alta`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2 sm:justify-end">
@@ -192,26 +234,48 @@ export function TorosTable({ toros, vacas, canEdit }: TorosTableProps) {
           >
             <ArrowUpCircle className="h-4 w-4 mr-2" />
             {mostrarDeBaja ? "Ver de alta" : "Ver de baja"}
-            {!mostrarDeBaja && torosDeBaja.length > 0 && (
+            {!mostrarDeBaja && animalesDeBaja.length > 0 && (
               <span className="ml-1.5 text-xs bg-orange-100 text-orange-600 rounded-full px-1.5 py-0.5">
-                {torosDeBaja.length}
+                {animalesDeBaja.length}
               </span>
             )}
           </Button>
           {canEdit && !mostrarDeBaja && (
             <Button onClick={() => setModalOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Agregar Toro
+              Agregar Animal
             </Button>
           )}
         </div>
       </div>
 
-      <DataTable data={torosMostrados} columns={columns} filterPlaceholder="  Buscar toro..." />
+      <div className="flex gap-1.5">
+        {SEXO_FILTROS.map(({ value, label }) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setSexoFiltro(value)}
+            className={cn(
+              "px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors",
+              sexoFiltro === value
+                ? "bg-gray-900 text-white border-gray-900"
+                : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <DataTable data={animalesMostrados} columns={columns} filterPlaceholder="  Buscar animal..." />
 
       {canEdit && (
-        <EntityModal open={modalOpen} onClose={() => setModalOpen(false)} title="Nuevo toro">
-          <ToroForm vacas={vacas} toros={torosDeAlta} onSuccess={() => setModalOpen(false)} />
+        <EntityModal open={modalOpen} onClose={() => setModalOpen(false)} title="Nuevo animal">
+          <AnimalForm
+            animales={animalesDeAlta}
+            pajillasPorToro={pajillasPorToro}
+            onSuccess={() => setModalOpen(false)}
+          />
         </EntityModal>
       )}
     </div>

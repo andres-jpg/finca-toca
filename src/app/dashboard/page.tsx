@@ -96,7 +96,7 @@ export default async function DashboardPage({
       .from("ingresos")
       .select("fecha, valor, source, subconceptos_ingreso(nombre, conceptos_ingreso(nombre))")
       .order("fecha", { ascending: true }),
-    supabase.from("vacas").select("estado").eq("alta", true),
+    supabase.from("animales").select("estado").eq("sexo", "hembra").eq("alta", true),
     supabase
       .from("extracciones_leche")
       .select("fecha, litros, vacas_en_produccion")
