@@ -96,7 +96,7 @@ export async function createExtraccion(formData: {
     .from("animales")
     .select("id")
     .eq("sexo", "hembra")
-    .eq("estado", "produccion")
+    .eq("estado_productivo", "produccion")
     .eq("alta", true);
 
   const { error } = await supabase.from("extracciones_leche").insert({
@@ -135,7 +135,7 @@ export async function updateExtraccion(
     .from("animales")
     .select("id")
     .eq("sexo", "hembra")
-    .eq("estado", "produccion")
+    .eq("estado_productivo", "produccion")
     .eq("alta", true);
 
   const { error } = await supabase

@@ -1,37 +1,43 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, ArrowUpCircle, Eye } from "lucide-react";
+import { Plus, Pencil, Trash2, ArrowUpCircle, Eye, RefreshCw } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/shared/data-table";
 import { EntityModal } from "@/components/shared/entity-modal";
 import { DeleteConfirmationDialog } from "@/components/shared/delete-confirmation-dialog";
 import { AnimalForm } from "@/features/animales/components/animal-form";
-import { venderAnimal } from "@/features/animales/actions/animales.actions";
+import {
+  recalcularEstadosPorEdad,
+  venderAnimal,
+} from "@/features/animales/actions/animales.actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  ESTADOS_PRODUCTIVOS,
+  ESTADOS_REPRODUCTIVOS,
+  ESTADO_PRODUCTIVO_COLORS,
+  ESTADO_PRODUCTIVO_LABELS,
+  ESTADO_REPRODUCTIVO_COLORS,
+  ESTADO_REPRODUCTIVO_LABELS,
+} from "@/lib/animales/estados";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import type { Animal, AnimalSexo, PajillaPorToro } from "@/types";
-
-const ESTADO_LABELS: Record<string, string> = {
-  produccion: "Producción",
-  secado: "Secado",
-  pre_jardin: "Pre-jardín",
-  jardin: "Jardín",
-  transicion: "Transición",
-  reproductor: "Reproductor",
-};
-
-const ESTADO_COLORS: Record<string, string> = {
-  produccion: "bg-green-100 text-green-700 hover:bg-green-100",
-  secado: "bg-yellow-100 text-yellow-700 hover:bg-yellow-100",
-  pre_jardin: "bg-blue-100 text-blue-700 hover:bg-blue-100",
-  jardin: "bg-purple-100 text-purple-700 hover:bg-purple-100",
-  transicion: "bg-orange-100 text-orange-700 hover:bg-orange-100",
-  reproductor: "bg-green-100 text-green-700 hover:bg-green-100",
-};
+import type {
+  Animal,
+  AnimalSexo,
+  EstadoProductivo,
+  EstadoReproductivo,
+  PajillaPorToro,
+} from "@/types";
 
 const ORIGEN_LABELS: Record<string, string> = {
   finca: "Finca",
@@ -43,6 +49,8 @@ const SEXO_FILTROS: { value: "todos" | AnimalSexo; label: string }[] = [
   { value: "hembra", label: "Hembras" },
   { value: "macho", label: "Machos" },
 ];
+
+const TODOS = "todos";
 
 function RowActions({
   animal,
@@ -128,21 +136,81 @@ interface AnimalesTableProps {
   animales: Animal[];
   pajillasPorToro: PajillaPorToro[];
   canEdit: boolean;
+  /** Filtros iniciales desde los enlaces del dashboard (?productivo= / ?reproductivo=). */
+  filtroProductivoInicial?: string;
+  filtroReproductivoInicial?: string;
 }
 
-export function AnimalesTable({ animales, pajillasPorToro, canEdit }: AnimalesTableProps) {
+export function AnimalesTable({
+  animales,
+  pajillasPorToro,
+  canEdit,
+  filtroProductivoInicial = TODOS,
+  filtroReproductivoInicial = TODOS,
+}: AnimalesTableProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [mostrarDeBaja, setMostrarDeBaja] = useState(false);
   const [sexoFiltro, setSexoFiltro] = useState<"todos" | AnimalSexo>("todos");
+  const [productivoFiltro, setProductivoFiltro] = useState<string>(filtroProductivoInicial);
+  const [reproductivoFiltro, setReproductivoFiltro] = useState<string>(
+    filtroReproductivoInicial
+  );
+
+  const router = useRouter();
+  const [recalculando, startRecalculo] = useTransition();
 
   const animalesDeAlta = useMemo(() => animales.filter((a) => a.alta), [animales]);
   const animalesDeBaja = useMemo(() => animales.filter((a) => !a.alta), [animales]);
   const animalesBase = mostrarDeBaja ? animalesDeBaja : animalesDeAlta;
+
   const animalesMostrados = useMemo(
     () =>
-      sexoFiltro === "todos" ? animalesBase : animalesBase.filter((a) => a.sexo === sexoFiltro),
-    [animalesBase, sexoFiltro]
+      animalesBase.filter(
+        (a) =>
+          (sexoFiltro === TODOS || a.sexo === sexoFiltro) &&
+          (productivoFiltro === TODOS || a.estado_productivo === productivoFiltro) &&
+          (reproductivoFiltro === TODOS || a.estado_reproductivo === reproductivoFiltro)
+      ),
+    [animalesBase, sexoFiltro, productivoFiltro, reproductivoFiltro]
   );
+
+  // Los contadores de cada opción se calculan sobre el resto de filtros ya aplicados,
+  // para que no aparezcan opciones con "(0)" que en realidad sí tienen animales.
+  const contarProductivo = (estado: EstadoProductivo) =>
+    animalesBase.filter(
+      (a) =>
+        a.estado_productivo === estado &&
+        (sexoFiltro === TODOS || a.sexo === sexoFiltro) &&
+        (reproductivoFiltro === TODOS || a.estado_reproductivo === reproductivoFiltro)
+    ).length;
+
+  const contarReproductivo = (estado: EstadoReproductivo) =>
+    animalesBase.filter(
+      (a) =>
+        a.estado_reproductivo === estado &&
+        (sexoFiltro === TODOS || a.sexo === sexoFiltro) &&
+        (productivoFiltro === TODOS || a.estado_productivo === productivoFiltro)
+    ).length;
+
+  const hayFiltroEstado = productivoFiltro !== TODOS || reproductivoFiltro !== TODOS;
+
+  const handleRecalcular = () => {
+    startRecalculo(async () => {
+      try {
+        const cambios = await recalcularEstadosPorEdad();
+        toast.success(
+          cambios === 0
+            ? "Todos los estados por edad ya estaban al día"
+            : `${cambios} animal(es) avanzaron de estado`
+        );
+        router.refresh();
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "No se pudieron recalcular los estados"
+        );
+      }
+    });
+  };
 
   const columns: ColumnDef<Animal>[] = useMemo(
     () => [
@@ -170,12 +238,29 @@ export function AnimalesTable({ animales, pajillasPorToro, canEdit }: AnimalesTa
         },
       },
       {
-        accessorKey: "estado",
-        header: "Estado",
+        accessorKey: "estado_productivo",
+        header: "Productivo",
         cell: ({ getValue }) => {
-          const val = getValue<string | null>();
+          const val = getValue<EstadoProductivo | null>();
           if (!val) return <span className="text-gray-400">—</span>;
-          return <Badge className={ESTADO_COLORS[val] ?? ""}>{ESTADO_LABELS[val] ?? val}</Badge>;
+          return (
+            <Badge className={ESTADO_PRODUCTIVO_COLORS[val]}>
+              {ESTADO_PRODUCTIVO_LABELS[val]}
+            </Badge>
+          );
+        },
+      },
+      {
+        accessorKey: "estado_reproductivo",
+        header: "Reproductivo",
+        cell: ({ getValue }) => {
+          const val = getValue<EstadoReproductivo | null>();
+          if (!val) return <span className="text-gray-400">—</span>;
+          return (
+            <Badge className={ESTADO_REPRODUCTIVO_COLORS[val]}>
+              {ESTADO_REPRODUCTIVO_LABELS[val]}
+            </Badge>
+          );
         },
       },
       {
@@ -240,6 +325,12 @@ export function AnimalesTable({ animales, pajillasPorToro, canEdit }: AnimalesTa
               </span>
             )}
           </Button>
+          {canEdit && (
+            <Button variant="outline" onClick={handleRecalcular} disabled={recalculando}>
+              <RefreshCw className={cn("h-4 w-4 mr-2", recalculando && "animate-spin")} />
+              Recalcular estados
+            </Button>
+          )}
           {canEdit && !mostrarDeBaja && (
             <Button onClick={() => setModalOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
@@ -249,22 +340,65 @@ export function AnimalesTable({ animales, pajillasPorToro, canEdit }: AnimalesTa
         </div>
       </div>
 
-      <div className="flex gap-1.5">
-        {SEXO_FILTROS.map(({ value, label }) => (
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex gap-1.5">
+          {SEXO_FILTROS.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setSexoFiltro(value)}
+              className={cn(
+                "px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors",
+                sexoFiltro === value
+                  ? "bg-gray-900 text-white border-gray-900"
+                  : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <Select value={productivoFiltro} onValueChange={setProductivoFiltro}>
+          <SelectTrigger className="w-[190px]">
+            <SelectValue placeholder="Estado productivo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={TODOS}>Todo estado productivo</SelectItem>
+            {ESTADOS_PRODUCTIVOS.map((estado) => (
+              <SelectItem key={estado} value={estado}>
+                {ESTADO_PRODUCTIVO_LABELS[estado]} ({contarProductivo(estado)})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={reproductivoFiltro} onValueChange={setReproductivoFiltro}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Estado reproductivo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={TODOS}>Todo estado reproductivo</SelectItem>
+            {ESTADOS_REPRODUCTIVOS.map((estado) => (
+              <SelectItem key={estado} value={estado}>
+                {ESTADO_REPRODUCTIVO_LABELS[estado]} ({contarReproductivo(estado)})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {hayFiltroEstado && (
           <button
-            key={value}
             type="button"
-            onClick={() => setSexoFiltro(value)}
-            className={cn(
-              "px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors",
-              sexoFiltro === value
-                ? "bg-gray-900 text-white border-gray-900"
-                : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
-            )}
+            onClick={() => {
+              setProductivoFiltro(TODOS);
+              setReproductivoFiltro(TODOS);
+            }}
+            className="text-sm text-gray-500 hover:text-gray-800 underline underline-offset-2"
           >
-            {label}
+            Limpiar
           </button>
-        ))}
+        )}
       </div>
 
       <DataTable data={animalesMostrados} columns={columns} filterPlaceholder="  Buscar animal..." />

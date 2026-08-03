@@ -1,7 +1,5 @@
 import { z } from "zod";
-
-const ESTADOS_HEMBRA = ["produccion", "secado", "pre_jardin", "jardin", "transicion"] as const;
-const ESTADOS_MACHO = ["jardin", "reproductor"] as const;
+import { ESTADOS_PRODUCTIVOS_POR_SEXO, ESTADOS_REPRODUCTIVOS } from "@/lib/animales/estados";
 
 export const animalSchema = z
   .object({
@@ -18,7 +16,8 @@ export const animalSchema = z
       message: "Selecciona la raza del animal",
     }),
     origen: z.enum(["finca", "externa"]),
-    estado: z.string().optional().nullable(),
+    estado_productivo: z.string().optional().nullable(),
+    estado_reproductivo: z.string().optional().nullable(),
     fecha_compra: z.date().optional().nullable(),
     fecha_nacimiento: z.date().optional().nullable(),
     numero_registro: z.string().optional(),
@@ -26,24 +25,40 @@ export const animalSchema = z
     padre_id: z.string().uuid().optional().nullable(),
   })
   .superRefine((data, ctx) => {
-    const estadosValidos: readonly string[] =
-      data.sexo === "hembra" ? ESTADOS_HEMBRA : ESTADOS_MACHO;
+    const productivosValidos: readonly string[] = ESTADOS_PRODUCTIVOS_POR_SEXO[data.sexo];
 
-    if (data.sexo === "hembra" && !data.estado) {
+    if (data.sexo === "hembra" && !data.estado_productivo) {
       ctx.addIssue({
         code: "custom",
-        path: ["estado"],
-        message: "El estado es obligatorio",
+        path: ["estado_productivo"],
+        message: "El estado productivo es obligatorio",
       });
-      return;
+    } else if (
+      data.estado_productivo &&
+      !productivosValidos.includes(data.estado_productivo)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["estado_productivo"],
+        message: "Estado productivo no válido para el sexo seleccionado",
+      });
     }
 
-    if (data.estado && !estadosValidos.includes(data.estado)) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["estado"],
-        message: "Estado no válido para el sexo seleccionado",
-      });
+    // El ciclo reproductivo solo aplica a hembras; en machos el campo ni se muestra.
+    if (data.estado_reproductivo) {
+      if (data.sexo === "macho") {
+        ctx.addIssue({
+          code: "custom",
+          path: ["estado_reproductivo"],
+          message: "El estado reproductivo solo aplica a hembras",
+        });
+      } else if (!(ESTADOS_REPRODUCTIVOS as string[]).includes(data.estado_reproductivo)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["estado_reproductivo"],
+          message: "Estado reproductivo no válido",
+        });
+      }
     }
   });
 

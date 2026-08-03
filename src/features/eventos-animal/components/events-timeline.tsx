@@ -12,25 +12,44 @@ import {
   CheckCircle2,
   Baby,
   FileText,
+  Milk,
+  Scissors,
+  Beef,
   Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { EventoAnimal, TipoEvento } from "@/types";
+import type { EventoAnimal, ResultadoPalpacion, TipoEvento } from "@/types";
 
-const TIPO_CONFIG: Record<
-  TipoEvento,
-  { label: string; icon: React.ElementType; color: string; bg: string }
-> = {
+type TipoConfig = { label: string; icon: React.ElementType; color: string; bg: string };
+
+const TIPO_CONFIG: Record<TipoEvento, TipoConfig> = {
   vacunacion:          { label: "Vacunación",           icon: Syringe,       color: "text-blue-600",   bg: "bg-blue-50 border-blue-200" },
   vitaminacion:        { label: "Vitaminación",         icon: Pill,          color: "text-teal-600",   bg: "bg-teal-50 border-teal-200" },
   medicamento:         { label: "Medicamento",          icon: Pill,          color: "text-indigo-600", bg: "bg-indigo-50 border-indigo-200" },
   enfermedad:          { label: "Enfermedad",           icon: AlertCircle,   color: "text-red-600",    bg: "bg-red-50 border-red-200" },
   celo:                { label: "Celo",                 icon: Flame,         color: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
   inseminacion:        { label: "Inseminación",         icon: FlaskConical,  color: "text-pink-600",   bg: "bg-pink-50 border-pink-200" },
+  monta:               { label: "Monta",                icon: Beef,          color: "text-fuchsia-600",bg: "bg-fuchsia-50 border-fuchsia-200" },
   palpacion:           { label: "Palpación",            icon: Stethoscope,   color: "text-purple-600", bg: "bg-purple-50 border-purple-200" },
   confirmacion_prenez: { label: "Confirmación preñez",  icon: CheckCircle2,  color: "text-green-600",  bg: "bg-green-50 border-green-200" },
   parto:               { label: "Parto",                icon: Baby,          color: "text-rose-600",   bg: "bg-rose-50 border-rose-200" },
+  secado:              { label: "Secado",               icon: Milk,          color: "text-amber-600",  bg: "bg-amber-50 border-amber-200" },
+  topizado:            { label: "Topizado",             icon: Scissors,      color: "text-violet-600", bg: "bg-violet-50 border-violet-200" },
   observacion:         { label: "Observación",          icon: FileText,      color: "text-gray-600",   bg: "bg-gray-50 border-gray-200" },
+};
+
+/** Fallback: un tipo desconocido en BD no debe tumbar la ficha entera. */
+const TIPO_FALLBACK: TipoConfig = {
+  label: "Evento",
+  icon: FileText,
+  color: "text-gray-600",
+  bg: "bg-gray-50 border-gray-200",
+};
+
+const RESULTADO_LABELS: Record<ResultadoPalpacion, string> = {
+  cargada: "Cargada",
+  rechequeo: "Rechequeo",
+  vacia: "Vacía",
 };
 
 interface EventsTimelineProps {
@@ -51,7 +70,7 @@ export function EventsTimeline({ eventos, canEdit, onEdit }: EventsTimelineProps
   return (
     <div className="space-y-3">
       {eventos.map((evento) => {
-        const config = TIPO_CONFIG[evento.tipo_evento];
+        const config = TIPO_CONFIG[evento.tipo_evento] ?? TIPO_FALLBACK;
         const Icon = config.icon;
         return (
           <div
@@ -69,6 +88,11 @@ export function EventsTimeline({ eventos, canEdit, onEdit }: EventsTimelineProps
                 <span className="text-xs text-gray-500">
                   {format(parseISO(evento.fecha), "dd/MM/yyyy", { locale: es })}
                 </span>
+                {evento.resultado && (
+                  <span className="text-xs font-medium rounded-full border border-current/20 px-2 py-0.5 bg-white/60 text-gray-700">
+                    {RESULTADO_LABELS[evento.resultado] ?? evento.resultado}
+                  </span>
+                )}
               </div>
               {evento.descripcion && (
                 <p className="mt-1 text-sm text-gray-700">{evento.descripcion}</p>

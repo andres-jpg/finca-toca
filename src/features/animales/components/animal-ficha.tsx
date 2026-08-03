@@ -13,25 +13,20 @@ import { AnimalGenealogy } from "@/features/animales/components/animal-genealogy
 import { AnimalOffspring } from "@/features/animales/components/animal-offspring";
 import { EventsTimeline } from "@/features/eventos-animal/components/events-timeline";
 import { EventForm } from "@/features/eventos-animal/components/event-form";
-import type { AnimalDetalle, EventoAnimal, Animal, PajillaPorToro } from "@/types";
-
-const ESTADO_LABELS: Record<string, string> = {
-  produccion: "Producción",
-  secado: "Secado",
-  pre_jardin: "Pre-jardín",
-  jardin: "Jardín",
-  transicion: "Transición",
-  reproductor: "Reproductor",
-};
-
-const ESTADO_COLORS: Record<string, string> = {
-  produccion: "bg-green-100 text-green-700",
-  secado: "bg-yellow-100 text-yellow-700",
-  pre_jardin: "bg-blue-100 text-blue-700",
-  jardin: "bg-purple-100 text-purple-700",
-  transicion: "bg-orange-100 text-orange-700",
-  reproductor: "bg-green-100 text-green-700",
-};
+import { AlertasAnimal } from "@/features/alertas/components/alertas-animal";
+import {
+  ESTADO_PRODUCTIVO_COLORS,
+  ESTADO_PRODUCTIVO_LABELS,
+  ESTADO_REPRODUCTIVO_COLORS,
+  ESTADO_REPRODUCTIVO_LABELS,
+} from "@/lib/animales/estados";
+import type {
+  Alerta,
+  AnimalDetalle,
+  EventoAnimal,
+  Animal,
+  PajillaPorToro,
+} from "@/types";
 
 const ORIGEN_LABELS: Record<string, string> = {
   finca: "Finca",
@@ -59,15 +54,26 @@ interface AnimalFichaProps {
   eventos: EventoAnimal[];
   animales: Animal[];
   pajillasPorToro: PajillaPorToro[];
+  alertas: Alerta[];
+  faltaServicio: boolean;
   canEdit: boolean;
 }
 
-export function AnimalFicha({ animal, eventos, animales, pajillasPorToro, canEdit }: AnimalFichaProps) {
+export function AnimalFicha({
+  animal,
+  eventos,
+  animales,
+  pajillasPorToro,
+  alertas,
+  faltaServicio,
+  canEdit,
+}: AnimalFichaProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
   const [editEvento, setEditEvento] = useState<EventoAnimal | null>(null);
 
   const animalTipo = animal.sexo === "hembra" ? "vaca" : "toro";
+  const toros = animales.filter((a) => a.sexo === "macho" && a.id !== animal.id);
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -101,9 +107,14 @@ export function AnimalFicha({ animal, eventos, animales, pajillasPorToro, canEdi
                 {RAZA_LABELS[animal.raza] ?? animal.raza}
               </Badge>
             )}
-            {animal.estado && (
-              <Badge className={`${ESTADO_COLORS[animal.estado] ?? ""} hover:${ESTADO_COLORS[animal.estado] ?? ""}`}>
-                {ESTADO_LABELS[animal.estado] ?? animal.estado}
+            {animal.estado_productivo && (
+              <Badge className={ESTADO_PRODUCTIVO_COLORS[animal.estado_productivo]}>
+                {ESTADO_PRODUCTIVO_LABELS[animal.estado_productivo]}
+              </Badge>
+            )}
+            {animal.estado_reproductivo && (
+              <Badge className={ESTADO_REPRODUCTIVO_COLORS[animal.estado_reproductivo]}>
+                {ESTADO_REPRODUCTIVO_LABELS[animal.estado_reproductivo]}
               </Badge>
             )}
             <Badge variant="outline" className={animal.alta ? "text-green-600 border-green-300" : "text-gray-400 border-gray-300"}>
@@ -162,6 +173,18 @@ export function AnimalFicha({ animal, eventos, animales, pajillasPorToro, canEdi
         <AnimalOffspring crias={animal.crias} />
       </section>
 
+      {/* Alertas — derivadas de los eventos, sin horizonte para este animal */}
+      <section>
+        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
+          Alertas{alertas.length > 0 && !faltaServicio ? ` (${alertas.length})` : ""}
+        </h2>
+        <AlertasAnimal
+          alertas={alertas}
+          faltaServicio={faltaServicio}
+          canEdit={canEdit}
+        />
+      </section>
+
       {/* Historial de eventos */}
       <section>
         <div className="flex items-center justify-between mb-3">
@@ -191,7 +214,13 @@ export function AnimalFicha({ animal, eventos, animales, pajillasPorToro, canEdi
           </EntityModal>
 
           <EntityModal open={eventOpen} onClose={() => setEventOpen(false)} title="Registrar evento">
-            <EventForm animalId={animal.id} animalTipo={animalTipo} onSuccess={() => setEventOpen(false)} />
+            <EventForm
+              animalId={animal.id}
+              animalTipo={animalTipo}
+              toros={toros}
+              pajillasPorToro={pajillasPorToro}
+              onSuccess={() => setEventOpen(false)}
+            />
           </EntityModal>
 
           <EntityModal open={!!editEvento} onClose={() => setEditEvento(null)} title="Editar evento">
@@ -200,6 +229,8 @@ export function AnimalFicha({ animal, eventos, animales, pajillasPorToro, canEdi
                 animalId={animal.id}
                 animalTipo={animalTipo}
                 evento={editEvento}
+                toros={toros}
+                pajillasPorToro={pajillasPorToro}
                 onSuccess={() => setEditEvento(null)}
               />
             )}

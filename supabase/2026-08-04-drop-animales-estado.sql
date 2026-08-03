@@ -1,0 +1,79 @@
+-- 2026-08-04 — Eliminación de `animales.estado` (columna legacy del refactor vacas+toros → animales).
+--
+-- Contexto: el estado único (`jardin|pre_jardin|transicion|produccion|secado`) quedó sustituido
+-- por el doble eje `estado_productivo` + `estado_reproductivo`. Ninguna parte del código leía ni
+-- escribía `estado` desde el refactor, y no había FK, vista, índice ni política RLS que dependiera
+-- de ella. Las 57 filas con valor ya tenían su `estado_productivo` equivalente.
+--
+-- Los valores originales siguen además en `vacas_legacy.estado` (56) y `toros_legacy.estado` (1),
+-- que se conservan como respaldo del refactor. El bloque de rollback de abajo es redundante con eso,
+-- pero evita tener que recomponer el mapeo por `identificador` si alguna vez hace falta.
+
+-- === APLICADO ===
+ALTER TABLE public.animales DROP COLUMN estado;
+
+-- === ROLLBACK (no ejecutar salvo que se necesite restaurar) ===
+-- ALTER TABLE public.animales ADD COLUMN estado text;
+--
+-- UPDATE public.animales a
+-- SET estado = v.estado
+-- FROM (VALUES
+--   ('00bc4777-76d1-43af-baf6-5b0eafa7d994'::uuid, 'pre_jardin'),
+--   ('4c6f7396-3ca4-4c66-8a1f-b70f47b3a15d'::uuid, 'produccion'),
+--   ('bf9fefb9-889f-4d00-866d-9e8b56ba3439'::uuid, 'produccion'),
+--   ('c5d01d5a-abd5-45d9-a900-753c80bfc2ad'::uuid, 'produccion'),
+--   ('e847f7ce-2cdb-4c59-a67e-aed984f944e1'::uuid, 'produccion'),
+--   ('b3614ea6-d061-4e4c-82fb-3db4761d71f2'::uuid, 'produccion'),
+--   ('793e769b-e8d9-4d82-b635-c40f0b5777cc'::uuid, 'produccion'),
+--   ('befdf3b0-fd54-471f-aeac-507b46850c36'::uuid, 'pre_jardin'),
+--   ('c5643e2b-835f-41db-8907-0d262fc6a755'::uuid, 'produccion'),
+--   ('e0aa3301-df74-4d82-b9a2-fc0d7c5759f8'::uuid, 'produccion'),
+--   ('f33395bc-fa24-41a0-a2e9-829513b769e9'::uuid, 'produccion'),
+--   ('4d502f50-cd22-4166-bf0d-4740b3bfd807'::uuid, 'produccion'),
+--   ('d0ffa227-fac0-46bf-b475-2a43378170aa'::uuid, 'produccion'),
+--   ('02e93574-6718-4a84-b24a-3e39317e9605'::uuid, 'produccion'),
+--   ('f8983144-0032-4d2e-b244-f20b7ff46b27'::uuid, 'produccion'),
+--   ('5a144717-8447-4102-827b-a68b34e9543e'::uuid, 'produccion'),
+--   ('c138afe9-539a-4301-a799-aa6115fc68ac'::uuid, 'transicion'),
+--   ('25580453-2567-4fd6-bc34-79b4f74ddecd'::uuid, 'jardin'),
+--   ('7e046607-ce0a-414a-acd6-1e0bb56f80ce'::uuid, 'jardin'),
+--   ('caa04574-b661-4c57-99ed-756f31cdceaa'::uuid, 'produccion'),
+--   ('137cb849-a647-4f7b-a652-ea490d43efdf'::uuid, 'transicion'),
+--   ('6abbcf3e-c3dd-4fdc-ab96-70c36c82cdb5'::uuid, 'jardin'),
+--   ('35d19929-3888-4ec3-9c3c-8f389d890e68'::uuid, 'transicion'),
+--   ('ee34a0aa-ce46-492f-a12e-808b30be9af1'::uuid, 'transicion'),
+--   ('87977678-63ce-46d1-b3cc-f48541d805d8'::uuid, 'transicion'),
+--   ('20fb0393-01f7-44cc-a119-ef614016de42'::uuid, 'jardin'),
+--   ('802ba0b4-436b-41c0-8150-9518f84c7d79'::uuid, 'jardin'),
+--   ('5ceabcd7-7c09-46c2-a02b-0cdb85e2c4fe'::uuid, 'secado'),
+--   ('96442986-fc23-4734-9891-53f02d945ba7'::uuid, 'jardin'),
+--   ('5d59b4c1-528f-4455-930a-c9f9f17b375a'::uuid, 'transicion'),
+--   ('5a835372-91a0-4151-9124-567139d41c61'::uuid, 'transicion'),
+--   ('1476d390-152a-4c1d-82cc-fb0d99ca390f'::uuid, 'transicion'),
+--   ('82620f5d-58a3-421d-b970-62da62f68a6c'::uuid, 'jardin'),
+--   ('7e12ca6e-62db-4934-8ee6-dd931b2f7dc9'::uuid, 'jardin'),
+--   ('5ff5db45-9443-427e-96d2-9d6f47bd7eef'::uuid, 'jardin'),
+--   ('355e8ab3-45e8-4976-b2b1-3111aa2e2d31'::uuid, 'jardin'),
+--   ('3f2c7f7b-084b-4550-b7be-2c4c58b78874'::uuid, 'produccion'),
+--   ('f958f085-5e00-4036-b29d-4f4190527160'::uuid, 'produccion'),
+--   ('2b16339c-7cb2-4827-822f-cf91b4ddad30'::uuid, 'jardin'),
+--   ('bcb7cb15-66b5-41ad-83dc-b898491a6047'::uuid, 'secado'),
+--   ('9aa2e972-a8b1-4e6b-bf4f-6c0029f5c20e'::uuid, 'produccion'),
+--   ('acc651f4-0aad-41a9-93de-e43db445d6d9'::uuid, 'produccion'),
+--   ('0f3f9a39-5d68-4ea0-8a05-05255f6fc792'::uuid, 'produccion'),
+--   ('03c8bef9-81f0-488b-b17d-ed44b81edcdb'::uuid, 'produccion'),
+--   ('7ea3dfc8-6b9d-4960-b5ad-a1b7dbde7f08'::uuid, 'produccion'),
+--   ('3792b036-dd2f-4223-8fca-a983c9c53c15'::uuid, 'produccion'),
+--   ('f3368367-8aa0-4fb1-9008-43d4513cf46f'::uuid, 'pre_jardin'),
+--   ('d612db17-fd1b-4324-80d9-dbf1cb087646'::uuid, 'pre_jardin'),
+--   ('0b9a7788-6d4b-4662-9434-b88d82951212'::uuid, 'produccion'),
+--   ('96dac425-4711-4825-aea6-400a1b992001'::uuid, 'jardin'),
+--   ('1be80a8a-f35d-46cd-a77d-276e5fbd9ae4'::uuid, 'jardin'),
+--   ('b1ba2b6d-b757-473c-bfdd-363fc7e82f1f'::uuid, 'secado'),
+--   ('e19ab417-791f-45f5-9839-349d3721d46c'::uuid, 'produccion'),
+--   ('6d67135f-4ba4-44e2-8981-1a9fbb0848f4'::uuid, 'produccion'),
+--   ('a6c869a2-5302-4303-a29f-773d9d6fc5f9'::uuid, 'produccion'),
+--   ('a2236d4e-669e-48fb-8a70-18f3600df20b'::uuid, 'secado'),
+--   ('deca263d-20e0-4a9f-9897-4595201b6977'::uuid, 'transicion')
+-- ) AS v(id, estado)
+-- WHERE a.id = v.id;

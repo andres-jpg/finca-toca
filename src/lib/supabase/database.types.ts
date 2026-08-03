@@ -18,7 +18,12 @@ export type Database = {
         Row: {
           alta: boolean
           created_at: string | null
-          estado: string | null
+          estado_productivo:
+            | Database["public"]["Enums"]["estado_productivo"]
+            | null
+          estado_reproductivo:
+            | Database["public"]["Enums"]["estado_reproductivo"]
+            | null
           fecha_compra: string | null
           fecha_nacimiento: string | null
           id: string
@@ -35,7 +40,12 @@ export type Database = {
         Insert: {
           alta?: boolean
           created_at?: string | null
-          estado?: string | null
+          estado_productivo?:
+            | Database["public"]["Enums"]["estado_productivo"]
+            | null
+          estado_reproductivo?:
+            | Database["public"]["Enums"]["estado_reproductivo"]
+            | null
           fecha_compra?: string | null
           fecha_nacimiento?: string | null
           id?: string
@@ -52,7 +62,12 @@ export type Database = {
         Update: {
           alta?: boolean
           created_at?: string | null
-          estado?: string | null
+          estado_productivo?:
+            | Database["public"]["Enums"]["estado_productivo"]
+            | null
+          estado_reproductivo?:
+            | Database["public"]["Enums"]["estado_reproductivo"]
+            | null
           fecha_compra?: string | null
           fecha_nacimiento?: string | null
           id?: string
@@ -121,8 +136,11 @@ export type Database = {
           descripcion: string | null
           fecha: string
           id: string
+          pajilla_toro_ref_id: string | null
           responsable: string | null
+          resultado: string | null
           tipo_evento: string
+          toro_id: string | null
         }
         Insert: {
           animal_id: string
@@ -131,8 +149,11 @@ export type Database = {
           descripcion?: string | null
           fecha: string
           id?: string
+          pajilla_toro_ref_id?: string | null
           responsable?: string | null
+          resultado?: string | null
           tipo_evento: string
+          toro_id?: string | null
         }
         Update: {
           animal_id?: string
@@ -141,10 +162,28 @@ export type Database = {
           descripcion?: string | null
           fecha?: string
           id?: string
+          pajilla_toro_ref_id?: string | null
           responsable?: string | null
+          resultado?: string | null
           tipo_evento?: string
+          toro_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "eventos_animal_animal_id_fkey"
+            columns: ["animal_id"]
+            isOneToOne: false
+            referencedRelation: "animales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "eventos_animal_toro_id_fkey"
+            columns: ["toro_id"]
+            isOneToOne: false
+            referencedRelation: "animales"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       extracciones_leche: {
         Row: {
@@ -809,6 +848,19 @@ export type Database = {
     Enums: {
       animal_raza: "holstein" | "jersey" | "jerholm" | "normando"
       animal_sexo: "hembra" | "macho"
+      estado_productivo:
+        | "leche"
+        | "levante_1"
+        | "levante_2"
+        | "produccion"
+        | "secado"
+        | "reproductor"
+      estado_reproductivo:
+        | "vacia"
+        | "pre_servicio"
+        | "por_confirmar"
+        | "rechequeo"
+        | "cargada"
       rol:
         | "admin"
         | "user"
@@ -951,6 +1003,21 @@ export const Constants = {
     Enums: {
       animal_raza: ["holstein", "jersey", "jerholm", "normando"],
       animal_sexo: ["hembra", "macho"],
+      estado_productivo: [
+        "leche",
+        "levante_1",
+        "levante_2",
+        "produccion",
+        "secado",
+        "reproductor",
+      ],
+      estado_reproductivo: [
+        "vacia",
+        "pre_servicio",
+        "por_confirmar",
+        "rechequeo",
+        "cargada",
+      ],
       rol: ["admin", "user", "cooperativa_admin", "cooperativa_user", "viewer"],
       vaca_estado: [
         "produccion",

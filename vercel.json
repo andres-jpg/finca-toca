@@ -1,3 +1,9 @@
 {
-  "ignoreCommand": "[ \"$VERCEL_GIT_COMMIT_REF\" != \"main\" ] && [ \"$VERCEL_GIT_COMMIT_REF\" != \"develop\" ]"
+  "ignoreCommand": "[ \"$VERCEL_GIT_COMMIT_REF\" != \"main\" ] && [ \"$VERCEL_GIT_COMMIT_REF\" != \"develop\" ]",
+  "crons": [
+    {
+      "path": "/api/cron/animales-estados",
+      "schedule": "0 11 * * *"
+    }
+  ]
 }

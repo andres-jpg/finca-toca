@@ -5,11 +5,18 @@ import { Menu, LogOut } from "lucide-react";
 
 interface HeaderProps {
   email: string;
+  /** Campana de alertas ya renderizada en el servidor; ausente para roles de cooperativa. */
+  alertasSlot?: React.ReactNode;
   onOpenMobileMenu?: () => void;
   onToggleDesktopSidebar?: () => void;
 }
 
-export function Header({ email, onOpenMobileMenu, onToggleDesktopSidebar }: HeaderProps) {
+export function Header({
+  email,
+  alertasSlot,
+  onOpenMobileMenu,
+  onToggleDesktopSidebar,
+}: HeaderProps) {
 
   return (
     <header className="h-16 flex items-center justify-between px-4 sm:px-6 bg-white border-b border-stone-200 sticky top-0 z-30 text-stone-900">
@@ -29,6 +36,13 @@ export function Header({ email, onOpenMobileMenu, onToggleDesktopSidebar }: Head
       </button>
 
       <div className="flex items-center gap-3 ml-auto">
+        {alertasSlot && (
+          <>
+            {alertasSlot}
+            <div className="h-5 w-px bg-stone-300 shrink-0 mx-1" aria-hidden />
+          </>
+        )}
+
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="min-w-0">
             <p className="text-xs font-medium text-stone-900 truncate max-w-[180px]">{email}</p>

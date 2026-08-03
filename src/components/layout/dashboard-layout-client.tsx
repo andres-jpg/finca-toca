@@ -9,12 +9,15 @@ import type { UserRole } from "@/types";
 interface DashboardLayoutClientProps {
   email: string;
   userRole: UserRole | null;
+  /** Se reenvía tal cual al Header: se renderiza en el servidor pese a este boundary. */
+  alertasSlot?: React.ReactNode;
   children: React.ReactNode;
 }
 
 export function DashboardLayoutClient({
   email,
   userRole,
+  alertasSlot,
   children,
 }: DashboardLayoutClientProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -37,6 +40,7 @@ export function DashboardLayoutClient({
       <div className="flex-1 flex flex-col min-w-0">
         <Header
           email={email}
+          alertasSlot={alertasSlot}
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
           onToggleDesktopSidebar={() => setDesktopCollapsed((prev) => !prev)}
         />
