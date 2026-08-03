@@ -28,6 +28,7 @@ Package manager is **pnpm**. There are no test commands configured.
 src/
 ├── app/                              # Next.js App Router pages
 │   ├── api/
+│   │   ├── cron/animales-estados/    # GET (Bearer CRON_SECRET) → avance diario leche→levante_1→levante_2
 │   │   ├── informes-cooperativa/     # GET → 2-sheet Excel report + payment vouchers (ExcelJS), cooperativa_admin only
 │   │   ├── itinerario-data/          # GET → conductor's assigned itinerario + today's synced data + pending pagos
 │   │   ├── recolecciones-sync/       # POST → offline conductor sync of recolecciones (Dexie → Supabase)
@@ -41,11 +42,13 @@ src/
 │   │   ├── pagos-cooperativa/        # Activar pagos por finca/período + historial (cooperativa_admin)
 │   │   ├── usuarios-cooperativa/     # User → itinerario assignment (admin only)
 │   │   ├── informes-cooperativa/     # Excel report generator
-│   │   ├── vacas/[id]/               # Vaca detail page
-│   │   ├── toros/[id]/               # Toro detail page
+│   │   ├── animales/[id]/            # Animal detail page (vacas/[id] y toros/[id] solo redirigen)
 │   │   └── ...                       # gastos, ingresos, extracciones, inventario, configuracion
 │   └── (auth)/                       # login, signup
 ├── features/                         # Feature modules — one per domain entity
+│   ├── animales/
+│   ├── eventos-animal/
+│   ├── alertas/                      # lib/calcular-alertas.ts (pura) + queries + campana/tarjeta/ficha
 │   ├── fincas-cooperativa/
 │   ├── rutas-cooperativa/
 │   ├── itinerarios/
@@ -115,17 +118,26 @@ Roles: `"admin" | "user" | "viewer" | "cooperativa_admin" | "cooperativa_user"` 
 
 **Offline sync lost-update guard** (`lib/offline/sync.ts`): `syncQueue()`/`syncPagos()` snapshot the `pending` Dexie records, await the network round-trip, then must re-check the record in IndexedDB still matches the snapshot before marking it `synced` — if the conductor edited it again while the request was in flight, blindly overwriting `syncStatus` would silently drop that newer edit (it would never be retried, since it's no longer `pending`). Any new offline-sync write path must follow this same "compare-before-commit" pattern, not just flip the status on a successful response. All sync triggers should go through `useSyncQueue()`'s `syncNow()` (the guarded entry point) rather than calling `syncQueue()`/`syncPagos()` directly, to avoid two syncs running concurrently.
 
-**Fichas de animales**: `vacas` y `toros` tienen páginas de detalle (`/dashboard/vacas/[id]`, `/dashboard/toros/[id]`) con:
+**Fichas de animales**: `vacas` y `toros` se unificaron en la tabla `animales`; la ficha vive en `/dashboard/animales/[id]` (las rutas `vacas/[id]` y `toros/[id]` solo redirigen) y contiene:
 - información básica
 - genealogía (madre/padre con enlaces cruzados)
-- crías (mezcla de vacas/toros, incluyendo estado y alta/baja)
+- crías (incluyendo estados y alta/baja)
+- alertas pendientes de ese animal
 - historial de eventos
 
-**Eventos por animal**: El módulo `features/eventos-animal` centraliza:
-- `getEventosAnimal()` y `createEventoAnimal()`
-- validación Zod de tipos de evento
-- formulario (`EventForm`) y timeline visual (`EventsTimeline`)
-- revalidación de la ruta de ficha del animal al crear eventos
+**Doble estado del animal** (`estado_productivo` + `estado_reproductivo`, enums de Postgres): sustituyen al antiguo campo único `estado`, **eliminado de `animales` el 2026-08-04** — `supabase/2026-08-04-drop-animales-estado.sql` documenta el DROP y guarda el rollback, y los valores originales siguen en `vacas_legacy.estado`/`toros_legacy.estado`. Productivo `leche → levante_1 → levante_2 → produccion ⇄ secado` (machos: `… → reproductor`); reproductivo, solo hembras, `vacia → pre_servicio → por_confirmar → cargada | rechequeo`. **`src/lib/animales/estados.ts` es la única fuente de verdad**: etiquetas, colores, hex, estados válidos por sexo, constantes de plazos (`MESES_SECADO`, `MESES_PARTO`, `DIAS_TOPIZADO`, `DIAS_CELO_POST_PARTO`, `DIAS_CICLO_CELO`), `estadoProductivoPorEdad()` y `estadoDesdeEvento()`. Antes estos mapas estaban duplicados en cuatro componentes — no los reintroduzcas localmente.
+
+**Eventos por animal**: El módulo `features/eventos-animal` centraliza `getEventosAnimal()`, `createEventoAnimal()`, `updateEventoAnimal()`, la validación Zod, el formulario (`EventForm`, con campos condicionales por tipo) y el timeline (`EventsTimeline`). Añadir un `tipo_evento` obliga a tocar 5 sitios: el CHECK de Postgres, `TipoEvento` en `types/index.ts`, `eventoSchema`, `TIPO_LABELS` en `event-form.tsx` y `TIPO_CONFIG` en `events-timeline.tsx`.
+
+Al crear/editar un evento, `aplicarTransicionEstado()` mueve el estado del animal según `estadoDesdeEvento()`. Es un modelo **delta hacia adelante**: solo escribe un eje si no existe ya un evento *posterior* que lo gobierne, de modo que registrar con retraso una inseminación antigua no revierte una vaca que ya parió, y un estado puesto a mano solo lo pisa un evento más nuevo.
+
+**Alertas** (`features/alertas`): 4 tipos — parto probable, pasar a secado, topizado y celo. **No se guardan en tabla**: `calcularAlertas()` (`lib/calcular-alertas.ts`, función pura) las deriva de `animales` + `eventos_animal` en cada lectura, y una alerta desaparece cuando existe el evento que la resuelve. Se muestran en la campana del header, una tarjeta del dashboard y la ficha del animal; no hay página `/dashboard/alertas`.
+- **Secado y parto se cuentan desde `eventos_animal.fecha` del último evento `inseminacion`/`monta`** — nunca desde la palpación, `created_at` ni la fecha del cambio de estado. Ambas solo aparecen con la vaca ya en `cargada`; si está cargada sin evento de servicio, la ficha muestra "Falta registrar la inseminación" en lugar de inventar fechas (`faltaRegistrarServicio()`).
+- `getAlertas()`/`getAlertasAnimal()` viven en `alertas.queries.ts` (módulo plano con `React.cache()`, **no** `"use server"` — `cache()` no se puede exportar desde un fichero de Server Actions); layout, dashboard y ficha comparten una única lectura por request. Solo la mutación `resolverAlerta()` está en `alertas.actions.ts`.
+
+**Avance por edad** (`lib/animales/sincronizar-estados.ts`): `leche → levante_1 → levante_2` depende solo de `fecha_nacimiento`. Lo ejecuta el cron diario `GET /api/cron/animales-estados` (Bearer `CRON_SECRET` + `createAdminClient()`, declarado en `vercel.json`) y, a mano, el botón "Recalcular estados" del listado. Es **monótono a propósito**: nunca retrocede, para no pisar una clasificación manual más avanzada que la fecha de nacimiento (hay animales con fecha aproximada). Usa `differenceInMonths` (meses cumplidos), no `differenceInCalendarMonths`, que contaría un animal nacido el 20/03 como de 5 meses ya el 01/08.
+
+El `schedule` de `vercel.json` está en **UTC**: `"0 11 * * *"` = 6:00 a.m. en Colombia (UTC-5 todo el año, sin horario de verano). Vercel Cron **solo ejecuta los jobs desde el deploy de producción** — en los previews de `develop` nunca se dispara solo, ahí únicamente funciona el botón "Recalcular estados". Vercel añade el header `Authorization: Bearer $CRON_SECRET` automáticamente si la variable existe en el proyecto; si falta, la ruta responde `500` y si no coincide, `401`.
 
 **Zod schemas**: `z.enum()` y `z.number()` en esta versión de Zod no aceptan `required_error`/`invalid_type_error`; usar `message`.
 
@@ -190,9 +202,9 @@ The cooperativa module manages a milk cooperative: farms (fincas), collection ro
 | `precios` | `id`, `created_at`, `valor`, `tipo` |
 | `conceptos_gasto` + `subconceptos_gasto` | hierarchy for gastos categories |
 | `conceptos_ingreso` + `subconceptos_ingreso` | hierarchy for ingresos categories |
-| `vacas` | `id` (UUID), `vaca_id` (**text**, alphanumeric), `nombre`, `origen` (finca\|externa), `estado` (produccion\|secado\|pre_jardin\|jardin\|transicion), `fecha_compra`, `fecha_nacimiento`, `numero_registro`, `madre_id` (FK→vacas), `padre_id` (FK→toros), `alta` |
-| `toros` | `id` (UUID), `toro_id` (int), `nombre`, `origen` (finca\|externa), `estado` (jardin\|reproductor), `fecha_compra`, `fecha_nacimiento`, `numero_registro`, `madre_id` (FK→vacas), `padre_id` (FK→toros), `alta` |
-| `eventos_animal` | `id`, `animal_id` (UUID), `animal_tipo` (vaca\|toro), `tipo_evento`, `fecha`, `descripcion`, `responsable`, `created_at` |
+| `animales` | `id` (UUID), `identificador` (text, **sin unique** — hay duplicados históricos, la unicidad por `(identificador, sexo)` se valida en código), `nombre`, `sexo` (enum `animal_sexo`), `raza` (enum `animal_raza`), `origen` (enum `vaca_origen`), `estado_productivo` (enum: leche\|levante_1\|levante_2\|produccion\|secado\|reproductor), `estado_reproductivo` (enum: vacia\|pre_servicio\|por_confirmar\|rechequeo\|cargada, solo hembras), `fecha_compra`, `fecha_nacimiento`, `numero_registro`, `madre_id`/`padre_id` (FK→animales), `padre_pajilla_nombre`, `alta` |
+| `eventos_animal` | `id`, `animal_id` (FK→animales, ON DELETE CASCADE), `animal_tipo` (vaca\|toro — vestigial, se deriva de `sexo`), `tipo_evento` (CHECK de 13 valores), `fecha`, `descripcion`, `responsable`, `resultado` (cargada\|rechequeo\|vacia, solo palpación/confirmación), `pajilla_toro_ref_id`, `toro_id` (FK→animales), `created_at` |
+| `vacas_legacy` / `toros_legacy` | Tablas previas a la unificación. **Ningún código las lee**; se conservan solo como respaldo del refactor — son el único sitio donde queda el `estado` antiguo (`jardin`\|`pre_jardin`\|`transicion`\|`produccion`\|`secado`) tras eliminarlo de `animales`. |
 | `roles` | `user_id`, `rol` (Postgres enum `rol`: `admin`\|`user`\|`viewer`\|`cooperativa_admin`\|`cooperativa_user`) |
 | `fincas_cooperativa` | `id`, `nombre`, `precio_litro`, `activa`, `metodo_pago` (conductor\|punto_venta\|gerente), `created_at` |
 | `rutas_cooperativa` | `id`, `nombre`, `created_at` |
@@ -234,11 +246,15 @@ The dashboard page (`app/dashboard/page.tsx`) accepts `searchParams` with option
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY
 NEXT_PUBLIC_SUPABASE_SCHEMA          # optional — defaults to "public", set to "preview" for preview env
+SUPABASE_SERVICE_ROLE_KEY            # server-only — createAdminClient() (cron de estados)
+CRON_SECRET                          # server-only — Bearer que valida /api/cron/animales-estados
 ```
 
 Both required vars are set in `.env.local`. The app uses the modern publishable key format (`sb_publishable_...`), not the legacy anon JWT.
 
-`public` and `preview` are two schemas in the **same** Supabase project (no project-level branching) — switching `NEXT_PUBLIC_SUPABASE_SCHEMA` just points PostgREST at the other schema. `supabase/preview-schema.sql` is a from-scratch bootstrap script for the `preview` schema; it's a useful reference for RLS policy shape but is **not** kept in lockstep with `public` (it's missing `itinerarios`/`itinerarios_fincas`/`user_itinerarios`/`pagos_finca` and the older `get_cooperativa_users()` body it defines still joins `user_rutas` instead of `user_itinerarios`) — don't treat running it as reproducing a real clone of `public`. `supabase/copy-public-to-preview.sql` copies data `public` → `preview` (truncates `preview` first) and is structurally accurate since both schemas share the same table/column layout.
+`public` and `preview` are two schemas in the **same** Supabase project (no project-level branching) — switching `NEXT_PUBLIC_SUPABASE_SCHEMA` just points PostgREST at the other schema. `supabase/preview-schema.sql` is a from-scratch bootstrap script for the `preview` schema; it's a useful reference for RLS policy shape but is **not** kept in lockstep with `public` (it's missing `itinerarios`/`itinerarios_fincas`/`user_itinerarios`/`pagos_finca` and the older `get_cooperativa_users()` body it defines still joins `user_rutas` instead of `user_itinerarios`) — don't treat running it as reproducing a real clone of `public`. `supabase/copy-public-to-preview.sql` copies data `public` → `preview` (truncates `preview` first); ya **no** es estructuralmente exacto, porque el refactor de animales solo se aplicó a `public`.
+
+⚠️ El schema `preview` sigue **anterior a la unificación de animales**: conserva `vacas` y `toros` (con el `estado` viejo) y **no tiene `animales`** — sí tiene `eventos_animal`, pero su `animal_id` apunta a las tablas viejas. Los enums (`animal_sexo`, `estado_productivo`, `estado_reproductivo`, …) solo existen en `public`. Con `NEXT_PUBLIC_SUPABASE_SCHEMA=preview` el módulo de animales/eventos/alertas no funciona; migrar `preview` está pendiente.
 
 ### Path Alias
 

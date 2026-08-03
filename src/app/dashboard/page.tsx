@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { TrendingDown, TrendingUp, Droplets, Milk } from "lucide-react";
+import { TrendingDown, TrendingUp, Droplets, Milk, HeartPulse } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import {
   ConceptosDonutChart,
@@ -7,11 +8,20 @@ import {
   ExtraccionesLineChart,
 } from "@/charts/chart-wrappers";
 import { getLitrosDiaActual } from "@/features/extracciones/actions/extracciones.actions";
-import { checkRoutePermission } from "@/lib/auth/check-permissions";
+import { getAlertas } from "@/features/alertas/actions/alertas.queries";
+import { AlertasCard } from "@/features/alertas/components/alertas-card";
+import {
+  ESTADO_PRODUCTIVO_HEX,
+  ESTADO_PRODUCTIVO_LABELS,
+  ESTADO_REPRODUCTIVO_HEX,
+  ESTADO_REPRODUCTIVO_LABELS,
+} from "@/lib/animales/estados";
+import { canWrite, checkRoutePermission } from "@/lib/auth/check-permissions";
 import { getUserRole } from "@/lib/auth/get-user-role";
 import { redirect } from "next/navigation";
 import { PiCow } from "react-icons/pi";
 import { DashboardFilter } from "@/components/dashboard/dashboard-filter";
+import type { EstadoProductivo, EstadoReproductivo } from "@/types";
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -96,7 +106,11 @@ export default async function DashboardPage({
       .from("ingresos")
       .select("fecha, valor, source, subconceptos_ingreso(nombre, conceptos_ingreso(nombre))")
       .order("fecha", { ascending: true }),
-    supabase.from("animales").select("estado").eq("sexo", "hembra").eq("alta", true),
+    supabase
+      .from("animales")
+      .select("estado_productivo, estado_reproductivo")
+      .eq("sexo", "hembra")
+      .eq("alta", true),
     supabase
       .from("extracciones_leche")
       .select("fecha, litros, vacas_en_produccion")
@@ -104,18 +118,33 @@ export default async function DashboardPage({
     getLitrosDiaActual(),
   ]);
 
+  // Comparte la lectura de animales/eventos con la campana del header vía React.cache().
+  const alertas = await getAlertas();
+
   const inRange = (fecha: string, start: string, end: string) => fecha >= start && fecha <= end;
   const q1Start = formatDate(new Date(effectiveAnio, effectiveMes - 1, 1));
   const q1End = formatDate(new Date(effectiveAnio, effectiveMes - 1, 15));
   const q2Start = formatDate(new Date(effectiveAnio, effectiveMes - 1, 16));
   const q2End = formatDate(new Date(effectiveAnio, effectiveMes, 0));
 
-  const vacasTotal = (vacasEstados ?? []).length;
-  const vacasProduccion = (vacasEstados ?? []).filter((v: any) => v.estado === "produccion").length;
-  const vacasSecado = (vacasEstados ?? []).filter((v: any) => v.estado === "secado").length;
-  const vacasTransicion = (vacasEstados ?? []).filter((v: any) => v.estado === "transicion").length;
-  const vacasPreJardin = (vacasEstados ?? []).filter((v: any) => v.estado === "pre_jardin").length;
-  const vacasJardin = (vacasEstados ?? []).filter((v: any) => v.estado === "jardin").length;
+  const hembras = (vacasEstados ?? []) as {
+    estado_productivo: EstadoProductivo | null;
+    estado_reproductivo: EstadoReproductivo | null;
+  }[];
+  const vacasTotal = hembras.length;
+  const contarProductivo = (estado: EstadoProductivo) =>
+    hembras.filter((v) => v.estado_productivo === estado).length;
+  const contarReproductivo = (estado: EstadoReproductivo) =>
+    hembras.filter((v) => v.estado_reproductivo === estado).length;
+
+  const vacasProduccion = contarProductivo("produccion");
+  const desgloseProductivo = (["produccion", "secado", "levante_2", "levante_1", "leche"] as const).map(
+    (estado) => ({ estado, total: contarProductivo(estado) })
+  );
+  const desgloseReproductivo = (
+    ["cargada", "por_confirmar", "rechequeo", "pre_servicio", "vacia"] as const
+  ).map((estado) => ({ estado, total: contarReproductivo(estado) }));
+  const sinEstadoReproductivo = hembras.filter((v) => !v.estado_reproductivo).length;
 
   // Datos para gráfico de líneas: solo fecha + valor (sin concepto), histórico completo
   const allGastos = (gastosRaw ?? []).map((g: any) => ({
@@ -338,31 +367,85 @@ export default async function DashboardPage({
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-stone-100 grid grid-cols-3 gap-x-3 gap-y-2">
-            <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "#16a34a" }} />
-              <span className="text-xs font-semibold" style={{ color: "#16a34a" }}>{vacasProduccion}</span>
-              <span className="text-xs" style={{ color: "#16a34a" }}>prod.</span>
+            {desgloseProductivo.map(({ estado, total }) => (
+              <Link
+                key={estado}
+                href={`/dashboard/animales?productivo=${estado}`}
+                className="flex items-center gap-1.5 rounded hover:bg-stone-50 -mx-1 px-1 transition-colors"
+                title={`Ver hembras en ${ESTADO_PRODUCTIVO_LABELS[estado]}`}
+              >
+                <span
+                  className="h-2 w-2 rounded-full shrink-0"
+                  style={{ backgroundColor: ESTADO_PRODUCTIVO_HEX[estado] }}
+                />
+                <span
+                  className="text-xs font-semibold"
+                  style={{ color: ESTADO_PRODUCTIVO_HEX[estado] }}
+                >
+                  {total}
+                </span>
+                <span className="text-xs truncate" style={{ color: ESTADO_PRODUCTIVO_HEX[estado] }}>
+                  {ESTADO_PRODUCTIVO_LABELS[estado]}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Alertas del hato + estado reproductivo — a lo ancho para no romper el grid de 5 KPIs */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2">
+          <AlertasCard alertas={alertas} canEdit={canWrite(role)} />
+        </div>
+
+        <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-sm">
+          <div className="flex items-start justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">
+                Estado reproductivo
+              </p>
+              <p className="text-2xl font-bold text-stone-900 mt-1.5">
+                {vacasTotal - sinEstadoReproductivo}
+                <span className="text-sm font-medium text-stone-400"> / {vacasTotal}</span>
+              </p>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "#d97706" }} />
-              <span className="text-xs font-semibold" style={{ color: "#d97706" }}>{vacasSecado}</span>
-              <span className="text-xs" style={{ color: "#d97706" }}>secado</span>
+            <div
+              className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ml-3"
+              style={{ backgroundColor: "#f0fdfa" }}
+            >
+              <HeartPulse className="h-5 w-5" style={{ color: "#0d9488" }} />
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "#0ea5e9" }} />
-              <span className="text-xs font-semibold" style={{ color: "#0ea5e9" }}>{vacasTransicion}</span>
-              <span className="text-xs" style={{ color: "#0ea5e9" }}>trans.</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "#a855f7" }} />
-              <span className="text-xs font-semibold" style={{ color: "#a855f7" }}>{vacasPreJardin}</span>
-              <span className="text-xs" style={{ color: "#a855f7" }}>prejardín</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "#ec4899" }} />
-              <span className="text-xs font-semibold" style={{ color: "#ec4899" }}>{vacasJardin}</span>
-              <span className="text-xs" style={{ color: "#ec4899" }}>jardín</span>
-            </div>
+          </div>
+          <div className="mt-3 pt-3 border-t border-stone-100 space-y-1.5">
+            {desgloseReproductivo.map(({ estado, total }) => (
+              <Link
+                key={estado}
+                href={`/dashboard/animales?reproductivo=${estado}`}
+                className="flex items-center justify-between rounded hover:bg-stone-50 -mx-1 px-1 py-0.5 transition-colors"
+              >
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <span
+                    className="h-2 w-2 rounded-full shrink-0"
+                    style={{ backgroundColor: ESTADO_REPRODUCTIVO_HEX[estado] }}
+                  />
+                  <span className="text-xs text-stone-600 truncate">
+                    {ESTADO_REPRODUCTIVO_LABELS[estado]}
+                  </span>
+                </span>
+                <span
+                  className="text-xs font-semibold shrink-0"
+                  style={{ color: ESTADO_REPRODUCTIVO_HEX[estado] }}
+                >
+                  {total}
+                </span>
+              </Link>
+            ))}
+            {sinEstadoReproductivo > 0 && (
+              <p className="text-[11px] text-stone-400 pt-1">
+                {sinEstadoReproductivo} sin estado — se asigna al registrar eventos.
+              </p>
+            )}
           </div>
         </div>
       </div>

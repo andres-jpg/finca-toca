@@ -4,12 +4,14 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { formatDate } from "@/lib/utils";
 import { requireRole } from "@/lib/auth/check-permissions";
+import { sincronizarEstadosPorEdad } from "@/lib/animales/sincronizar-estados";
 import type {
   Animal,
   AnimalDetalle,
-  AnimalEstado,
   AnimalRaza,
   AnimalSexo,
+  EstadoProductivo,
+  EstadoReproductivo,
   VacaOrigen,
   CriaAnimal,
 } from "@/types";
@@ -43,7 +45,7 @@ async function consumirPajillaParaPadre(
 }
 
 const SELECT_FIELDS =
-  "id, created_at, identificador, nombre, sexo, raza, origen, estado, fecha_compra, fecha_nacimiento, numero_registro, madre_id, padre_id, padre_pajilla_nombre, alta, madre:madre_id(nombre), padre:padre_id(nombre)";
+  "id, created_at, identificador, nombre, sexo, raza, origen, estado_productivo, estado_reproductivo, fecha_compra, fecha_nacimiento, numero_registro, madre_id, padre_id, padre_pajilla_nombre, alta, madre:madre_id(nombre), padre:padre_id(nombre)";
 
 function mapRow(row: any): Animal {
   const madreRaw = Array.isArray(row.madre) ? row.madre[0] : row.madre;
@@ -56,7 +58,8 @@ function mapRow(row: any): Animal {
     sexo: row.sexo,
     raza: row.raza,
     origen: row.origen,
-    estado: row.estado,
+    estado_productivo: row.estado_productivo,
+    estado_reproductivo: row.estado_reproductivo,
     fecha_compra: row.fecha_compra,
     fecha_nacimiento: row.fecha_nacimiento,
     numero_registro: row.numero_registro,
@@ -105,7 +108,7 @@ export async function getAnimalById(id: string): Promise<AnimalDetalle | null> {
 
   const { data: criasRows } = await supabase
     .from("animales")
-    .select("id, identificador, nombre, estado, alta, sexo")
+    .select("id, identificador, nombre, estado_productivo, estado_reproductivo, alta, sexo")
     .or(`madre_id.eq.${id},padre_id.eq.${id}`);
 
   const madreRaw = Array.isArray(animal.madre) ? animal.madre[0] : animal.madre;
@@ -120,7 +123,8 @@ export async function getAnimalById(id: string): Promise<AnimalDetalle | null> {
       sexo: c.sexo,
       identificador: c.identificador,
       nombre: c.nombre,
-      estado: c.estado,
+      estado_productivo: c.estado_productivo,
+      estado_reproductivo: c.estado_reproductivo,
       alta: c.alta,
     }));
 
@@ -142,7 +146,8 @@ interface AnimalFormData {
   sexo: AnimalSexo;
   raza?: AnimalRaza | null;
   origen: VacaOrigen;
-  estado?: AnimalEstado | null;
+  estado_productivo?: EstadoProductivo | null;
+  estado_reproductivo?: EstadoReproductivo | null;
   fecha_compra?: Date | null;
   fecha_nacimiento?: Date | null;
   numero_registro?: string;
@@ -193,7 +198,10 @@ export async function createAnimal(formData: AnimalFormData) {
     sexo: formData.sexo,
     raza: formData.raza || null,
     origen: formData.origen,
-    estado: formData.estado || null,
+    estado_productivo: formData.estado_productivo || null,
+    // El estado reproductivo solo aplica a hembras.
+    estado_reproductivo:
+      formData.sexo === "hembra" ? formData.estado_reproductivo || null : null,
     fecha_compra: formData.fecha_compra ? formatDate(formData.fecha_compra) : null,
     fecha_nacimiento: formData.fecha_nacimiento ? formatDate(formData.fecha_nacimiento) : null,
     numero_registro: formData.numero_registro || null,
@@ -246,7 +254,9 @@ export async function updateAnimal(id: string, formData: AnimalFormData) {
       sexo: formData.sexo,
       raza: formData.raza || null,
       origen: formData.origen,
-      estado: formData.estado || null,
+      estado_productivo: formData.estado_productivo || null,
+      estado_reproductivo:
+        formData.sexo === "hembra" ? formData.estado_reproductivo || null : null,
       fecha_compra: formData.fecha_compra ? formatDate(formData.fecha_compra) : null,
       fecha_nacimiento: formData.fecha_nacimiento ? formatDate(formData.fecha_nacimiento) : null,
       numero_registro: formData.numero_registro || null,
@@ -268,6 +278,23 @@ export async function venderAnimal(id: string) {
 
   if (error) throw new Error("No se pudo dar de baja el animal");
   revalidatePath("/dashboard/animales");
+}
+
+/**
+ * Escape hatch manual del cron diario (`/api/cron/animales-estados`): recalcula
+ * `leche` → `levante_1` → `levante_2` por edad. Devuelve cuántos animales cambiaron.
+ */
+export async function recalcularEstadosPorEdad(): Promise<number> {
+  await requireRole(["admin", "user"]);
+  const supabase = await createClient();
+
+  const { actualizados } = await sincronizarEstadosPorEdad(supabase);
+
+  if (actualizados.length > 0) {
+    revalidatePath("/dashboard/animales");
+    revalidatePath("/dashboard");
+  }
+  return actualizados.length;
 }
 
 export async function deleteAnimal(id: string) {

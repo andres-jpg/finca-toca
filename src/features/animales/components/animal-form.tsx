@@ -16,8 +16,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/shared/date-picker";
+import {
+  ESTADOS_PRODUCTIVOS_POR_SEXO,
+  ESTADOS_REPRODUCTIVOS,
+  ESTADO_PRODUCTIVO_LABELS,
+  ESTADO_REPRODUCTIVO_LABELS,
+} from "@/lib/animales/estados";
 import { toast } from "sonner";
-import type { Animal, AnimalEstado, AnimalRaza, AnimalSexo, PajillaPorToro } from "@/types";
+import type {
+  Animal,
+  AnimalRaza,
+  AnimalSexo,
+  EstadoProductivo,
+  EstadoReproductivo,
+  PajillaPorToro,
+} from "@/types";
 
 const SEXO_LABELS: Record<AnimalSexo, string> = {
   hembra: "Hembra",
@@ -36,20 +49,6 @@ const ORIGEN_LABELS: Record<string, string> = {
   externa: "Externa",
 };
 
-const ESTADO_LABELS: Record<AnimalEstado, string> = {
-  produccion: "Producción",
-  secado: "Secado",
-  pre_jardin: "Pre-jardín",
-  jardin: "Jardín",
-  transicion: "Transición",
-  reproductor: "Reproductor",
-};
-
-const ESTADOS_POR_SEXO: Record<AnimalSexo, AnimalEstado[]> = {
-  hembra: ["produccion", "secado", "pre_jardin", "jardin", "transicion"],
-  macho: ["jardin", "reproductor"],
-};
-
 type PadreTipo = "none" | "animal" | "pajilla";
 
 interface FormValues {
@@ -58,7 +57,8 @@ interface FormValues {
   sexo: AnimalSexo;
   raza: AnimalRaza;
   origen: "finca" | "externa";
-  estado?: string | null;
+  estado_productivo?: string | null;
+  estado_reproductivo?: string | null;
   fecha_compra?: Date | null;
   fecha_nacimiento?: Date | null;
   numero_registro?: string;
@@ -100,7 +100,8 @@ export function AnimalForm({ animal, animales, pajillasPorToro, onSuccess }: Ani
       sexo: animal?.sexo ?? undefined,
       raza: animal?.raza ?? undefined,
       origen: animal?.origen ?? undefined,
-      estado: animal?.estado ?? undefined,
+      estado_productivo: animal?.estado_productivo ?? undefined,
+      estado_reproductivo: animal?.estado_reproductivo ?? undefined,
       fecha_compra: animal?.fecha_compra ? new Date(animal.fecha_compra + "T00:00:00") : null,
       fecha_nacimiento: animal?.fecha_nacimiento
         ? new Date(animal.fecha_nacimiento + "T00:00:00")
@@ -113,7 +114,8 @@ export function AnimalForm({ animal, animales, pajillasPorToro, onSuccess }: Ani
 
   const sexoValue = watch("sexo");
   const origenValue = watch("origen");
-  const estadoValue = watch("estado");
+  const estadoProductivoValue = watch("estado_productivo");
+  const estadoReproductivoValue = watch("estado_reproductivo");
   const fechaCompraValue = watch("fecha_compra");
   const fechaNacimientoValue = watch("fecha_nacimiento");
   const madreIdValue = watch("madre_id");
@@ -121,15 +123,23 @@ export function AnimalForm({ animal, animales, pajillasPorToro, onSuccess }: Ani
 
   const madresDisponibles = animales.filter((a) => a.sexo === "hembra" && a.id !== animal?.id);
   const padresDisponibles = animales.filter((a) => a.sexo === "macho" && a.id !== animal?.id);
-  const estadosDisponibles = sexoValue ? ESTADOS_POR_SEXO[sexoValue] : [];
+  const estadosProductivosDisponibles = sexoValue ? ESTADOS_PRODUCTIVOS_POR_SEXO[sexoValue] : [];
 
   useEffect(() => {
-    if (sexoValue && estadoValue && !ESTADOS_POR_SEXO[sexoValue].includes(estadoValue as AnimalEstado)) {
-      setValue("estado", null);
+    if (
+      sexoValue &&
+      estadoProductivoValue &&
+      !ESTADOS_PRODUCTIVOS_POR_SEXO[sexoValue].includes(estadoProductivoValue as EstadoProductivo)
+    ) {
+      setValue("estado_productivo", null);
     }
-    if (sexoValue === "macho" && padreTipo === "pajilla") {
-      setPadreTipo("none");
-      setValue("padre_id", null);
+    // El ciclo reproductivo solo existe en hembras.
+    if (sexoValue === "macho") {
+      setValue("estado_reproductivo", null);
+      if (padreTipo === "pajilla") {
+        setPadreTipo("none");
+        setValue("padre_id", null);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sexoValue]);
@@ -148,7 +158,11 @@ export function AnimalForm({ animal, animales, pajillasPorToro, onSuccess }: Ani
         sexo: data.sexo,
         raza: data.raza,
         origen: data.origen,
-        estado: (data.estado || null) as AnimalEstado | null,
+        estado_productivo: (data.estado_productivo || null) as EstadoProductivo | null,
+        estado_reproductivo:
+          data.sexo === "hembra"
+            ? ((data.estado_reproductivo || null) as EstadoReproductivo | null)
+            : null,
         fecha_compra: data.origen === "externa" ? data.fecha_compra : null,
         fecha_nacimiento: data.fecha_nacimiento || null,
         numero_registro: data.origen === "externa" ? data.numero_registro : undefined,
@@ -266,26 +280,60 @@ export function AnimalForm({ animal, animales, pajillasPorToro, onSuccess }: Ani
         </div>
 
         <div className="space-y-2">
-          <Label>Estado</Label>
+          <Label>Estado productivo</Label>
           <Select
-            value={estadoValue ?? ""}
-            onValueChange={(val) => setValue("estado", val)}
+            value={estadoProductivoValue ?? ""}
+            onValueChange={(val) => setValue("estado_productivo", val)}
             disabled={!sexoValue}
           >
             <SelectTrigger>
-              <SelectValue placeholder={sexoValue ? "Seleccionar estado" : "Primero selecciona el sexo"} />
+              <SelectValue
+                placeholder={sexoValue ? "Seleccionar estado" : "Primero selecciona el sexo"}
+              />
             </SelectTrigger>
             <SelectContent>
-              {estadosDisponibles.map((value) => (
+              {estadosProductivosDisponibles.map((value) => (
                 <SelectItem key={value} value={value}>
-                  {ESTADO_LABELS[value]}
+                  {ESTADO_PRODUCTIVO_LABELS[value]}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {errors.estado && <p className="text-sm text-red-500">{errors.estado.message}</p>}
+          {errors.estado_productivo && (
+            <p className="text-sm text-red-500">{errors.estado_productivo.message}</p>
+          )}
         </div>
       </div>
+
+      {/* El ciclo reproductivo solo aplica a hembras y normalmente lo mueven los eventos */}
+      {sexoValue === "hembra" && (
+        <div className="space-y-2">
+          <Label>Estado reproductivo</Label>
+          <Select
+            value={estadoReproductivoValue ?? "none"}
+            onValueChange={(val) => setValue("estado_reproductivo", val === "none" ? null : val)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Sin definir" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Sin definir</SelectItem>
+              {ESTADOS_REPRODUCTIVOS.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {ESTADO_REPRODUCTIVO_LABELS[value]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-gray-400">
+            Se actualiza solo al registrar inseminaciones, palpaciones y partos. Cámbialo a mano
+            únicamente para corregir el punto de partida.
+          </p>
+          {errors.estado_reproductivo && (
+            <p className="text-sm text-red-500">{errors.estado_reproductivo.message}</p>
+          )}
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label>Fecha de nacimiento</Label>

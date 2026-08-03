@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/shared/date-picker";
+import { ESTADO_PRODUCTIVO_LABELS } from "@/lib/animales/estados";
 import { toast } from "sonner";
 import type { Ingreso, ConceptoIngreso, Animal } from "@/types";
 
@@ -200,7 +201,9 @@ export function IngresoForm({ ingreso, conceptos, vacas = [], toros = [], onSucc
               <div className="flex justify-between">
                 <span className="text-gray-500">Estado actual</span>
                 <span className="font-medium text-gray-800">
-                  {selectedVaca.estado ?? "—"}
+                  {selectedVaca.estado_productivo
+                    ? ESTADO_PRODUCTIVO_LABELS[selectedVaca.estado_productivo]
+                    : "—"}
                 </span>
               </div>
             </div>

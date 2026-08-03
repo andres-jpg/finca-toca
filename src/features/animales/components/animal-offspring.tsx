@@ -1,15 +1,10 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import {
+  ESTADO_PRODUCTIVO_LABELS,
+  ESTADO_REPRODUCTIVO_LABELS,
+} from "@/lib/animales/estados";
 import type { CriaAnimal } from "@/types";
-
-const ESTADO_LABELS: Record<string, string> = {
-  produccion: "Producción",
-  secado: "Secado",
-  pre_jardin: "Pre-jardín",
-  jardin: "Jardín",
-  transicion: "Transición",
-  reproductor: "Reproductor",
-};
 
 interface AnimalOffspringProps {
   crias: CriaAnimal[];
@@ -23,7 +18,12 @@ export function AnimalOffspring({ crias }: AnimalOffspringProps) {
   return (
     <div className="space-y-2">
       {crias.map((cria) => {
-        const estadoLabel = ESTADO_LABELS[cria.estado ?? ""] ?? cria.estado;
+        const productivoLabel = cria.estado_productivo
+          ? ESTADO_PRODUCTIVO_LABELS[cria.estado_productivo]
+          : null;
+        const reproductivoLabel = cria.estado_reproductivo
+          ? ESTADO_REPRODUCTIVO_LABELS[cria.estado_reproductivo]
+          : null;
 
         return (
           <div
@@ -40,10 +40,15 @@ export function AnimalOffspring({ crias }: AnimalOffspringProps) {
               </Link>
               {!cria.alta && <span className="text-xs text-gray-400">(baja)</span>}
             </div>
-            <div className="flex items-center gap-2">
-              {estadoLabel && (
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {productivoLabel && (
                 <Badge variant="outline" className="text-xs text-gray-600">
-                  {estadoLabel}
+                  {productivoLabel}
+                </Badge>
+              )}
+              {reproductivoLabel && (
+                <Badge variant="outline" className="text-xs text-gray-600">
+                  {reproductivoLabel}
                 </Badge>
               )}
               <Badge variant="outline" className="text-xs capitalize text-gray-500">

@@ -86,13 +86,11 @@ export interface ExtraccionLecheFormData {
 export type VacaOrigen = "finca" | "externa";
 export type AnimalSexo = "hembra" | "macho";
 export type AnimalRaza = "holstein" | "jersey" | "jerholm" | "normando";
-export type AnimalEstado =
-  | "produccion"
-  | "secado"
-  | "pre_jardin"
-  | "jardin"
-  | "transicion"
-  | "reproductor";
+
+/** Ciclo productivo: leche → levante_1 → levante_2 → produccion ⇄ secado (machos: … → reproductor). */
+export type EstadoProductivo = Database["public"]["Enums"]["estado_productivo"];
+/** Ciclo reproductivo (solo hembras): vacia → pre_servicio → por_confirmar → cargada / rechequeo. */
+export type EstadoReproductivo = Database["public"]["Enums"]["estado_reproductivo"];
 
 export interface Animal {
   id: string;
@@ -102,7 +100,8 @@ export interface Animal {
   sexo: AnimalSexo;
   raza: AnimalRaza | null;
   origen: VacaOrigen | null;
-  estado: AnimalEstado | null;
+  estado_productivo: EstadoProductivo | null;
+  estado_reproductivo: EstadoReproductivo | null;
   fecha_compra: string | null;
   fecha_nacimiento: string | null;
   numero_registro: string | null;
@@ -122,10 +121,16 @@ export type TipoEvento =
   | "enfermedad"
   | "celo"
   | "inseminacion"
+  | "monta"
   | "palpacion"
   | "confirmacion_prenez"
   | "parto"
+  | "secado"
+  | "topizado"
   | "observacion";
+
+/** Resultado de una palpación / confirmación de preñez. */
+export type ResultadoPalpacion = "cargada" | "rechequeo" | "vacia";
 
 export interface EventoAnimal {
   id: string;
@@ -136,6 +141,32 @@ export interface EventoAnimal {
   fecha: string;
   descripcion: string | null;
   responsable: string | null;
+  resultado: ResultadoPalpacion | null;
+  /** Inseminación: toro de la pajilla utilizada (`pajillas.toro_ref_id`). */
+  pajilla_toro_ref_id: string | null;
+  /** Monta: toro que cubrió (`animales.id`). */
+  toro_id: string | null;
+}
+
+// ===== ALERTAS =====
+export type TipoAlerta = "parto" | "secado" | "topizado" | "celo";
+export type SeveridadAlerta = "vencida" | "hoy" | "proxima";
+
+export interface Alerta {
+  /** Determinista (`${animal_id}:${tipo}`) — las alertas se derivan, no se guardan. */
+  id: string;
+  tipo: TipoAlerta;
+  animal_id: string;
+  animal_nombre: string;
+  animal_identificador: string;
+  /** ISO `YYYY-MM-DD`. */
+  fecha_objetivo: string;
+  /** Negativo = vencida. */
+  dias_restantes: number;
+  severidad: SeveridadAlerta;
+  /** `true` para secado y topizado: se cierran con el botón "Marcar hecho". */
+  resoluble: boolean;
+  detalle: string;
 }
 
 // ===== FICHAS (detalle) =====
@@ -144,7 +175,8 @@ export interface CriaAnimal {
   sexo: AnimalSexo;
   identificador: string;
   nombre: string;
-  estado: string | null;
+  estado_productivo: EstadoProductivo | null;
+  estado_reproductivo: EstadoReproductivo | null;
   alta: boolean;
 }
 
