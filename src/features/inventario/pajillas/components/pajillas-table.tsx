@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Plus, Trash2, Eye, FlaskConical, FlaskRound } from "lucide-react";
+import { Plus, Trash2, Eye, Pencil, FlaskConical, FlaskRound } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/shared/data-table";
 import { EntityModal } from "@/components/shared/entity-modal";
@@ -34,6 +34,7 @@ function PajillaDetail({ pajilla }: { pajilla: Pajilla }) {
       <div className="grid grid-cols-2 gap-4">
         <Field label="Nombre del toro" value={pajilla.toro_nombre} />
         <Field label="ID del toro" value={pajilla.toro_ref_id} />
+        <Field label="Proveedor" value={pajilla.proveedor} />
         <Field label="Fecha de compra" value={fecha} />
         <Field label="Cantidad inicial" value={`${pajilla.cantidad} pajillas`} />
         <Field
@@ -75,6 +76,7 @@ function RowActions({
   canEdit: boolean;
 }) {
   const [viewOpen, setViewOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [usarOpen, setUsarOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -101,6 +103,13 @@ function RowActions({
         {canEdit && (
           <>
             <button
+              onClick={() => setEditOpen(true)}
+              className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+              title="Editar lote"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            <button
               onClick={() => setUsarOpen(true)}
               disabled={pajilla.cantidad_disponible === 0}
               className="p-1.5 rounded-md text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -125,6 +134,10 @@ function RowActions({
 
       {canEdit && (
         <>
+          <EntityModal open={editOpen} onClose={() => setEditOpen(false)} title="Editar lote">
+            <PajillaForm pajilla={pajilla} onSuccess={() => setEditOpen(false)} />
+          </EntityModal>
+
           <EntityModal open={usarOpen} onClose={() => setUsarOpen(false)} title="Usar pajillas">
             <UsarPajillasForm pajilla={pajilla} onSuccess={() => setUsarOpen(false)} />
           </EntityModal>
@@ -151,7 +164,7 @@ function ResumenPorToro({ porToro }: { porToro: PajillaPorToro[] }) {
       </div>
       <div className="divide-y divide-gray-100">
         {porToro.map((item) => (
-          <div key={item.toro_ref_id} className="flex items-center justify-between px-4 py-3">
+          <div key={item.clave} className="flex items-center justify-between px-4 py-3">
             <div>
               <p className="text-sm font-medium text-gray-800">{item.toro_nombre}</p>
               <p className="text-xs text-gray-400">{item.toro_ref_id}</p>
@@ -240,11 +253,6 @@ export function PajillasTable({ pajillas, porToro, canEdit }: PajillasTableProps
           const usadas = row.original.cantidad - row.original.cantidad_disponible;
           return <span className="text-gray-500">{usadas}</span>;
         },
-      },
-      {
-        accessorKey: "observaciones",
-        header: "Observaciones",
-        cell: ({ getValue }) => getValue<string | null>() ?? "—",
       },
       {
         id: "actions",

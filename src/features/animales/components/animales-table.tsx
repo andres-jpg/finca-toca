@@ -36,7 +36,7 @@ import type {
   AnimalSexo,
   EstadoProductivo,
   EstadoReproductivo,
-  PajillaPorToro,
+  PajillaDisponible,
 } from "@/types";
 
 const ORIGEN_LABELS: Record<string, string> = {
@@ -55,12 +55,12 @@ const TODOS = "todos";
 function RowActions({
   animal,
   animales,
-  pajillasPorToro,
+  lotesPajillas,
   canEdit,
 }: {
   animal: Animal;
   animales: Animal[];
-  pajillasPorToro: PajillaPorToro[];
+  lotesPajillas: PajillaDisponible[];
   canEdit: boolean;
 }) {
   const router = useRouter();
@@ -114,7 +114,7 @@ function RowActions({
           <AnimalForm
             animal={animal}
             animales={animales}
-            pajillasPorToro={pajillasPorToro}
+            lotesPajillas={lotesPajillas}
             onSuccess={() => setEditOpen(false)}
           />
         </EntityModal>
@@ -134,7 +134,7 @@ function RowActions({
 
 interface AnimalesTableProps {
   animales: Animal[];
-  pajillasPorToro: PajillaPorToro[];
+  lotesPajillas: PajillaDisponible[];
   canEdit: boolean;
   /** Filtros iniciales desde los enlaces del dashboard (?productivo= / ?reproductivo=). */
   filtroProductivoInicial?: string;
@@ -143,7 +143,7 @@ interface AnimalesTableProps {
 
 export function AnimalesTable({
   animales,
-  pajillasPorToro,
+  lotesPajillas,
   canEdit,
   filtroProductivoInicial = TODOS,
   filtroReproductivoInicial = TODOS,
@@ -291,13 +291,13 @@ export function AnimalesTable({
           <RowActions
             animal={row.original}
             animales={animalesDeAlta}
-            pajillasPorToro={pajillasPorToro}
+            lotesPajillas={lotesPajillas}
             canEdit={canEdit}
           />
         ),
       },
     ],
-    [canEdit, animalesDeAlta, pajillasPorToro]
+    [canEdit, animalesDeAlta, lotesPajillas]
   );
 
   return (
@@ -407,7 +407,7 @@ export function AnimalesTable({
         <EntityModal open={modalOpen} onClose={() => setModalOpen(false)} title="Nuevo animal">
           <AnimalForm
             animales={animalesDeAlta}
-            pajillasPorToro={pajillasPorToro}
+            lotesPajillas={lotesPajillas}
             onSuccess={() => setModalOpen(false)}
           />
         </EntityModal>

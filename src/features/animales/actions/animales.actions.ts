@@ -4,7 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { formatDate } from "@/lib/utils";
 import { requireRole } from "@/lib/auth/check-permissions";
-import { sincronizarEstadosPorEdad } from "@/lib/animales/sincronizar-estados";
+import { sincronizarEstadosAnimales } from "@/lib/animales/sincronizar-estados";
+import { estadoReproductivoPorCrianza } from "@/lib/animales/estados";
 import type {
   Animal,
   AnimalDetalle,
@@ -16,32 +17,32 @@ import type {
   CriaAnimal,
 } from "@/types";
 
-async function consumirPajillaParaPadre(
+/**
+ * Nombre del toro del lote elegido como padre de la cría.
+ *
+ * **No toca el inventario.** El descuento se hace al registrar la inseminación
+ * (`createEventoAnimal`), que es cuando la pajilla se usa de verdad; descontar también aquí
+ * restaba dos pajillas por una sola monta. Además la versión anterior buscaba el lote por
+ * `toro_ref_id`, que es texto libre y está repetido —"NA" lo comparten cinco toros—, así que
+ * podía descontar del lote de un toro completamente distinto.
+ *
+ * Aquí solo se resuelve el nombre, y se acepta un lote agotado a propósito: la cría nace unos
+ * nueve meses después de gastarse la pajilla, cuando su lote suele estar ya a cero.
+ */
+async function nombreToroDeLote(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  toroRefId: string
+  pajillaId: string
 ): Promise<string> {
-  const { data: lotes, error } = await supabase
+  const { data, error } = await supabase
     .from("pajillas")
-    .select("id, toro_nombre, cantidad_disponible")
-    .eq("toro_ref_id", toroRefId)
-    .gt("cantidad_disponible", 0)
-    .order("fecha_compra", { ascending: true })
-    .limit(1);
+    .select("toro_nombre")
+    .eq("id", pajillaId)
+    .maybeSingle();
 
-  if (error) throw new Error("Error al verificar las pajillas disponibles");
-  if (!lotes || lotes.length === 0)
-    throw new Error("No hay pajillas disponibles para este toro");
+  if (error) throw new Error("Error al consultar el lote de pajillas");
+  if (!data) throw new Error("El lote de pajillas seleccionado ya no existe");
 
-  const lote = lotes[0];
-  const { error: updateError } = await supabase
-    .from("pajillas")
-    .update({ cantidad_disponible: lote.cantidad_disponible - 1 })
-    .eq("id", lote.id);
-
-  if (updateError) throw new Error("No se pudo actualizar el inventario de pajillas");
-
-  revalidatePath("/dashboard/inventario");
-  return lote.toro_nombre as string;
+  return (data as unknown as { toro_nombre: string }).toro_nombre;
 }
 
 const SELECT_FIELDS =
@@ -153,7 +154,8 @@ interface AnimalFormData {
   numero_registro?: string;
   madre_id?: string | null;
   padre_id?: string | null;
-  padre_pajilla_toro_ref_id?: string | null;
+  /** Lote de pajillas del que salió el padre (`pajillas.id`). Solo se usa para el nombre. */
+  padre_pajilla_id?: string | null;
   padre_pajilla_nombre_keep?: string | null;
 }
 
@@ -178,6 +180,22 @@ async function assertIdentificadorDisponible(
   }
 }
 
+/**
+ * Estado reproductivo con el que se guarda una hembra.
+ *
+ * Si el usuario no eligió ninguno y el animal está en el tramo de crianza, se deriva de
+ * la escalera juvenil (`leche` → pre-púber, `levante_1` → púber, `levante_2` → servicio)
+ * en vez de dejarlo vacío hasta que pase el cron: una cría recién registrada debe salir
+ * ya con su estado. Fuera de ese tramo se respeta lo que venga del formulario.
+ */
+function resolverEstadoReproductivo(
+  formData: Pick<AnimalFormData, "sexo" | "estado_productivo" | "estado_reproductivo">
+): EstadoReproductivo | null {
+  if (formData.sexo !== "hembra") return null;
+  if (formData.estado_reproductivo) return formData.estado_reproductivo;
+  return estadoReproductivoPorCrianza(formData.estado_productivo ?? null);
+}
+
 export async function createAnimal(formData: AnimalFormData) {
   await requireRole(["admin", "user"]);
   const supabase = await createClient();
@@ -187,8 +205,8 @@ export async function createAnimal(formData: AnimalFormData) {
   let padrePajillaNombre: string | null = null;
   let padreId: string | null = formData.padre_id || null;
 
-  if (formData.padre_pajilla_toro_ref_id) {
-    padrePajillaNombre = await consumirPajillaParaPadre(supabase, formData.padre_pajilla_toro_ref_id);
+  if (formData.padre_pajilla_id) {
+    padrePajillaNombre = await nombreToroDeLote(supabase, formData.padre_pajilla_id);
     padreId = null;
   }
 
@@ -200,8 +218,7 @@ export async function createAnimal(formData: AnimalFormData) {
     origen: formData.origen,
     estado_productivo: formData.estado_productivo || null,
     // El estado reproductivo solo aplica a hembras.
-    estado_reproductivo:
-      formData.sexo === "hembra" ? formData.estado_reproductivo || null : null,
+    estado_reproductivo: resolverEstadoReproductivo(formData),
     fecha_compra: formData.fecha_compra ? formatDate(formData.fecha_compra) : null,
     fecha_nacimiento: formData.fecha_nacimiento ? formatDate(formData.fecha_nacimiento) : null,
     numero_registro: formData.numero_registro || null,
@@ -238,8 +255,8 @@ export async function updateAnimal(id: string, formData: AnimalFormData) {
   let padrePajillaNombre: string | null = null;
   let padreId: string | null = formData.padre_id || null;
 
-  if (formData.padre_pajilla_toro_ref_id) {
-    padrePajillaNombre = await consumirPajillaParaPadre(supabase, formData.padre_pajilla_toro_ref_id);
+  if (formData.padre_pajilla_id) {
+    padrePajillaNombre = await nombreToroDeLote(supabase, formData.padre_pajilla_id);
     padreId = null;
   } else if (formData.padre_pajilla_nombre_keep) {
     padrePajillaNombre = formData.padre_pajilla_nombre_keep;
@@ -255,8 +272,7 @@ export async function updateAnimal(id: string, formData: AnimalFormData) {
       raza: formData.raza || null,
       origen: formData.origen,
       estado_productivo: formData.estado_productivo || null,
-      estado_reproductivo:
-        formData.sexo === "hembra" ? formData.estado_reproductivo || null : null,
+      estado_reproductivo: resolverEstadoReproductivo(formData),
       fecha_compra: formData.fecha_compra ? formatDate(formData.fecha_compra) : null,
       fecha_nacimiento: formData.fecha_nacimiento ? formatDate(formData.fecha_nacimiento) : null,
       numero_registro: formData.numero_registro || null,
@@ -282,13 +298,14 @@ export async function venderAnimal(id: string) {
 
 /**
  * Escape hatch manual del cron diario (`/api/cron/animales-estados`): recalcula
- * `leche` → `levante_1` → `levante_2` por edad. Devuelve cuántos animales cambiaron.
+ * `leche` → `levante_1` → `levante_2` por edad y el pase `pre_servicio` → `servicio`
+ * a los 60 días del parto/aborto. Devuelve cuántos animales cambiaron.
  */
 export async function recalcularEstadosPorEdad(): Promise<number> {
   await requireRole(["admin", "user"]);
   const supabase = await createClient();
 
-  const { actualizados } = await sincronizarEstadosPorEdad(supabase);
+  const { actualizados } = await sincronizarEstadosAnimales(supabase);
 
   if (actualizados.length > 0) {
     revalidatePath("/dashboard/animales");

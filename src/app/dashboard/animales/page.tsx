@@ -1,5 +1,5 @@
 import { getAnimales } from "@/features/animales/actions/animales.actions";
-import { getPajillasPorToro } from "@/features/inventario/pajillas/actions/pajillas.actions";
+import { getLotesPajillas } from "@/features/inventario/pajillas/actions/pajillas.actions";
 import { AnimalesTable } from "@/features/animales/components/animales-table";
 import { ESTADOS_PRODUCTIVOS, ESTADOS_REPRODUCTIVOS } from "@/lib/animales/estados";
 import { canWrite, checkRoutePermission } from "@/lib/auth/check-permissions";
@@ -9,11 +9,11 @@ export default async function AnimalesPage({
 }: {
   searchParams: Promise<{ productivo?: string; reproductivo?: string }>;
 }) {
-  const [params, userRole, animales, pajillasPorToro] = await Promise.all([
+  const [params, userRole, animales, lotesPajillas] = await Promise.all([
     searchParams,
     checkRoutePermission(["admin", "viewer"]),
     getAnimales(),
-    getPajillasPorToro(),
+    getLotesPajillas(),
   ]);
   const canEdit = canWrite(userRole);
 
@@ -30,7 +30,7 @@ export default async function AnimalesPage({
   return (
     <AnimalesTable
       animales={animales}
-      pajillasPorToro={pajillasPorToro}
+      lotesPajillas={lotesPajillas}
       canEdit={canEdit}
       filtroProductivoInicial={filtroProductivoInicial}
       filtroReproductivoInicial={filtroReproductivoInicial}

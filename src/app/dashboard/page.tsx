@@ -142,7 +142,16 @@ export default async function DashboardPage({
     (estado) => ({ estado, total: contarProductivo(estado) })
   );
   const desgloseReproductivo = (
-    ["cargada", "por_confirmar", "rechequeo", "pre_servicio", "vacia"] as const
+    [
+      "cargada",
+      "por_confirmar",
+      "rechequeo",
+      "servicio",
+      "pre_servicio",
+      "vacia",
+      "puber",
+      "pre_puber",
+    ] as const
   ).map((estado) => ({ estado, total: contarReproductivo(estado) }));
   const sinEstadoReproductivo = hembras.filter((v) => !v.estado_reproductivo).length;
 
@@ -355,11 +364,11 @@ export default async function DashboardPage({
           </div>
         </div>
 
-        {/* Vacas — siempre fija */}
+        {/* Estado productivo — siempre fija */}
         <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
           <div className="flex items-start justify-between">
             <div className="min-w-0">
-              <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Vacas</p>
+              <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Estado productivo</p>
               <p className="text-2xl font-bold text-stone-900 mt-1.5">{vacasTotal}</p>
             </div>
             <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ml-3" style={{ backgroundColor: "#fffbeb" }}>
@@ -393,14 +402,21 @@ export default async function DashboardPage({
         </div>
       </div>
 
-      {/* Alertas del hato + estado reproductivo — a lo ancho para no romper el grid de 5 KPIs */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
-          <AlertasCard alertas={alertas} canEdit={canWrite(role)} />
+      {/* Alertas del hato + estado reproductivo — a lo ancho para no romper el grid de 5 KPIs.
+          En `lg` la altura de la fila la marca SOLO la card de estado reproductivo: la de
+          alertas va en `position: absolute`, así no aporta altura propia y desborda con scroll
+          en vez de estirar la fila. Con el `items-stretch` de siempre, una lista de alertas
+          larga hacía crecer la fila entera y dejaba estado reproductivo con un hueco al final.
+          Por debajo de `lg` las cards se apilan y cada una crece a su contenido. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+        <div className="lg:col-span-2 relative flex min-h-0">
+          <div className="flex w-full lg:absolute lg:inset-0">
+            <AlertasCard alertas={alertas} canEdit={canWrite(role)} />
+          </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-sm">
-          <div className="flex items-start justify-between">
+        <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-sm flex flex-col">
+          <div className="flex items-start justify-between shrink-0">
             <div className="min-w-0">
               <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">
                 Estado reproductivo
@@ -417,6 +433,8 @@ export default async function DashboardPage({
               <HeartPulse className="h-5 w-5" style={{ color: "#0d9488" }} />
             </div>
           </div>
+          {/* Sin `flex-1`: la lista mide lo que ocupan sus filas, para que la card termine
+              justo debajo del último estado en lugar de estirarse. */}
           <div className="mt-3 pt-3 border-t border-stone-100 space-y-1.5">
             {desgloseReproductivo.map(({ estado, total }) => (
               <Link

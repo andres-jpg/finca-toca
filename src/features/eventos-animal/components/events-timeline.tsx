@@ -11,11 +11,13 @@ import {
   Stethoscope,
   CheckCircle2,
   Baby,
+  HeartCrack,
   FileText,
   Milk,
   Scissors,
   Beef,
   Pencil,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { EventoAnimal, ResultadoPalpacion, TipoEvento } from "@/types";
@@ -33,6 +35,7 @@ const TIPO_CONFIG: Record<TipoEvento, TipoConfig> = {
   palpacion:           { label: "Palpación",            icon: Stethoscope,   color: "text-purple-600", bg: "bg-purple-50 border-purple-200" },
   confirmacion_prenez: { label: "Confirmación preñez",  icon: CheckCircle2,  color: "text-green-600",  bg: "bg-green-50 border-green-200" },
   parto:               { label: "Parto",                icon: Baby,          color: "text-rose-600",   bg: "bg-rose-50 border-rose-200" },
+  aborto:              { label: "Aborto",               icon: HeartCrack,    color: "text-red-700",    bg: "bg-red-100 border-red-300" },
   secado:              { label: "Secado",               icon: Milk,          color: "text-amber-600",  bg: "bg-amber-50 border-amber-200" },
   topizado:            { label: "Topizado",             icon: Scissors,      color: "text-violet-600", bg: "bg-violet-50 border-violet-200" },
   observacion:         { label: "Observación",          icon: FileText,      color: "text-gray-600",   bg: "bg-gray-50 border-gray-200" },
@@ -52,13 +55,26 @@ const RESULTADO_LABELS: Record<ResultadoPalpacion, string> = {
   vacia: "Vacía",
 };
 
+/** Etiqueta legible de un tipo de evento, para textos fuera del timeline (diálogos, toasts). */
+export function labelTipoEvento(tipo: TipoEvento): string {
+  return (TIPO_CONFIG[tipo] ?? TIPO_FALLBACK).label;
+}
+
 interface EventsTimelineProps {
   eventos: EventoAnimal[];
   canEdit?: boolean;
   onEdit?: (evento: EventoAnimal) => void;
+  canDelete?: boolean;
+  onDelete?: (evento: EventoAnimal) => void;
 }
 
-export function EventsTimeline({ eventos, canEdit, onEdit }: EventsTimelineProps) {
+export function EventsTimeline({
+  eventos,
+  canEdit,
+  onEdit,
+  canDelete,
+  onDelete,
+}: EventsTimelineProps) {
   if (eventos.length === 0) {
     return (
       <p className="text-sm text-gray-400 py-4 text-center">
@@ -66,6 +82,9 @@ export function EventsTimeline({ eventos, canEdit, onEdit }: EventsTimelineProps
       </p>
     );
   }
+
+  const mostrarEditar = !!(canEdit && onEdit);
+  const mostrarEliminar = !!(canDelete && onDelete);
 
   return (
     <div className="space-y-3">
@@ -101,16 +120,33 @@ export function EventsTimeline({ eventos, canEdit, onEdit }: EventsTimelineProps
                 <p className="mt-0.5 text-xs text-gray-500">Responsable: {evento.responsable}</p>
               )}
             </div>
-            {canEdit && onEdit && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="shrink-0 h-7 w-7 text-gray-400 hover:text-gray-700"
-                onClick={() => onEdit(evento)}
-                type="button"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
+            {(mostrarEditar || mostrarEliminar) && (
+              <div className="flex shrink-0 items-start gap-0.5">
+                {mostrarEditar && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-gray-400 hover:text-gray-700"
+                    onClick={() => onEdit!(evento)}
+                    type="button"
+                    title="Editar evento"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {mostrarEliminar && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                    onClick={() => onDelete!(evento)}
+                    type="button"
+                    title="Eliminar evento"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
             )}
           </div>
         );

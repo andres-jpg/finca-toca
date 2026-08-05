@@ -26,7 +26,7 @@ import { toast } from "sonner";
 import type {
   Animal,
   EventoAnimal,
-  PajillaPorToro,
+  PajillaDisponible,
   ResultadoPalpacion,
   TipoEvento,
 } from "@/types";
@@ -38,6 +38,7 @@ const TIPO_LABELS: Record<TipoEvento, string> = {
   palpacion: "Palpación",
   confirmacion_prenez: "Confirmación de preñez",
   parto: "Parto",
+  aborto: "Aborto",
   secado: "Secado",
   topizado: "Topizado",
   vacunacion: "Vacunación",
@@ -58,6 +59,7 @@ const TIPO_EFECTO: Partial<Record<TipoEvento, string>> = {
   inseminacion: "La vaca pasará a «Por confirmar».",
   monta: "La vaca pasará a «Por confirmar».",
   parto: "La vaca pasará a «Producción» y «Pre-servicio».",
+  aborto: "La vaca pasará a «Producción» y «Pre-servicio»; se cancelan las alertas de parto y secado.",
   secado: "La vaca pasará a «Secado» y dejará de contarse en producción.",
 };
 
@@ -67,8 +69,8 @@ interface EventFormProps {
   evento?: EventoAnimal;
   /** Machos de alta, para el selector de toro en una monta. */
   toros?: Animal[];
-  /** Inventario de pajillas agrupado por toro, para el selector de inseminación. */
-  pajillasPorToro?: PajillaPorToro[];
+  /** Lotes de pajillas con su stock, para el selector de inseminación. */
+  lotesPajillas?: PajillaDisponible[];
   onSuccess: () => void;
 }
 
@@ -80,7 +82,7 @@ interface FormValues {
   descripcion?: string;
   responsable?: string;
   resultado?: ResultadoPalpacion | null;
-  pajilla_toro_ref_id?: string | null;
+  pajilla_id?: string | null;
   toro_id?: string | null;
 }
 
@@ -89,7 +91,7 @@ export function EventForm({
   animalTipo,
   evento,
   toros = [],
-  pajillasPorToro = [],
+  lotesPajillas = [],
   onSuccess,
 }: EventFormProps) {
   const isEditing = !!evento;
@@ -110,7 +112,7 @@ export function EventForm({
       descripcion: evento?.descripcion ?? "",
       responsable: evento?.responsable ?? "",
       resultado: evento?.resultado ?? null,
-      pajilla_toro_ref_id: evento?.pajilla_toro_ref_id ?? null,
+      pajilla_id: evento?.pajilla_id ?? null,
       toro_id: evento?.toro_id ?? null,
     },
   });
@@ -118,8 +120,15 @@ export function EventForm({
   const tipoValue = watch("tipo_evento");
   const fechaValue = watch("fecha");
   const resultadoValue = watch("resultado");
-  const pajillaValue = watch("pajilla_toro_ref_id");
+  const pajillaValue = watch("pajilla_id");
   const toroValue = watch("toro_id");
+
+  // Se ocultan los lotes agotados, salvo el que ya tenga este evento: al editar una
+  // inseminación su lote puede estar a 0 precisamente porque gastó la última pajilla,
+  // y filtrarlo dejaría el selector vacío borrando la referencia al guardar.
+  const lotesSeleccionables = lotesPajillas.filter(
+    (p) => p.cantidad_disponible > 0 || p.id === pajillaValue
+  );
 
   const esServicio = tipoValue === "inseminacion" || tipoValue === "monta";
   const esConfirmacion =
@@ -139,7 +148,7 @@ export function EventForm({
       responsable: data.responsable,
       // Solo se persiste el campo que corresponde al tipo elegido.
       resultado: esConfirmacion ? data.resultado : null,
-      pajilla_toro_ref_id: data.tipo_evento === "inseminacion" ? data.pajilla_toro_ref_id : null,
+      pajilla_id: data.tipo_evento === "inseminacion" ? data.pajilla_id : null,
       toro_id: data.tipo_evento === "monta" ? data.toro_id : null,
     };
 
@@ -218,22 +227,29 @@ export function EventForm({
           <Label>Pajilla utilizada</Label>
           <Select
             value={pajillaValue ?? ""}
-            onValueChange={(val) => setValue("pajilla_toro_ref_id", val || null)}
+            onValueChange={(val) => setValue("pajilla_id", val || null)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Seleccionar toro de la pajilla (opcional)" />
+              <SelectValue placeholder="Seleccionar lote de pajillas (opcional)" />
             </SelectTrigger>
             <SelectContent>
-              {pajillasPorToro.map((p) => (
-                <SelectItem key={p.toro_ref_id} value={p.toro_ref_id}>
-                  {p.toro_nombre} ({p.total_disponible} disponibles)
-                </SelectItem>
-              ))}
+              {lotesSeleccionables.length === 0 ? (
+                <div className="px-2 py-3 text-sm text-gray-400">
+                  No hay pajillas disponibles en el inventario
+                </div>
+              ) : (
+                lotesSeleccionables.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.toro_nombre} · {format(new Date(p.fecha_compra + "T00:00:00"), "dd/MM/yyyy")}{" "}
+                    — {p.cantidad_disponible} disponible(s)
+                  </SelectItem>
+                ))
+              )}
             </SelectContent>
           </Select>
           <p className="text-xs text-gray-400">
-            Queda registrado como referencia. El descuento del inventario sigue haciéndose al
-            dar de alta la cría.
+            Se listan los lotes con existencias. Al guardar se descuenta una pajilla del lote
+            elegido; si luego editas o eliminas el evento, el inventario se ajusta solo.
           </p>
         </div>
       )}

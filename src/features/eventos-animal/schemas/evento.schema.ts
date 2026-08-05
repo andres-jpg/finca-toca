@@ -16,6 +16,7 @@ export const eventoSchema = z
         "palpacion",
         "confirmacion_prenez",
         "parto",
+        "aborto",
         "secado",
         "topizado",
         "observacion",
@@ -26,7 +27,7 @@ export const eventoSchema = z
     descripcion: z.string().optional(),
     responsable: z.string().optional(),
     resultado: z.enum(["cargada", "rechequeo", "vacia"]).optional().nullable(),
-    pajilla_toro_ref_id: z.string().optional().nullable(),
+    pajilla_id: z.string().uuid().optional().nullable(),
     toro_id: z.string().optional().nullable(),
   })
   .superRefine((data, ctx) => {

@@ -9,6 +9,8 @@ import type { UserRole } from "@/types";
 interface DashboardLayoutClientProps {
   email: string;
   userRole: UserRole | null;
+  /** Nombre del cliente para la marca de la barra lateral; `null` en roles de cooperativa. */
+  tenantNombre: string | null;
   /** Se reenvía tal cual al Header: se renderiza en el servidor pese a este boundary. */
   alertasSlot?: React.ReactNode;
   children: React.ReactNode;
@@ -17,6 +19,7 @@ interface DashboardLayoutClientProps {
 export function DashboardLayoutClient({
   email,
   userRole,
+  tenantNombre,
   alertasSlot,
   children,
 }: DashboardLayoutClientProps) {
@@ -33,6 +36,7 @@ export function DashboardLayoutClient({
       >
         <Sidebar
           role={userRole}
+          tenantNombre={tenantNombre}
           mobileMenuOpen={mobileMenuOpen}
           onCloseMobileMenu={() => setMobileMenuOpen(false)}
         />

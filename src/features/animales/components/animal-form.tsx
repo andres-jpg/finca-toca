@@ -29,7 +29,7 @@ import type {
   AnimalSexo,
   EstadoProductivo,
   EstadoReproductivo,
-  PajillaPorToro,
+  PajillaDisponible,
 } from "@/types";
 
 const SEXO_LABELS: Record<AnimalSexo, string> = {
@@ -69,11 +69,11 @@ interface FormValues {
 interface AnimalFormProps {
   animal?: Animal;
   animales: Animal[];
-  pajillasPorToro: PajillaPorToro[];
+  lotesPajillas: PajillaDisponible[];
   onSuccess: () => void;
 }
 
-export function AnimalForm({ animal, animales, pajillasPorToro, onSuccess }: AnimalFormProps) {
+export function AnimalForm({ animal, animales, lotesPajillas, onSuccess }: AnimalFormProps) {
   const getInitialPadreTipo = (): PadreTipo => {
     if (!animal) return "none";
     if (animal.padre_id) return "animal";
@@ -84,7 +84,9 @@ export function AnimalForm({ animal, animales, pajillasPorToro, onSuccess }: Ani
   const [padreTipo, setPadreTipo] = useState<PadreTipo>(getInitialPadreTipo);
   const [selectedPajillaToro, setSelectedPajillaToro] = useState<string>("");
 
-  const pajillasDisponibles = pajillasPorToro.filter((p) => p.total_disponible > 0);
+  // Sin filtrar por stock: la cría nace ~9 meses después de usarse la pajilla, así que su
+  // lote de origen casi siempre está ya agotado. Aquí solo se registra de qué toro vino.
+  const lotesParaPadre = lotesPajillas;
 
   const {
     register,
@@ -168,7 +170,7 @@ export function AnimalForm({ animal, animales, pajillasPorToro, onSuccess }: Ani
         numero_registro: data.origen === "externa" ? data.numero_registro : undefined,
         madre_id: data.madre_id || null,
         padre_id: padreTipo === "animal" ? (data.padre_id || null) : null,
-        padre_pajilla_toro_ref_id:
+        padre_pajilla_id:
           padreTipo === "pajilla" && selectedPajillaToro ? selectedPajillaToro : null,
         padre_pajilla_nombre_keep:
           padreTipo === "pajilla" && !selectedPajillaToro
@@ -444,14 +446,14 @@ export function AnimalForm({ animal, animales, pajillasPorToro, onSuccess }: Ani
                   <p className="text-xs text-blue-600 font-medium">Padre actual por pajilla</p>
                   <p className="text-sm text-blue-800 font-semibold">{animal.padre_pajilla_nombre}</p>
                   <p className="text-xs text-blue-500 mt-0.5">
-                    Selecciona otra pajilla abajo para cambiarlo (descontará del inventario)
+                    Selecciona otra pajilla abajo para cambiarlo
                   </p>
                 </div>
               )}
-              {pajillasDisponibles.length === 0 ? (
+              {lotesParaPadre.length === 0 ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
                   <p className="text-sm text-amber-700">
-                    No hay pajillas disponibles en el inventario.
+                    No hay lotes de pajillas registrados en el inventario.
                   </p>
                 </div>
               ) : (
@@ -464,7 +466,7 @@ export function AnimalForm({ animal, animales, pajillasPorToro, onSuccess }: Ani
                       placeholder={
                         animal?.padre_pajilla_nombre
                           ? "Cambiar pajilla (opcional)..."
-                          : "Seleccionar toro de la pajilla"
+                          : "Seleccionar lote de la pajilla"
                       }
                     />
                   </SelectTrigger>
@@ -472,11 +474,11 @@ export function AnimalForm({ animal, animales, pajillasPorToro, onSuccess }: Ani
                     <SelectItem value="none">
                       {animal?.padre_pajilla_nombre ? "Mantener actual" : "Sin selección"}
                     </SelectItem>
-                    {pajillasDisponibles.map((p) => (
-                      <SelectItem key={p.toro_ref_id} value={p.toro_ref_id}>
+                    {lotesParaPadre.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
                         {p.toro_nombre}{" "}
                         <span className="text-gray-400">
-                          ({p.toro_ref_id}) — {p.total_disponible} disponibles
+                          ({p.toro_ref_id}) — {p.cantidad_disponible} disponible(s)
                         </span>
                       </SelectItem>
                     ))}

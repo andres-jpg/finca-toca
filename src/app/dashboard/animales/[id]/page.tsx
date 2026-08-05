@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
 import { getAnimalById, getAnimalesDeAlta } from "@/features/animales/actions/animales.actions";
 import { getEventosAnimal } from "@/features/eventos-animal/actions/eventos.actions";
-import { getPajillasPorToro } from "@/features/inventario/pajillas/actions/pajillas.actions";
+import { getLotesPajillas } from "@/features/inventario/pajillas/actions/pajillas.actions";
 import { getAlertasAnimal } from "@/features/alertas/actions/alertas.queries";
 import { AnimalFicha } from "@/features/animales/components/animal-ficha";
-import { canWrite, checkRoutePermission } from "@/lib/auth/check-permissions";
+import { formatEdad } from "@/lib/animales/estados";
+import { canDelete, canWrite, checkRoutePermission } from "@/lib/auth/check-permissions";
 
 export default async function AnimalFichaPage({
   params,
@@ -13,11 +14,11 @@ export default async function AnimalFichaPage({
 }) {
   const { id } = await params;
 
-  const [userRole, animal, animales, pajillasPorToro] = await Promise.all([
+  const [userRole, animal, animales, lotesPajillas] = await Promise.all([
     checkRoutePermission(["admin", "viewer"]),
     getAnimalById(id),
     getAnimalesDeAlta(),
-    getPajillasPorToro(),
+    getLotesPajillas(),
   ]);
 
   if (!animal) notFound();
@@ -35,10 +36,12 @@ export default async function AnimalFichaPage({
       animal={animal}
       eventos={eventos}
       animales={animales}
-      pajillasPorToro={pajillasPorToro}
+      lotesPajillas={lotesPajillas}
       alertas={alertas}
       faltaServicio={faltaServicio}
+      edad={formatEdad(animal.fecha_nacimiento)}
       canEdit={canEdit}
+      canDelete={canDelete(userRole)}
     />
   );
 }
