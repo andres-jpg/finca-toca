@@ -135,6 +135,8 @@ const navItems: NavItem[] = [
 
 interface SidebarProps {
   role?: UserRole | null;
+  /** Nombre del cliente (finca) de la sesión. `null` en roles de cooperativa. */
+  tenantNombre?: string | null;
   mobileMenuOpen?: boolean;
   onCloseMobileMenu?: () => void;
 }
@@ -149,6 +151,7 @@ const roleConfig: Record<UserRole, { label: string; classes: string }> = {
 
 export function Sidebar({
   role,
+  tenantNombre = null,
   mobileMenuOpen = false,
   onCloseMobileMenu,
 }: SidebarProps = {}) {
@@ -203,8 +206,11 @@ export function Sidebar({
                 <div className="h-8 w-8 rounded-lg bg-green-600 flex items-center justify-center shadow-sm shrink-0">
                   <Leaf className="h-4 w-4 text-white" />
                 </div>
-                <span className="font-semibold text-white tracking-tight truncate">
-                  Finca Villa Blanca
+                <span
+                  className="font-semibold text-white tracking-tight truncate"
+                  title={tenantNombre ?? undefined}
+                >
+                  {tenantNombre ? `Finca ${tenantNombre}` : "Finca"}
                 </span>
               </>
             )}

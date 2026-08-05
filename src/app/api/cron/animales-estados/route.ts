@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sincronizarEstadosPorEdad } from "@/lib/animales/sincronizar-estados";
+import { sincronizarEstadosAnimales } from "@/lib/animales/sincronizar-estados";
 
 /**
- * Avance diario de los estados productivos que dependen solo de la edad:
- * `leche` → `levante_1` (5 meses) → `levante_2` (+1,5 años).
+ * Avance diario de los estados que corren solos con el calendario:
+ * - productivo por edad: `leche` → `levante_1` (5 meses) → `levante_2` (+1,5 años);
+ * - reproductivo: `pre_servicio` → `servicio` a los 60 días del parto/aborto.
  *
  * No hay sesión de usuario en una invocación de cron, así que se autentica con
  * `CRON_SECRET` (lo envía Vercel Cron como Bearer) y se usa el cliente service-role.
@@ -22,7 +23,7 @@ export async function GET(request: Request) {
 
   try {
     const supabase = createAdminClient();
-    const { revisados, actualizados } = await sincronizarEstadosPorEdad(supabase);
+    const { revisados, actualizados } = await sincronizarEstadosAnimales(supabase);
 
     return NextResponse.json({
       ok: true,

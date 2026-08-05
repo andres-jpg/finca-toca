@@ -125,6 +125,7 @@ export type TipoEvento =
   | "palpacion"
   | "confirmacion_prenez"
   | "parto"
+  | "aborto"
   | "secado"
   | "topizado"
   | "observacion";
@@ -142,8 +143,8 @@ export interface EventoAnimal {
   descripcion: string | null;
   responsable: string | null;
   resultado: ResultadoPalpacion | null;
-  /** Inseminación: toro de la pajilla utilizada (`pajillas.toro_ref_id`). */
-  pajilla_toro_ref_id: string | null;
+  /** Inseminación: lote de pajillas utilizado (`pajillas.id`). Descuenta stock. */
+  pajilla_id: string | null;
   /** Monta: toro que cubrió (`animales.id`). */
   toro_id: string | null;
 }
@@ -192,6 +193,7 @@ export interface Pajilla {
   created_at: string;
   toro_nombre: string;
   toro_ref_id: string;
+  proveedor: string | null;
   fecha_compra: string;
   cantidad: number;
   cantidad_disponible: number;
@@ -199,10 +201,28 @@ export interface Pajilla {
 }
 
 export interface PajillaPorToro {
+  /**
+   * Identificador de la fila agrupada (`nombre||referencia`). Existe porque `toro_ref_id`
+   * **no es único** —"NA" lo comparten varios toros—, así que no sirve como key de React.
+   */
+  clave: string;
   toro_nombre: string;
   toro_ref_id: string;
   total_disponible: number;
   total_inicial: number;
+}
+
+/**
+ * Un lote con existencias, para el selector de pajilla de una inseminación.
+ * Es por **lote** y no por toro: `toro_ref_id` es texto libre y está repetido
+ * (varios toros comparten "NA"), así que agrupar por él escondía lotes.
+ */
+export interface PajillaDisponible {
+  id: string;
+  toro_nombre: string;
+  toro_ref_id: string;
+  fecha_compra: string;
+  cantidad_disponible: number;
 }
 
 // ===== ROLES DE USUARIO =====

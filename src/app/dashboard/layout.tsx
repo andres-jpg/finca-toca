@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getUserRole } from "@/lib/auth/get-user-role";
+import { getTenantActual } from "@/lib/auth/get-tenant";
 import { canWrite } from "@/lib/auth/check-permissions";
 import { DashboardLayoutClient } from "@/components/layout/dashboard-layout-client";
 import { getAlertas } from "@/features/alertas/actions/alertas.queries";
@@ -21,7 +22,8 @@ export default async function DashboardLayout({
       data: { session },
     },
     userRole,
-  ] = await Promise.all([supabase.auth.getSession(), getUserRole()]);
+    tenant,
+  ] = await Promise.all([supabase.auth.getSession(), getUserRole(), getTenantActual()]);
 
   if (!session) {
     redirect("/login");
@@ -37,6 +39,7 @@ export default async function DashboardLayout({
     <DashboardLayoutClient
       email={session.user.email ?? ""}
       userRole={userRole}
+      tenantNombre={tenant?.nombre ?? null}
       alertasSlot={alertasSlot}
     >
       {children}

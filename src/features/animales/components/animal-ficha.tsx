@@ -7,12 +7,18 @@ import { es } from "date-fns/locale";
 import { ArrowLeft, Pencil, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import { EntityModal } from "@/components/shared/entity-modal";
+import { DeleteConfirmationDialog } from "@/components/shared/delete-confirmation-dialog";
 import { AnimalForm } from "@/features/animales/components/animal-form";
 import { AnimalGenealogy } from "@/features/animales/components/animal-genealogy";
 import { AnimalOffspring } from "@/features/animales/components/animal-offspring";
-import { EventsTimeline } from "@/features/eventos-animal/components/events-timeline";
+import {
+  EventsTimeline,
+  labelTipoEvento,
+} from "@/features/eventos-animal/components/events-timeline";
 import { EventForm } from "@/features/eventos-animal/components/event-form";
+import { deleteEventoAnimal } from "@/features/eventos-animal/actions/eventos.actions";
 import { AlertasAnimal } from "@/features/alertas/components/alertas-animal";
 import {
   ESTADO_PRODUCTIVO_COLORS,
@@ -25,7 +31,7 @@ import type {
   AnimalDetalle,
   EventoAnimal,
   Animal,
-  PajillaPorToro,
+  PajillaDisponible,
 } from "@/types";
 
 const ORIGEN_LABELS: Record<string, string> = {
@@ -53,27 +59,48 @@ interface AnimalFichaProps {
   animal: AnimalDetalle;
   eventos: EventoAnimal[];
   animales: Animal[];
-  pajillasPorToro: PajillaPorToro[];
+  lotesPajillas: PajillaDisponible[];
   alertas: Alerta[];
   faltaServicio: boolean;
+  /** Ya formateada en el servidor (`formatEdad`); `null` si no hay fecha de nacimiento. */
+  edad: string | null;
   canEdit: boolean;
+  canDelete: boolean;
 }
 
 export function AnimalFicha({
   animal,
   eventos,
   animales,
-  pajillasPorToro,
+  lotesPajillas,
   alertas,
   faltaServicio,
+  edad,
   canEdit,
+  canDelete,
 }: AnimalFichaProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
   const [editEvento, setEditEvento] = useState<EventoAnimal | null>(null);
+  const [deleteEvento, setDeleteEvento] = useState<EventoAnimal | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const animalTipo = animal.sexo === "hembra" ? "vaca" : "toro";
   const toros = animales.filter((a) => a.sexo === "macho" && a.id !== animal.id);
+
+  const handleDeleteEvento = async () => {
+    if (!deleteEvento || deleting) return;
+    setDeleting(true);
+    try {
+      await deleteEventoAnimal(deleteEvento.id);
+      toast.success("Evento eliminado");
+      setDeleteEvento(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error al eliminar");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -144,6 +171,7 @@ export function AnimalFicha({
                 : "—"
             }
           />
+          <Field label="Edad" value={edad} />
           <Field label="Origen" value={ORIGEN_LABELS[animal.origen ?? ""] ?? animal.origen} />
           {animal.origen === "externa" && animal.fecha_compra && (
             <Field
@@ -198,7 +226,13 @@ export function AnimalFicha({
             </Button>
           )}
         </div>
-        <EventsTimeline eventos={eventos} canEdit={canEdit} onEdit={(evento) => setEditEvento(evento)} />
+        <EventsTimeline
+          eventos={eventos}
+          canEdit={canEdit}
+          onEdit={(evento) => setEditEvento(evento)}
+          canDelete={canDelete}
+          onDelete={(evento) => setDeleteEvento(evento)}
+        />
       </section>
 
       {/* Modales */}
@@ -208,7 +242,7 @@ export function AnimalFicha({
             <AnimalForm
               animal={animal}
               animales={animales.filter((a) => a.id !== animal.id)}
-              pajillasPorToro={pajillasPorToro}
+              lotesPajillas={lotesPajillas}
               onSuccess={() => setEditOpen(false)}
             />
           </EntityModal>
@@ -218,7 +252,7 @@ export function AnimalFicha({
               animalId={animal.id}
               animalTipo={animalTipo}
               toros={toros}
-              pajillasPorToro={pajillasPorToro}
+              lotesPajillas={lotesPajillas}
               onSuccess={() => setEventOpen(false)}
             />
           </EntityModal>
@@ -230,12 +264,30 @@ export function AnimalFicha({
                 animalTipo={animalTipo}
                 evento={editEvento}
                 toros={toros}
-                pajillasPorToro={pajillasPorToro}
+                lotesPajillas={lotesPajillas}
                 onSuccess={() => setEditEvento(null)}
               />
             )}
           </EntityModal>
         </>
+      )}
+
+      {canDelete && (
+        <DeleteConfirmationDialog
+          open={!!deleteEvento}
+          onOpenChange={(open) => !open && setDeleteEvento(null)}
+          onConfirm={handleDeleteEvento}
+          title="¿Eliminar este evento?"
+          description={
+            deleteEvento
+              ? `Se eliminará el evento «${labelTipoEvento(deleteEvento.tipo_evento)}» del ${format(
+                  parseISO(deleteEvento.fecha),
+                  "dd/MM/yyyy",
+                  { locale: es }
+                )}. Si era el que fijaba el estado del animal, se recalculará a partir del evento anterior. Esta acción no se puede deshacer.`
+              : undefined
+          }
+        />
       )}
     </div>
   );

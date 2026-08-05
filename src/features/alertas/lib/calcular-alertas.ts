@@ -6,6 +6,7 @@ import {
   DIAS_TOPIZADO,
   MESES_PARTO,
   MESES_SECADO,
+  TIPOS_EVENTO_FIN_GESTACION,
   parseFechaDB,
 } from "@/lib/animales/estados";
 import { formatDate } from "@/lib/utils";
@@ -104,8 +105,9 @@ export function faltaRegistrarServicio(
  * - **Secado** y **parto probable** se cuentan desde `fecha` del último evento
  *   `inseminacion`/`monta`, nunca desde la palpación ni desde `created_at`.
  * - **Topizado**: 15 días desde el nacimiento, solo mientras la cría siga en estado `leche`.
- * - **Celo**: 50 días tras el parto (pre-servicio), o el siguiente múltiplo de 20 días
- *   desde el último evento reproductivo si la vaca está vacía.
+ * - **Celo**: 50 días tras cerrarse la gestación —parto o aborto— mientras la vaca esté
+ *   en pre-servicio, o el siguiente múltiplo de 20 días desde el último evento
+ *   reproductivo si la vaca está vacía.
  */
 export function calcularAlertas(
   animales: AnimalParaAlertas[],
@@ -149,7 +151,9 @@ export function calcularAlertas(
     if (animal.sexo !== "hembra") continue;
 
     const servicio = ultimoDe(suyos, ["inseminacion", "monta"]);
-    const parto = ultimoDe(suyos, ["parto"]);
+    // Parto y aborto cierran la gestación igual: devuelven la vaca a pre-servicio y
+    // son la fecha base desde la que se cuenta el primer celo.
+    const finGestacion = ultimoDe(suyos, TIPOS_EVENTO_FIN_GESTACION);
 
     // --- Secado y parto probable: solo en la rama "cargada" del diagrama, y siempre
     //     contados desde la fecha del servicio que introdujo el usuario.
@@ -171,21 +175,30 @@ export function calcularAlertas(
       }
     }
 
-    // --- Celo tras el parto (pre-servicio): +50 días.
-    if (animal.estado_reproductivo === "pre_servicio" && parto) {
+    // --- Celo tras cerrarse la gestación: +60 días desde el parto/aborto.
+    // Incluye `servicio` además de `pre_servicio`: el cron mueve la vaca a `servicio`
+    // exactamente el día objetivo de esta alerta, así que filtrar solo por `pre_servicio`
+    // la apagaría justo cuando vence. Sigue viva hasta que se registre el celo o el servicio.
+    if (
+      (animal.estado_reproductivo === "pre_servicio" ||
+        animal.estado_reproductivo === "servicio") &&
+      finGestacion
+    ) {
       const yaEntroEnCelo = existeDesde(
         suyos,
         ["celo", "inseminacion", "monta"],
-        parto.fecha
+        finGestacion.fecha
       );
       if (!yaEntroEnCelo) {
-        const fechaParto = parseFechaDB(parto.fecha);
+        const fechaCierre = parseFechaDB(finGestacion.fecha);
+        const etiquetaCierre =
+          finGestacion.tipo_evento === "aborto" ? "Aborto" : "Parto";
         alertas.push(
           construir(
             animal,
             "celo",
-            addDays(fechaParto, DIAS_CELO_POST_PARTO),
-            `Parto del ${fmt(fechaParto)}`,
+            addDays(fechaCierre, DIAS_CELO_POST_PARTO),
+            `${etiquetaCierre} del ${fmt(fechaCierre)}`,
             hoy
           )
         );
@@ -199,6 +212,7 @@ export function calcularAlertas(
         "palpacion",
         "confirmacion_prenez",
         "parto",
+        "aborto",
         "inseminacion",
         "monta",
       ]);

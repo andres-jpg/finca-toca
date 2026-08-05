@@ -6,8 +6,6 @@ import {
 } from "@/features/alertas/components/alerta-config";
 import type { Alerta } from "@/types";
 
-const MAX_VISIBLES = 8;
-
 export function AlertasCard({
   alertas,
   canEdit = false,
@@ -16,13 +14,11 @@ export function AlertasCard({
   canEdit?: boolean;
 }) {
   const vencidas = alertas.filter((a) => a.severidad === "vencida").length;
-  const visibles = alertas.slice(0, MAX_VISIBLES);
-  const ocultas = alertas.length - visibles.length;
-  const grupos = agruparPorSeveridad(visibles);
+  const grupos = agruparPorSeveridad(alertas);
 
   return (
-    <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-sm h-full">
-      <div className="flex items-start justify-between">
+    <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-sm flex flex-col flex-1 w-full h-full min-h-0 overflow-hidden">
+      <div className="flex items-start justify-between shrink-0">
         <div className="min-w-0">
           <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">
             Alertas del hato
@@ -47,11 +43,11 @@ export function AlertasCard({
         </div>
       </div>
 
-      <div className="mt-3 pt-3 border-t border-stone-100">
+      <div className="mt-3 pt-3 border-t border-stone-100 min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {alertas.length === 0 ? (
-          <div className="flex items-center gap-2 py-6 justify-center text-stone-400">
-            <CheckCircle2 className="h-4 w-4" />
-            <span className="text-sm">Nada pendiente esta semana</span>
+          <div className="flex items-center gap-2 py-2 justify-center text-stone-400">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <span className="text-xs">Nada pendiente</span>
           </div>
         ) : (
           <div className="divide-y divide-stone-100">
@@ -68,12 +64,6 @@ export function AlertasCard({
               </div>
             ))}
           </div>
-        )}
-
-        {ocultas > 0 && (
-          <p className="text-xs text-stone-400 pt-3 border-t border-stone-100 mt-1">
-            y {ocultas} más — revísalas desde la campana o la ficha de cada animal.
-          </p>
         )}
       </div>
     </div>
