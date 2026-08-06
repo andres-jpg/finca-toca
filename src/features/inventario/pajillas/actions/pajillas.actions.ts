@@ -4,10 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { formatDate } from "@/lib/utils";
 import { requireRole } from "@/lib/auth/check-permissions";
-import type { Pajilla, PajillaDisponible, PajillaPorToro } from "@/types";
+import type { AnimalRaza, Pajilla, PajillaDisponible, PajillaPorToro } from "@/types";
 
 const CAMPOS_PAJILLA =
-  "id, created_at, toro_nombre, toro_ref_id, proveedor, fecha_compra, cantidad, cantidad_disponible, observaciones";
+  "id, created_at, toro_nombre, toro_ref_id, raza, proveedor, fecha_compra, cantidad, cantidad_disponible, observaciones";
 
 export async function getPajillas(): Promise<Pajilla[]> {
   const supabase = await createClient();
@@ -23,6 +23,7 @@ export async function getPajillas(): Promise<Pajilla[]> {
     created_at: row.created_at,
     toro_nombre: row.toro_nombre,
     toro_ref_id: row.toro_ref_id,
+    raza: row.raza ?? null,
     proveedor: row.proveedor ?? null,
     fecha_compra: row.fecha_compra,
     cantidad: row.cantidad,
@@ -88,14 +89,16 @@ export async function getPajillasPorToro(): Promise<PajillaPorToro[]> {
     }
   }
 
-  return Array.from(grouped.values()).sort((a, b) =>
-    a.toro_nombre.localeCompare(b.toro_nombre)
-  );
+  // Solo toros con existencias: uno agotado no aporta nada a "disponibles por toro".
+  return Array.from(grouped.values())
+    .filter((t) => t.total_disponible > 0)
+    .sort((a, b) => a.toro_nombre.localeCompare(b.toro_nombre));
 }
 
 interface PajillaFormData {
   toro_nombre: string;
   toro_ref_id: string;
+  raza?: AnimalRaza | null;
   proveedor?: string;
   fecha_compra: Date;
   cantidad: number;
@@ -108,6 +111,7 @@ export async function createPajillas(formData: PajillaFormData) {
   const { error } = await supabase.from("pajillas").insert({
     toro_nombre: formData.toro_nombre,
     toro_ref_id: formData.toro_ref_id,
+    raza: formData.raza || null,
     proveedor: formData.proveedor || null,
     fecha_compra: formatDate(formData.fecha_compra),
     cantidad: formData.cantidad,
@@ -149,6 +153,7 @@ export async function updatePajilla(id: string, formData: PajillaFormData) {
     .update({
       toro_nombre: formData.toro_nombre,
       toro_ref_id: formData.toro_ref_id,
+      raza: formData.raza || null,
       proveedor: formData.proveedor || null,
       fecha_compra: formatDate(formData.fecha_compra),
       cantidad: formData.cantidad,

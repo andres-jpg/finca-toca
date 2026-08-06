@@ -85,7 +85,7 @@ export interface ExtraccionLecheFormData {
 // ===== ANIMALES =====
 export type VacaOrigen = "finca" | "externa";
 export type AnimalSexo = "hembra" | "macho";
-export type AnimalRaza = "holstein" | "jersey" | "jerholm" | "normando";
+export type AnimalRaza = "holstein" | "jersey" | "jerhol" | "normando" | "ayrshire" | "cruce";
 
 /** Ciclo productivo: leche → levante_1 → levante_2 → produccion ⇄ secado (machos: … → reproductor). */
 export type EstadoProductivo = Database["public"]["Enums"]["estado_productivo"];
@@ -99,6 +99,8 @@ export interface Animal {
   nombre: string;
   sexo: AnimalSexo;
   raza: AnimalRaza | null;
+  /** Composición racial en texto libre, ej. "AYR:88% x HOL:13%". Opcional. */
+  sangre: string | null;
   origen: VacaOrigen | null;
   estado_productivo: EstadoProductivo | null;
   estado_reproductivo: EstadoReproductivo | null;
@@ -110,6 +112,10 @@ export interface Animal {
   padre_id: string | null;
   padre_nombre: string | null;
   padre_pajilla_nombre: string | null;
+  /** Nombre de un toro de monta natural que no es de la finca ni fue usado por pajilla. */
+  padre_alquiler_nombre: string | null;
+  /** Raza del toro de alquiler — no tiene un registro propio del que inferirla. */
+  padre_alquiler_raza: AnimalRaza | null;
   alta: boolean;
 }
 
@@ -193,6 +199,7 @@ export interface Pajilla {
   created_at: string;
   toro_nombre: string;
   toro_ref_id: string;
+  raza: AnimalRaza | null;
   proveedor: string | null;
   fecha_compra: string;
   cantidad: number;

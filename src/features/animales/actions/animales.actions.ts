@@ -46,7 +46,7 @@ async function nombreToroDeLote(
 }
 
 const SELECT_FIELDS =
-  "id, created_at, identificador, nombre, sexo, raza, origen, estado_productivo, estado_reproductivo, fecha_compra, fecha_nacimiento, numero_registro, madre_id, padre_id, padre_pajilla_nombre, alta, madre:madre_id(nombre), padre:padre_id(nombre)";
+  "id, created_at, identificador, nombre, sexo, raza, sangre, origen, estado_productivo, estado_reproductivo, fecha_compra, fecha_nacimiento, numero_registro, madre_id, padre_id, padre_pajilla_nombre, padre_alquiler_nombre, padre_alquiler_raza, alta, madre:madre_id(nombre), padre:padre_id(nombre)";
 
 function mapRow(row: any): Animal {
   const madreRaw = Array.isArray(row.madre) ? row.madre[0] : row.madre;
@@ -58,6 +58,7 @@ function mapRow(row: any): Animal {
     nombre: row.nombre,
     sexo: row.sexo,
     raza: row.raza,
+    sangre: row.sangre ?? null,
     origen: row.origen,
     estado_productivo: row.estado_productivo,
     estado_reproductivo: row.estado_reproductivo,
@@ -69,6 +70,8 @@ function mapRow(row: any): Animal {
     padre_id: row.padre_id,
     padre_nombre: padreRaw?.nombre ?? null,
     padre_pajilla_nombre: row.padre_pajilla_nombre ?? null,
+    padre_alquiler_nombre: row.padre_alquiler_nombre ?? null,
+    padre_alquiler_raza: row.padre_alquiler_raza ?? null,
     alta: row.alta,
   };
 }
@@ -146,6 +149,8 @@ interface AnimalFormData {
   nombre: string;
   sexo: AnimalSexo;
   raza?: AnimalRaza | null;
+  /** Composición racial en texto libre, ej. "AYR:88% x HOL:13%". Opcional. */
+  sangre?: string | null;
   origen: VacaOrigen;
   estado_productivo?: EstadoProductivo | null;
   estado_reproductivo?: EstadoReproductivo | null;
@@ -157,6 +162,10 @@ interface AnimalFormData {
   /** Lote de pajillas del que salió el padre (`pajillas.id`). Solo se usa para el nombre. */
   padre_pajilla_id?: string | null;
   padre_pajilla_nombre_keep?: string | null;
+  /** Nombre de un toro de monta natural que no es de la finca ni vino de una pajilla. */
+  padre_alquiler_nombre?: string | null;
+  /** Raza del toro de alquiler — no tiene un registro propio del que inferirla. */
+  padre_alquiler_raza?: AnimalRaza | null;
 }
 
 async function assertIdentificadorDisponible(
@@ -215,6 +224,7 @@ export async function createAnimal(formData: AnimalFormData) {
     nombre: formData.nombre,
     sexo: formData.sexo,
     raza: formData.raza || null,
+    sangre: formData.sangre || null,
     origen: formData.origen,
     estado_productivo: formData.estado_productivo || null,
     // El estado reproductivo solo aplica a hembras.
@@ -225,6 +235,8 @@ export async function createAnimal(formData: AnimalFormData) {
     madre_id: formData.madre_id || null,
     padre_id: padreId,
     padre_pajilla_nombre: padrePajillaNombre,
+    padre_alquiler_nombre: formData.padre_alquiler_nombre || null,
+    padre_alquiler_raza: formData.padre_alquiler_nombre ? formData.padre_alquiler_raza || null : null,
   });
 
   if (error) throw new Error("No se pudo registrar el animal");
@@ -270,6 +282,7 @@ export async function updateAnimal(id: string, formData: AnimalFormData) {
       nombre: formData.nombre,
       sexo: formData.sexo,
       raza: formData.raza || null,
+      sangre: formData.sangre || null,
       origen: formData.origen,
       estado_productivo: formData.estado_productivo || null,
       estado_reproductivo: resolverEstadoReproductivo(formData),
@@ -279,6 +292,8 @@ export async function updateAnimal(id: string, formData: AnimalFormData) {
       madre_id: formData.madre_id || null,
       padre_id: padreId,
       padre_pajilla_nombre: padrePajillaNombre,
+      padre_alquiler_nombre: formData.padre_alquiler_nombre || null,
+      padre_alquiler_raza: formData.padre_alquiler_nombre ? formData.padre_alquiler_raza || null : null,
     })
     .eq("id", id);
 

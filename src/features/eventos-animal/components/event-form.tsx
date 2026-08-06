@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
@@ -9,6 +10,7 @@ import {
   createEventoAnimal,
   updateEventoAnimal,
 } from "@/features/eventos-animal/actions/eventos.actions";
+import { createAnimal } from "@/features/animales/actions/animales.actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,9 +24,12 @@ import {
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/shared/date-picker";
 import { proyeccionesServicio } from "@/lib/animales/estados";
+import { RAZAS, RAZA_LABELS } from "@/lib/animales/razas";
 import { toast } from "sonner";
 import type {
   Animal,
+  AnimalRaza,
+  AnimalSexo,
   EventoAnimal,
   PajillaDisponible,
   ResultadoPalpacion,
@@ -67,10 +72,14 @@ interface EventFormProps {
   animalId: string;
   animalTipo: "vaca" | "toro";
   evento?: EventoAnimal;
-  /** Machos de alta, para el selector de toro en una monta. */
+  /** Machos de alta, para el selector de toro en una monta y como padre de la cría. */
   toros?: Animal[];
-  /** Lotes de pajillas con su stock, para el selector de inseminación. */
+  /** Lotes de pajillas con su stock, para el selector de inseminación y de padre de la cría. */
   lotesPajillas?: PajillaDisponible[];
+  /** El animal sobre el que se registra el evento (la madre) — prellena raza y último servicio al registrar un parto. */
+  madre?: Animal;
+  /** Eventos ya cargados de este animal, para heredar el padre del último servicio en un parto. */
+  eventosPrevios?: EventoAnimal[];
   onSuccess: () => void;
 }
 
@@ -92,9 +101,43 @@ export function EventForm({
   evento,
   toros = [],
   lotesPajillas = [],
+  madre,
+  eventosPrevios = [],
   onSuccess,
 }: EventFormProps) {
   const isEditing = !!evento;
+
+  // Último servicio (inseminación o monta) registrado en este animal, para heredar el padre
+  // de la cría al registrar un parto — mismo criterio que usan las alertas de parto/secado:
+  // la fecha/padre reales están en el evento de servicio, no en el estado del animal.
+  const ultimoServicio = useMemo(() => {
+    const ultimo = eventosPrevios.find(
+      (e) => e.tipo_evento === "inseminacion" || e.tipo_evento === "monta"
+    );
+    if (!ultimo) return null;
+    if (ultimo.tipo_evento === "monta" && ultimo.toro_id) {
+      const toro = toros.find((t) => t.id === ultimo.toro_id);
+      if (toro) return { tipo: "animal" as const, id: toro.id, nombre: toro.nombre };
+    }
+    if (ultimo.tipo_evento === "inseminacion" && ultimo.pajilla_id) {
+      const lote = lotesPajillas.find((p) => p.id === ultimo.pajilla_id);
+      if (lote) return { tipo: "pajilla" as const, id: lote.id, nombre: lote.toro_nombre };
+    }
+    return null;
+  }, [eventosPrevios, toros, lotesPajillas]);
+
+  // Datos de la cría a crear junto con el evento de parto — solo aplica al registrar uno
+  // nuevo (no al editar uno ya existente, cuya cría ya se creó la primera vez).
+  const [criaSexo, setCriaSexo] = useState<AnimalSexo | "">("");
+  const [criaIdentificador, setCriaIdentificador] = useState("");
+  const [criaNombre, setCriaNombre] = useState("");
+  const [criaRaza, setCriaRaza] = useState<AnimalRaza | "">(madre?.raza ?? "");
+  // El padre de la cría no se elige a mano: se infiere del último servicio (monta o
+  // inseminación) registrado en la vaca. La única alternativa manual es un toro de alquiler,
+  // para el caso de una monta natural que no quedó registrada como evento.
+  const [criaEsAlquiler, setCriaEsAlquiler] = useState(false);
+  const [criaAlquilerNombre, setCriaAlquilerNombre] = useState("");
+  const [criaAlquilerRaza, setCriaAlquilerRaza] = useState<AnimalRaza | "">("");
 
   const {
     register,
@@ -133,6 +176,9 @@ export function EventForm({
   const esServicio = tipoValue === "inseminacion" || tipoValue === "monta";
   const esConfirmacion =
     tipoValue === "palpacion" || tipoValue === "confirmacion_prenez";
+  // La cría solo se crea junto con un parto nuevo — al editar uno ya existente la cría
+  // ya se creó la primera vez, así que el subformulario no vuelve a aparecer.
+  const mostrarCriaForm = tipoValue === "parto" && !isEditing;
 
   // Al registrar el servicio se muestran ya las fechas que generarán las alertas,
   // para que el usuario detecte de inmediato si se equivocó de día.
@@ -156,6 +202,53 @@ export function EventForm({
       if (isEditing) {
         await updateEventoAnimal(evento.id, payload);
         toast.success("Evento actualizado");
+      } else if (mostrarCriaForm) {
+        if (!criaSexo || !criaIdentificador.trim() || !criaNombre.trim() || !criaRaza) {
+          toast.error("Completa el sexo, identificador, nombre y raza de la cría");
+          return;
+        }
+        if (criaEsAlquiler && !criaAlquilerNombre.trim()) {
+          toast.error("Escribe el nombre del toro de alquiler, padre de la cría");
+          return;
+        }
+
+        // El padre se infiere del último servicio (monta o inseminación) registrado en la
+        // vaca; la única alternativa manual es un toro de alquiler.
+        const padreInferido = !criaEsAlquiler ? ultimoServicio : null;
+
+        // Se garantiza que la cría quede creada antes de registrar el parto: si esto
+        // falla, se aborta sin guardar el evento en vez de dejar un parto sin animal.
+        try {
+          await createAnimal({
+            identificador: criaIdentificador.trim(),
+            nombre: criaNombre.trim(),
+            sexo: criaSexo,
+            raza: criaRaza,
+            origen: "finca",
+            estado_productivo: "leche",
+            fecha_nacimiento: data.fecha,
+            madre_id: animalId,
+            padre_id: padreInferido?.tipo === "animal" ? padreInferido.id : null,
+            padre_pajilla_id: padreInferido?.tipo === "pajilla" ? padreInferido.id : null,
+            padre_alquiler_nombre: criaEsAlquiler ? criaAlquilerNombre.trim() : null,
+            padre_alquiler_raza: criaEsAlquiler ? criaAlquilerRaza || null : null,
+          });
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "No se pudo registrar la cría");
+          return;
+        }
+
+        try {
+          await createEventoAnimal(payload);
+          toast.success("Parto y cría registrados");
+        } catch (error) {
+          toast.error(
+            (error instanceof Error ? error.message : "No se pudo registrar el evento de parto") +
+              " — la cría ya quedó creada; registra el parto manualmente desde el historial."
+          );
+          onSuccess();
+          return;
+        }
       } else {
         await createEventoAnimal(payload);
         toast.success("Evento registrado");
@@ -220,6 +313,122 @@ export function EventForm({
         )}
         {errors.fecha && <p className="text-sm text-red-500">{errors.fecha.message}</p>}
       </div>
+
+      {/* Parto: se crea la cría en el mismo paso, con madre y (si se pudo inferir) padre ya prellenados */}
+      {mostrarCriaForm && (
+        <div className="space-y-3 rounded-lg border border-gray-200 p-3">
+          <div>
+            <Label>Datos de la cría</Label>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Madre: <span className="font-medium text-gray-600">{madre?.nombre ?? "esta vaca"}</span>
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Select
+              value={criaSexo || "none"}
+              onValueChange={(val) => setCriaSexo(val === "none" ? "" : (val as AnimalSexo))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Sexo de la cría" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Seleccionar sexo</SelectItem>
+                <SelectItem value="hembra">Hembra</SelectItem>
+                <SelectItem value="macho">Macho</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={criaRaza || "none"}
+              onValueChange={(val) => setCriaRaza(val === "none" ? "" : (val as AnimalRaza))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Raza" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Seleccionar raza</SelectItem>
+                {RAZAS.map((r) => (
+                  <SelectItem key={r} value={r}>
+                    {RAZA_LABELS[r]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              type="text"
+              placeholder="Identificador (ej: 231)"
+              value={criaIdentificador}
+              onChange={(e) => setCriaIdentificador(e.target.value)}
+            />
+            <Input
+              type="text"
+              placeholder="Nombre"
+              value={criaNombre}
+              onChange={(e) => setCriaNombre(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs text-gray-500">Padre de la cría</Label>
+
+            {!criaEsAlquiler && (
+              ultimoServicio ? (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+                  <p className="text-xs text-blue-600 font-medium">Inferido del último servicio</p>
+                  <p className="text-sm text-blue-800 font-semibold">{ultimoServicio.nombre}</p>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400">
+                  No se encontró una inseminación o monta previa registrada en esta vaca. La
+                  cría quedará sin padre, salvo que marques que fue un toro de alquiler.
+                </p>
+              )
+            )}
+
+            <label className="flex items-center gap-2 text-xs text-gray-600">
+              <input
+                type="checkbox"
+                checked={criaEsAlquiler}
+                onChange={(e) => setCriaEsAlquiler(e.target.checked)}
+              />
+              Fue un toro de alquiler{ultimoServicio ? " (en vez del inferido arriba)" : ""}
+            </label>
+
+            {criaEsAlquiler && (
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  type="text"
+                  placeholder="Nombre del toro de alquiler (ej: Aurora)"
+                  value={criaAlquilerNombre}
+                  onChange={(e) => setCriaAlquilerNombre(e.target.value)}
+                />
+                <Select
+                  value={criaAlquilerRaza || "none"}
+                  onValueChange={(val) =>
+                    setCriaAlquilerRaza(val === "none" ? "" : (val as AnimalRaza))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Raza (opcional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin definir</SelectItem>
+                    {RAZAS.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {RAZA_LABELS[r]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Inseminación: qué pajilla se usó */}
       {tipoValue === "inseminacion" && (

@@ -13,6 +13,7 @@ import { UsarPajillasForm } from "@/features/inventario/pajillas/components/usar
 import { deletePajilla } from "@/features/inventario/pajillas/actions/pajillas.actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { RAZA_LABELS } from "@/lib/animales/razas";
 import { toast } from "sonner";
 import type { Pajilla, PajillaPorToro } from "@/types";
 
@@ -34,6 +35,7 @@ function PajillaDetail({ pajilla }: { pajilla: Pajilla }) {
       <div className="grid grid-cols-2 gap-4">
         <Field label="Nombre del toro" value={pajilla.toro_nombre} />
         <Field label="ID del toro" value={pajilla.toro_ref_id} />
+        <Field label="Raza" value={pajilla.raza ? RAZA_LABELS[pajilla.raza] : null} />
         <Field label="Proveedor" value={pajilla.proveedor} />
         <Field label="Fecha de compra" value={fecha} />
         <Field label="Cantidad inicial" value={`${pajilla.cantidad} pajillas`} />
@@ -210,6 +212,14 @@ export function PajillasTable({ pajillas, porToro, canEdit }: PajillasTableProps
             <p className="text-xs text-gray-400">{row.original.toro_ref_id}</p>
           </div>
         ),
+      },
+      {
+        accessorKey: "raza",
+        header: "Raza",
+        cell: ({ getValue }) => {
+          const raza = getValue<Pajilla["raza"]>();
+          return raza ? RAZA_LABELS[raza] : <span className="text-gray-400">—</span>;
+        },
       },
       {
         accessorKey: "fecha_compra",
