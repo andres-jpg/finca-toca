@@ -11,9 +11,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { DatePicker } from "@/components/shared/date-picker";
+import { RAZAS, RAZA_LABELS } from "@/lib/animales/razas";
 import { toast } from "sonner";
-import type { Pajilla } from "@/types";
+import type { AnimalRaza, Pajilla } from "@/types";
 
 interface PajillaFormProps {
   /** Presente = modo edición. */
@@ -36,6 +44,7 @@ export function PajillaForm({ pajilla, onSuccess }: PajillaFormProps) {
     defaultValues: {
       toro_nombre: pajilla?.toro_nombre ?? "",
       toro_ref_id: pajilla?.toro_ref_id ?? "",
+      raza: pajilla?.raza ?? null,
       proveedor: pajilla?.proveedor ?? "",
       fecha_compra: pajilla
         ? new Date(pajilla.fecha_compra + "T00:00:00")
@@ -87,6 +96,28 @@ export function PajillaForm({ pajilla, onSuccess }: PajillaFormProps) {
           {errors.toro_ref_id && (
             <p className="text-xs text-red-500">{errors.toro_ref_id.message}</p>
           )}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Raza</Label>
+          <Select
+            value={watch("raza") ?? "none"}
+            onValueChange={(val) =>
+              setValue("raza", val === "none" ? null : (val as AnimalRaza))
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Seleccionar raza (opcional)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Sin definir</SelectItem>
+              {RAZAS.map((r) => (
+                <SelectItem key={r} value={r}>
+                  {RAZA_LABELS[r]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="space-y-1.5">

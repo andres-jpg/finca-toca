@@ -3,6 +3,10 @@ import { z } from "zod";
 export const pajillaSchema = z.object({
   toro_nombre: z.string().min(1, "El nombre del toro es requerido"),
   toro_ref_id: z.string().min(1, "El ID del toro es requerido"),
+  raza: z
+    .enum(["holstein", "jersey", "jerhol", "normando", "ayrshire", "cruce"])
+    .optional()
+    .nullable(),
   proveedor: z.string().optional(),
   fecha_compra: z
     .date()

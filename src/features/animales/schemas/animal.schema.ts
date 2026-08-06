@@ -12,9 +12,10 @@ export const animalSchema = z
       .min(1, "El nombre es obligatorio")
       .max(100, "Máximo 100 caracteres"),
     sexo: z.enum(["hembra", "macho"], { message: "Selecciona el sexo del animal" }),
-    raza: z.enum(["holstein", "jersey", "jerholm", "normando"], {
+    raza: z.enum(["holstein", "jersey", "jerhol", "normando", "ayrshire", "cruce"], {
       message: "Selecciona la raza del animal",
     }),
+    sangre: z.string().optional().nullable(),
     origen: z.enum(["finca", "externa"]),
     estado_productivo: z.string().optional().nullable(),
     estado_reproductivo: z.string().optional().nullable(),

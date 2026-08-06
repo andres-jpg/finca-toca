@@ -32,9 +32,12 @@ export type Database = {
           nombre: string
           numero_registro: string | null
           origen: Database["public"]["Enums"]["vaca_origen"] | null
+          padre_alquiler_nombre: string | null
+          padre_alquiler_raza: Database["public"]["Enums"]["animal_raza"] | null
           padre_id: string | null
           padre_pajilla_nombre: string | null
           raza: Database["public"]["Enums"]["animal_raza"] | null
+          sangre: string | null
           sexo: Database["public"]["Enums"]["animal_sexo"]
           tenant_id: string
         }
@@ -55,9 +58,12 @@ export type Database = {
           nombre: string
           numero_registro?: string | null
           origen?: Database["public"]["Enums"]["vaca_origen"] | null
+          padre_alquiler_nombre?: string | null
+          padre_alquiler_raza?: Database["public"]["Enums"]["animal_raza"] | null
           padre_id?: string | null
           padre_pajilla_nombre?: string | null
           raza?: Database["public"]["Enums"]["animal_raza"] | null
+          sangre?: string | null
           sexo: Database["public"]["Enums"]["animal_sexo"]
           tenant_id?: string
         }
@@ -78,20 +84,16 @@ export type Database = {
           nombre?: string
           numero_registro?: string | null
           origen?: Database["public"]["Enums"]["vaca_origen"] | null
+          padre_alquiler_nombre?: string | null
+          padre_alquiler_raza?: Database["public"]["Enums"]["animal_raza"] | null
           padre_id?: string | null
           padre_pajilla_nombre?: string | null
           raza?: Database["public"]["Enums"]["animal_raza"] | null
+          sangre?: string | null
           sexo?: Database["public"]["Enums"]["animal_sexo"]
           tenant_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "animales_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "animales_madre_id_fkey"
             columns: ["madre_id"]
@@ -104,6 +106,13 @@ export type Database = {
             columns: ["padre_id"]
             isOneToOne: false
             referencedRelation: "animales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "animales_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -171,9 +180,9 @@ export type Database = {
           pajilla_id: string | null
           responsable: string | null
           resultado: string | null
+          tenant_id: string
           tipo_evento: string
           toro_id: string | null
-          tenant_id: string
         }
         Insert: {
           animal_id: string
@@ -185,9 +194,9 @@ export type Database = {
           pajilla_id?: string | null
           responsable?: string | null
           resultado?: string | null
+          tenant_id?: string
           tipo_evento: string
           toro_id?: string | null
-          tenant_id?: string
         }
         Update: {
           animal_id?: string
@@ -199,23 +208,30 @@ export type Database = {
           pajilla_id?: string | null
           responsable?: string | null
           resultado?: string | null
+          tenant_id?: string
           tipo_evento?: string
           toro_id?: string | null
-          tenant_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "eventos_animal_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "eventos_animal_animal_id_fkey"
             columns: ["animal_id"]
             isOneToOne: false
             referencedRelation: "animales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "eventos_animal_pajilla_id_fkey"
+            columns: ["pajilla_id"]
+            isOneToOne: false
+            referencedRelation: "pajillas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "eventos_animal_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
           {
@@ -233,24 +249,24 @@ export type Database = {
           fecha: string
           id: number
           litros: number
-          vacas_en_produccion: number | null
           tenant_id: string
+          vacas_en_produccion: number | null
         }
         Insert: {
           created_at?: string
           fecha: string
           id?: number
           litros: number
-          vacas_en_produccion?: number | null
           tenant_id?: string
+          vacas_en_produccion?: number | null
         }
         Update: {
           created_at?: string
           fecha?: string
           id?: number
           litros?: number
-          vacas_en_produccion?: number | null
           tenant_id?: string
+          vacas_en_produccion?: number | null
         }
         Relationships: [
           {
@@ -299,8 +315,8 @@ export type Database = {
           pagado: boolean
           proveedor: string | null
           subconcepto_id: number | null
-          valor: number
           tenant_id: string
+          valor: number
         }
         Insert: {
           created_at?: string
@@ -311,8 +327,8 @@ export type Database = {
           pagado?: boolean
           proveedor?: string | null
           subconcepto_id?: number | null
-          valor: number
           tenant_id?: string
+          valor: number
         }
         Update: {
           created_at?: string
@@ -323,22 +339,22 @@ export type Database = {
           pagado?: boolean
           proveedor?: string | null
           subconcepto_id?: number | null
-          valor?: number
           tenant_id?: string
+          valor?: number
         }
         Relationships: [
-          {
-            foreignKeyName: "gastos_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "gastos_subconcepto_id_fkey"
             columns: ["subconcepto_id"]
             isOneToOne: false
             referencedRelation: "subconceptos_gasto"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gastos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -351,8 +367,8 @@ export type Database = {
           observaciones: string | null
           source: string | null
           subconcepto_id: number
-          valor: number
           tenant_id: string
+          valor: number
         }
         Insert: {
           created_at?: string
@@ -361,8 +377,8 @@ export type Database = {
           observaciones?: string | null
           source?: string | null
           subconcepto_id: number
-          valor: number
           tenant_id?: string
+          valor: number
         }
         Update: {
           created_at?: string
@@ -371,22 +387,22 @@ export type Database = {
           observaciones?: string | null
           source?: string | null
           subconcepto_id?: number
-          valor?: number
           tenant_id?: string
+          valor?: number
         }
         Relationships: [
-          {
-            foreignKeyName: "ingresos_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "ingresos_subconcepto_id_fkey"
             columns: ["subconcepto_id"]
             isOneToOne: false
             referencedRelation: "subconceptos_ingreso"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ingresos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -449,8 +465,8 @@ export type Database = {
           gasto_id: number
           id: number
           numero_cuenta: string | null
-          tipo_cuenta: string | null
           tenant_id: string
+          tipo_cuenta: string | null
         }
         Insert: {
           banco?: string | null
@@ -458,8 +474,8 @@ export type Database = {
           gasto_id: number
           id?: never
           numero_cuenta?: string | null
-          tipo_cuenta?: string | null
           tenant_id?: string
+          tipo_cuenta?: string | null
         }
         Update: {
           banco?: string | null
@@ -467,22 +483,22 @@ export type Database = {
           gasto_id?: number
           id?: never
           numero_cuenta?: string | null
-          tipo_cuenta?: string | null
           tenant_id?: string
+          tipo_cuenta?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "pagos_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "pagos_gasto_id_fkey"
             columns: ["gasto_id"]
             isOneToOne: true
             referencedRelation: "gastos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -559,9 +575,10 @@ export type Database = {
           id: string
           observaciones: string | null
           proveedor: string | null
+          raza: Database["public"]["Enums"]["animal_raza"] | null
+          tenant_id: string
           toro_nombre: string
           toro_ref_id: string
-          tenant_id: string
         }
         Insert: {
           cantidad: number
@@ -571,9 +588,10 @@ export type Database = {
           id?: string
           observaciones?: string | null
           proveedor?: string | null
+          raza?: Database["public"]["Enums"]["animal_raza"] | null
+          tenant_id?: string
           toro_nombre: string
           toro_ref_id: string
-          tenant_id?: string
         }
         Update: {
           cantidad?: number
@@ -583,9 +601,10 @@ export type Database = {
           id?: string
           observaciones?: string | null
           proveedor?: string | null
+          raza?: Database["public"]["Enums"]["animal_raza"] | null
+          tenant_id?: string
           toro_nombre?: string
           toro_ref_id?: string
-          tenant_id?: string
         }
         Relationships: [
           {
@@ -601,23 +620,23 @@ export type Database = {
         Row: {
           created_at: string | null
           id: number
+          tenant_id: string
           tipo: string
           valor: number
-          tenant_id: string
         }
         Insert: {
           created_at?: string | null
           id?: number
+          tenant_id?: string
           tipo?: string
           valor: number
-          tenant_id?: string
         }
         Update: {
           created_at?: string | null
           id?: number
+          tenant_id?: string
           tipo?: string
           valor?: number
-          tenant_id?: string
         }
         Relationships: [
           {
@@ -669,24 +688,32 @@ export type Database = {
           created_at: string
           id: number
           rol: Database["public"]["Enums"]["rol"]
-          user_id: string
           tenant_id: string | null
+          user_id: string
         }
         Insert: {
           created_at?: string
           id?: number
           rol: Database["public"]["Enums"]["rol"]
-          user_id: string
           tenant_id?: string | null
+          user_id: string
         }
         Update: {
           created_at?: string
           id?: number
           rol?: Database["public"]["Enums"]["rol"]
-          user_id?: string
           tenant_id?: string | null
+          user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "roles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rutas_cooperativa: {
         Row: {
@@ -760,17 +787,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "subconceptos_gasto_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "subconceptos_gasto_concepto_id_fkey"
             columns: ["concepto_id"]
             isOneToOne: false
             referencedRelation: "conceptos_gasto"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subconceptos_gasto_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -796,17 +823,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "subconceptos_ingreso_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "subconceptos_ingreso_concepto_id_fkey"
             columns: ["concepto_id"]
             isOneToOne: false
             referencedRelation: "conceptos_ingreso"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subconceptos_ingreso_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -986,8 +1013,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      rol_actual: { Args: never; Returns: Database["public"]["Enums"]["rol"] }
-      tenant_actual: { Args: never; Returns: string }
       get_cooperativa_users: {
         Args: never
         Returns: {
@@ -998,9 +1023,17 @@ export type Database = {
           user_id: string
         }[]
       }
+      rol_actual: { Args: never; Returns: Database["public"]["Enums"]["rol"] }
+      tenant_actual: { Args: never; Returns: string }
     }
     Enums: {
-      animal_raza: "holstein" | "jersey" | "jerholm" | "normando"
+      animal_raza:
+        | "holstein"
+        | "jersey"
+        | "jerhol"
+        | "normando"
+        | "ayrshire"
+        | "cruce"
       animal_sexo: "hembra" | "macho"
       estado_productivo:
         | "leche"
@@ -1158,7 +1191,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      animal_raza: ["holstein", "jersey", "jerholm", "normando"],
+      animal_raza: [
+        "holstein",
+        "jersey",
+        "jerhol",
+        "normando",
+        "ayrshire",
+        "cruce",
+      ],
       animal_sexo: ["hembra", "macho"],
       estado_productivo: [
         "leche",

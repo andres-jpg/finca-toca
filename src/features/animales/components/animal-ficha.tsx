@@ -26,6 +26,7 @@ import {
   ESTADO_REPRODUCTIVO_COLORS,
   ESTADO_REPRODUCTIVO_LABELS,
 } from "@/lib/animales/estados";
+import { RAZA_LABELS } from "@/lib/animales/razas";
 import type {
   Alerta,
   AnimalDetalle,
@@ -37,13 +38,6 @@ import type {
 const ORIGEN_LABELS: Record<string, string> = {
   finca: "Finca",
   externa: "Externa",
-};
-
-const RAZA_LABELS: Record<string, string> = {
-  holstein: "Holstein",
-  jersey: "Jersey",
-  jerholm: "Jerholm",
-  normando: "Normando",
 };
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
@@ -182,6 +176,7 @@ export function AnimalFicha({
           {animal.numero_registro && (
             <Field label="Número de registro" value={animal.numero_registro} />
           )}
+          {animal.sangre && <Field label="Sangre" value={animal.sangre} />}
         </div>
       </section>
 
@@ -253,6 +248,8 @@ export function AnimalFicha({
               animalTipo={animalTipo}
               toros={toros}
               lotesPajillas={lotesPajillas}
+              madre={animal}
+              eventosPrevios={eventos}
               onSuccess={() => setEventOpen(false)}
             />
           </EntityModal>
@@ -265,6 +262,8 @@ export function AnimalFicha({
                 evento={editEvento}
                 toros={toros}
                 lotesPajillas={lotesPajillas}
+                madre={animal}
+                eventosPrevios={eventos}
                 onSuccess={() => setEditEvento(null)}
               />
             )}
