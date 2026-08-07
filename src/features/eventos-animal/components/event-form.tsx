@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/shared/date-picker";
 import { proyeccionesServicio } from "@/lib/animales/estados";
-import { RAZAS, RAZA_LABELS } from "@/lib/animales/razas";
+import { RAZAS, RAZA_LABELS, construirSangre } from "@/lib/animales/razas";
 import { toast } from "sonner";
 import type {
   Animal,
@@ -80,6 +80,8 @@ interface EventFormProps {
   madre?: Animal;
   /** Eventos ya cargados de este animal, para heredar el padre del último servicio en un parto. */
   eventosPrevios?: EventoAnimal[];
+  /** "Nombre largo" y "Sangre" (% de pureza) del subformulario de cría, solo para El Velero. */
+  esVelero?: boolean;
   onSuccess: () => void;
 }
 
@@ -103,6 +105,7 @@ export function EventForm({
   lotesPajillas = [],
   madre,
   eventosPrevios = [],
+  esVelero = false,
   onSuccess,
 }: EventFormProps) {
   const isEditing = !!evento;
@@ -130,8 +133,21 @@ export function EventForm({
   // nuevo (no al editar uno ya existente, cuya cría ya se creó la primera vez).
   const [criaSexo, setCriaSexo] = useState<AnimalSexo | "">("");
   const [criaIdentificador, setCriaIdentificador] = useState("");
+  const [criaNumeroRegistro, setCriaNumeroRegistro] = useState("");
+  const [criaNombreLargo, setCriaNombreLargo] = useState("");
   const [criaNombre, setCriaNombre] = useState("");
   const [criaRaza, setCriaRaza] = useState<AnimalRaza | "">(madre?.raza ?? "");
+  // Sangre: mismo selector guiado que el alta normal (hasta dos razas + %), solo El Velero.
+  const [criaSangreRaza1, setCriaSangreRaza1] = useState<AnimalRaza | "">("");
+  const [criaSangrePct1, setCriaSangrePct1] = useState<number | "">("");
+  const [criaSangreRaza2, setCriaSangreRaza2] = useState<AnimalRaza | "">("");
+  const criaSangrePct2 = criaSangreRaza2 ? Math.max(0, 100 - (Number(criaSangrePct1) || 0)) : null;
+  const criaSangre = construirSangre(
+    criaSangreRaza1 || null,
+    Number(criaSangrePct1) || null,
+    criaSangreRaza2 || null,
+    criaSangrePct2
+  );
   // El padre de la cría no se elige a mano: se infiere del último servicio (monta o
   // inseminación) registrado en la vaca. La única alternativa manual es un toro de alquiler,
   // para el caso de una monta natural que no quedó registrada como evento.
@@ -221,9 +237,12 @@ export function EventForm({
         try {
           await createAnimal({
             identificador: criaIdentificador.trim(),
+            numero_registro: criaNumeroRegistro.trim(),
+            nombre_largo: esVelero ? criaNombreLargo.trim() || null : null,
             nombre: criaNombre.trim(),
             sexo: criaSexo,
             raza: criaRaza,
+            sangre: esVelero ? criaSangre : null,
             origen: "finca",
             estado_productivo: "leche",
             fecha_nacimiento: data.fecha,
@@ -357,6 +376,74 @@ export function EventForm({
             </Select>
           </div>
 
+          {/* Sangre: % de pureza, opcional. Solo El Velero — mismo selector que el alta normal. */}
+          {esVelero && (
+            <div className="space-y-2 rounded-lg border border-gray-200 p-3">
+              <Label className="text-xs text-gray-500">Sangre (% de pureza) — opcional</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Select
+                    value={criaSangreRaza1 || "none"}
+                    onValueChange={(val) =>
+                      setCriaSangreRaza1(val === "none" ? "" : (val as AnimalRaza))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Raza 1" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin definir</SelectItem>
+                      {RAZAS.map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {RAZA_LABELS[r]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={criaSangreRaza2 ? 99 : 100}
+                    placeholder="% pureza"
+                    disabled={!criaSangreRaza1}
+                    value={criaSangrePct1}
+                    onChange={(e) =>
+                      setCriaSangrePct1(e.target.value === "" ? "" : Number(e.target.value))
+                    }
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Select
+                    value={criaSangreRaza2 || "none"}
+                    onValueChange={(val) =>
+                      setCriaSangreRaza2(val === "none" ? "" : (val as AnimalRaza))
+                    }
+                    disabled={!criaSangreRaza1 || !criaSangrePct1}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Raza 2 (opcional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Ninguna</SelectItem>
+                      {RAZAS.filter((r) => r !== criaSangreRaza1).map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {RAZA_LABELS[r]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input type="number" placeholder="% pureza" disabled value={criaSangrePct2 ?? ""} />
+                </div>
+              </div>
+              {criaSangre && (
+                <p className="text-xs text-gray-500">
+                  Se guardará como: <span className="font-medium text-gray-700">{criaSangre}</span>
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <Input
               type="text"
@@ -366,11 +453,28 @@ export function EventForm({
             />
             <Input
               type="text"
-              placeholder="Nombre"
-              value={criaNombre}
-              onChange={(e) => setCriaNombre(e.target.value)}
+              placeholder="Número de registro (opcional)"
+              value={criaNumeroRegistro}
+              onChange={(e) => setCriaNumeroRegistro(e.target.value)}
             />
           </div>
+
+          {/* Nombre largo: solo El Velero. */}
+          {esVelero && (
+            <Input
+              type="text"
+              placeholder="Nombre largo (opcional)"
+              value={criaNombreLargo}
+              onChange={(e) => setCriaNombreLargo(e.target.value)}
+            />
+          )}
+
+          <Input
+            type="text"
+            placeholder="Nombre"
+            value={criaNombre}
+            onChange={(e) => setCriaNombre(e.target.value)}
+          />
 
           <div className="space-y-2">
             <Label className="text-xs text-gray-500">Padre de la cría</Label>

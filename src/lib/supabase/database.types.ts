@@ -17,6 +17,7 @@ export type Database = {
       animales: {
         Row: {
           alta: boolean
+          concentrado_por_ordeno: number | null
           created_at: string | null
           estado_productivo:
             | Database["public"]["Enums"]["estado_productivo"]
@@ -28,8 +29,10 @@ export type Database = {
           fecha_nacimiento: string | null
           id: string
           identificador: string
+          madre_externa_nombre: string | null
           madre_id: string | null
           nombre: string
+          nombre_largo: string | null
           numero_registro: string | null
           origen: Database["public"]["Enums"]["vaca_origen"] | null
           padre_alquiler_nombre: string | null
@@ -43,6 +46,7 @@ export type Database = {
         }
         Insert: {
           alta?: boolean
+          concentrado_por_ordeno?: number | null
           created_at?: string | null
           estado_productivo?:
             | Database["public"]["Enums"]["estado_productivo"]
@@ -54,12 +58,16 @@ export type Database = {
           fecha_nacimiento?: string | null
           id?: string
           identificador: string
+          madre_externa_nombre?: string | null
           madre_id?: string | null
           nombre: string
+          nombre_largo?: string | null
           numero_registro?: string | null
           origen?: Database["public"]["Enums"]["vaca_origen"] | null
           padre_alquiler_nombre?: string | null
-          padre_alquiler_raza?: Database["public"]["Enums"]["animal_raza"] | null
+          padre_alquiler_raza?:
+            | Database["public"]["Enums"]["animal_raza"]
+            | null
           padre_id?: string | null
           padre_pajilla_nombre?: string | null
           raza?: Database["public"]["Enums"]["animal_raza"] | null
@@ -69,6 +77,7 @@ export type Database = {
         }
         Update: {
           alta?: boolean
+          concentrado_por_ordeno?: number | null
           created_at?: string | null
           estado_productivo?:
             | Database["public"]["Enums"]["estado_productivo"]
@@ -80,12 +89,16 @@ export type Database = {
           fecha_nacimiento?: string | null
           id?: string
           identificador?: string
+          madre_externa_nombre?: string | null
           madre_id?: string | null
           nombre?: string
+          nombre_largo?: string | null
           numero_registro?: string | null
           origen?: Database["public"]["Enums"]["vaca_origen"] | null
           padre_alquiler_nombre?: string | null
-          padre_alquiler_raza?: Database["public"]["Enums"]["animal_raza"] | null
+          padre_alquiler_raza?:
+            | Database["public"]["Enums"]["animal_raza"]
+            | null
           padre_id?: string | null
           padre_pajilla_nombre?: string | null
           raza?: Database["public"]["Enums"]["animal_raza"] | null
@@ -248,7 +261,8 @@ export type Database = {
           created_at: string
           fecha: string
           id: number
-          litros: number
+          litros_cantina: number
+          litros_cria: number
           tenant_id: string
           vacas_en_produccion: number | null
         }
@@ -256,7 +270,8 @@ export type Database = {
           created_at?: string
           fecha: string
           id?: number
-          litros: number
+          litros_cantina: number
+          litros_cria?: number
           tenant_id?: string
           vacas_en_produccion?: number | null
         }
@@ -264,7 +279,8 @@ export type Database = {
           created_at?: string
           fecha?: string
           id?: number
-          litros?: number
+          litros_cantina?: number
+          litros_cria?: number
           tenant_id?: string
           vacas_en_produccion?: number | null
         }
@@ -314,6 +330,7 @@ export type Database = {
           observaciones: string | null
           pagado: boolean
           proveedor: string | null
+          source: string | null
           subconcepto_id: number | null
           tenant_id: string
           valor: number
@@ -326,6 +343,7 @@ export type Database = {
           observaciones?: string | null
           pagado?: boolean
           proveedor?: string | null
+          source?: string | null
           subconcepto_id?: number | null
           tenant_id?: string
           valor: number
@@ -338,6 +356,7 @@ export type Database = {
           observaciones?: string | null
           pagado?: boolean
           proveedor?: string | null
+          source?: string | null
           subconcepto_id?: number | null
           tenant_id?: string
           valor?: number
@@ -1045,7 +1064,6 @@ export type Database = {
       estado_reproductivo:
         | "pre_puber"
         | "puber"
-        | "vacia"
         | "pre_servicio"
         | "servicio"
         | "por_confirmar"
@@ -1211,7 +1229,6 @@ export const Constants = {
       estado_reproductivo: [
         "pre_puber",
         "puber",
-        "vacia",
         "pre_servicio",
         "servicio",
         "por_confirmar",

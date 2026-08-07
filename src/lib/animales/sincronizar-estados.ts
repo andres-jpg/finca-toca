@@ -1,7 +1,7 @@
 import { addDays } from "date-fns";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  DIAS_CELO_POST_PARTO,
+  DIAS_PASE_A_SERVICIO,
   ORDEN_REPRODUCTIVO_JUVENIL,
   TIPOS_EVENTO_FIN_GESTACION,
   estadoProductivoPorEdad,
@@ -143,9 +143,13 @@ export async function sincronizarEstadosPorEdad(
 }
 
 /**
- * Pasa a `servicio` las vacas que llevan `DIAS_CELO_POST_PARTO` días en `pre_servicio`,
+ * Pasa a `servicio` las vacas que llevan `DIAS_PASE_A_SERVICIO` (61) días en `pre_servicio`,
  * contados desde el parto o aborto que cerró la gestación (nunca desde `created_at` ni
  * desde la fecha en que se cambió el estado: el ganadero puede registrar el parto tarde).
+ *
+ * Es un día más que la fecha objetivo de la alerta de celo (60): el día 60 la alerta marca
+ * "hoy" con la vaca aún en `pre_servicio`, y el pase ocurre al día siguiente, justo cuando
+ * esa alerta vence. La alerta no se apaga con el pase — cubre los dos estados.
  *
  * Solo mira las que están en `pre_servicio`: cualquier otro estado reproductivo lo gobierna
  * un evento posterior (inseminación, palpación…) o el usuario, y no debe pisarse.
@@ -194,7 +198,7 @@ export async function sincronizarPaseAServicio(
     const cierre = ultimoCierre.get(vaca.id);
     if (!cierre) continue;
 
-    const objetivo = addDays(parseFechaDB(cierre), DIAS_CELO_POST_PARTO);
+    const objetivo = addDays(parseFechaDB(cierre), DIAS_PASE_A_SERVICIO);
     if (hoy < objetivo) continue;
 
     const { error: updateError } = await supabase

@@ -58,8 +58,15 @@ interface AnimalFichaProps {
   faltaServicio: boolean;
   /** Ya formateada en el servidor (`formatEdad`); `null` si no hay fecha de nacimiento. */
   edad: string | null;
+  /**
+   * Días desde el último parto/aborto, 0 si está en secado. Calculado en el servidor
+   * (`calcularDiasEnLeche`); `null` = no hay parto ni aborto registrado.
+   */
+  diasEnLeche: number | null;
   canEdit: boolean;
   canDelete: boolean;
+  /** El formulario de edición ofrece "Nombre largo" y "Sangre" solo para El Velero. */
+  esVelero: boolean;
 }
 
 export function AnimalFicha({
@@ -70,8 +77,10 @@ export function AnimalFicha({
   alertas,
   faltaServicio,
   edad,
+  diasEnLeche,
   canEdit,
   canDelete,
+  esVelero,
 }: AnimalFichaProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
@@ -157,6 +166,7 @@ export function AnimalFicha({
           Información básica
         </h2>
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 grid grid-cols-2 sm:grid-cols-3 gap-4">
+          {animal.nombre_largo && <Field label="Nombre largo" value={animal.nombre_largo} />}
           <Field
             label="Fecha de nacimiento"
             value={
@@ -177,6 +187,30 @@ export function AnimalFicha({
             <Field label="Número de registro" value={animal.numero_registro} />
           )}
           {animal.sangre && <Field label="Sangre" value={animal.sangre} />}
+          {animal.sexo === "hembra" && (
+            <Field
+              label="Días en leche"
+              value={
+                diasEnLeche === null ? (
+                  <span className="text-gray-400">Sin parto registrado</span>
+                ) : diasEnLeche === 0 && animal.estado_productivo === "secado" ? (
+                  <span>
+                    0 <span className="text-xs font-normal text-gray-500">· en secado</span>
+                  </span>
+                ) : (
+                  `${diasEnLeche} ${diasEnLeche === 1 ? "día" : "días"}`
+                )
+              }
+            />
+          )}
+          {animal.sexo === "hembra" && animal.concentrado_por_ordeno !== null && (
+            <Field
+              label="Concentrado por ordeño"
+              value={animal.concentrado_por_ordeno.toLocaleString("es-CO", {
+                maximumFractionDigits: 2,
+              })}
+            />
+          )}
         </div>
       </section>
 
@@ -238,6 +272,7 @@ export function AnimalFicha({
               animal={animal}
               animales={animales.filter((a) => a.id !== animal.id)}
               lotesPajillas={lotesPajillas}
+              esVelero={esVelero}
               onSuccess={() => setEditOpen(false)}
             />
           </EntityModal>
@@ -250,6 +285,7 @@ export function AnimalFicha({
               lotesPajillas={lotesPajillas}
               madre={animal}
               eventosPrevios={eventos}
+              esVelero={esVelero}
               onSuccess={() => setEventOpen(false)}
             />
           </EntityModal>
@@ -264,6 +300,7 @@ export function AnimalFicha({
                 lotesPajillas={lotesPajillas}
                 madre={animal}
                 eventosPrevios={eventos}
+                esVelero={esVelero}
                 onSuccess={() => setEditEvento(null)}
               />
             )}

@@ -7,7 +7,7 @@ import {
   GastosIngresosLineChart,
   ExtraccionesLineChart,
 } from "@/charts/chart-wrappers";
-import { getLitrosDiaActual } from "@/features/extracciones/actions/extracciones.actions";
+import { getLecheHoy } from "@/features/extracciones/actions/extracciones.actions";
 import { getAlertas } from "@/features/alertas/actions/alertas.queries";
 import { AlertasCard } from "@/features/alertas/components/alertas-card";
 import {
@@ -96,7 +96,7 @@ export default async function DashboardPage({
     { data: ingresosRaw },
     { data: vacasEstados },
     { data: extraccionesRaw },
-    litrosDia,
+    lecheHoy,
   ] = await Promise.all([
     supabase
       .from("gastos")
@@ -113,9 +113,9 @@ export default async function DashboardPage({
       .eq("alta", true),
     supabase
       .from("extracciones_leche")
-      .select("fecha, litros, vacas_en_produccion")
+      .select("fecha, litros_cantina, litros_cria, vacas_en_produccion")
       .order("fecha", { ascending: true }),
-    getLitrosDiaActual(),
+    getLecheHoy(),
   ]);
 
   // Comparte la lectura de animales/eventos con la campana del header vía React.cache().
@@ -148,7 +148,6 @@ export default async function DashboardPage({
       "rechequeo",
       "servicio",
       "pre_servicio",
-      "vacia",
       "puber",
       "pre_puber",
     ] as const
@@ -197,24 +196,31 @@ export default async function DashboardPage({
   const gastosTrend = calcTrend(totalGastos, lastGastos);
   const ingresosTrend = calcTrend(totalIngresos, lastIngresos);
 
+  // "Leche extraída" = cantina + cría: se ordeñó igual, se venda o se quede para los terneros.
+  // Los cortes que van acompañados de dinero (quincenas) sí usan solo cantina, que es la
+  // única que generó ingreso.
+  const totalExtraido = (r: any) => r.litros_cantina + r.litros_cria;
+
   const extMes = (extraccionesRaw ?? []).filter((r: any) => inRange(r.fecha, selected.start, selected.end));
-  const litrosMes = extMes.reduce((s: number, r: any) => s + r.litros, 0);
-  const litrosPorVacaHoy = vacasProduccion > 0 ? litrosDia / vacasProduccion : 0;
+  const litrosMes = extMes.reduce((s: number, r: any) => s + totalExtraido(r), 0);
+  const cantinaMes = extMes.reduce((s: number, r: any) => s + r.litros_cantina, 0);
+  const criaMes = extMes.reduce((s: number, r: any) => s + r.litros_cria, 0);
+  const litrosPorVacaHoy = vacasProduccion > 0 ? lecheHoy.total / vacasProduccion : 0;
   const extMesConVacas = extMes.filter((r: any) => r.vacas_en_produccion != null && r.vacas_en_produccion > 0);
   const litrosPorVacaMes = extMesConVacas.length > 0
-    ? extMesConVacas.reduce((s: number, r: any) => s + r.litros / r.vacas_en_produccion, 0) / extMesConVacas.length
+    ? extMesConVacas.reduce((s: number, r: any) => s + totalExtraido(r) / r.vacas_en_produccion, 0) / extMesConVacas.length
     : vacasProduccion > 0 ? litrosMes / vacasProduccion : 0;
   const APORTACION_PCT = 0.0075;
   const quincenas = {
     q1Litros: (extraccionesRaw ?? [])
       .filter((r: any) => inRange(r.fecha, q1Start, q1End))
-      .reduce((s: number, r: any) => s + r.litros, 0),
+      .reduce((s: number, r: any) => s + r.litros_cantina, 0),
     q1Valor: (ingresosRaw ?? [])
       .filter((r: any) => r.source === "leche_extraccion" && inRange(r.fecha, q1Start, q1End))
       .reduce((s: number, r: any) => s + r.valor, 0),
     q2Litros: (extraccionesRaw ?? [])
       .filter((r: any) => inRange(r.fecha, q2Start, q2End))
-      .reduce((s: number, r: any) => s + r.litros, 0),
+      .reduce((s: number, r: any) => s + r.litros_cantina, 0),
     q2Valor: (ingresosRaw ?? [])
       .filter((r: any) => r.source === "leche_extraccion" && inRange(r.fecha, q2Start, q2End))
       .reduce((s: number, r: any) => s + r.valor, 0),
@@ -224,9 +230,10 @@ export default async function DashboardPage({
   const totalAportacion = q1Aportacion + q2Aportacion;
   const totalIngresosNeto = totalIngresos - totalAportacion;
 
+  // La gráfica es de extracciones, así que muestra el total ordeñado (cantina + cría).
   const allExtracciones = (extraccionesRaw ?? []).map((e: any) => ({
     fecha: e.fecha as string,
-    litros: e.litros as number,
+    litros: totalExtraido(e) as number,
     vacasEnProduccion: (e.vacas_en_produccion as number | null) ?? null,
   }));
 
@@ -245,8 +252,8 @@ export default async function DashboardPage({
         <DashboardFilter hasFilter={hasFilter} mes={effectiveMes} anio={effectiveAnio} />
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+      {/* Stat cards — 4 columnas que marcan la rejilla que reutiliza la segunda fila. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {/* Gastos */}
         <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
           <div className="flex items-start justify-between">
@@ -292,7 +299,7 @@ export default async function DashboardPage({
             <div className="min-w-0">
               <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Leche hoy</p>
               <p className="text-2xl font-bold text-stone-900 mt-1.5">
-                {litrosDia.toFixed(1)}{" "}
+                {lecheHoy.total.toFixed(1)}{" "}
                 <span className="text-base font-medium text-stone-400">L</span>
               </p>
             </div>
@@ -302,8 +309,26 @@ export default async function DashboardPage({
           </div>
           <div className="mt-3 pt-3 border-t border-stone-100 space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-stone-400">Litros extraídos hoy</span>
+              <span className="text-xs text-stone-400">Total extraído hoy</span>
               <span className="text-xs text-stone-400">{fechaHoy}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-xs text-stone-500">
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "#3b82f6" }} />
+                Cantina
+              </span>
+              <span className="text-xs font-semibold text-stone-600">
+                {lecheHoy.cantina.toFixed(1)} L
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-xs text-stone-500">
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "#f59e0b" }} />
+                Cría
+              </span>
+              <span className="text-xs font-semibold text-stone-600">
+                {lecheHoy.cria.toFixed(1)} L
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs text-stone-400">Promedio por vaca</span>
@@ -327,9 +352,15 @@ export default async function DashboardPage({
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-stone-100 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-stone-400">Cantina · Cría</span>
+              <span className="text-xs text-stone-500">
+                {cantinaMes.toFixed(1)} L · {criaMes.toFixed(1)} L
+              </span>
+            </div>
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-stone-400">Leche Q1</span>
+                <span className="text-xs text-stone-400">Cantina Q1</span>
                 <span className="text-xs text-stone-500">
                   {quincenas.q1Litros.toFixed(1)} L · ${quincenas.q1Valor.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
                 </span>
@@ -344,7 +375,7 @@ export default async function DashboardPage({
             </div>
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-stone-400">Leche Q2</span>
+                <span className="text-xs text-stone-400">Cantina Q2</span>
                 <span className="text-xs text-stone-500">
                   {quincenas.q2Litros.toFixed(1)} L · ${quincenas.q2Valor.toLocaleString("es-CO", { minimumFractionDigits: 0 })}
                 </span>
@@ -364,51 +395,63 @@ export default async function DashboardPage({
           </div>
         </div>
 
-        {/* Estado productivo — siempre fija */}
-        <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
-          <div className="flex items-start justify-between">
+      </div>
+
+      {/* Estado productivo + alertas + estado reproductivo, las tres al mismo alto.
+          Son 4 columnas (alertas ocupa 2) para que la rejilla case con la fila de KPIs.
+          La altura de la fila la marcan SOLO las dos cards de estado: la de alertas va en
+          `position: absolute`, así no aporta altura propia y desborda con scroll interno en
+          vez de estirar la fila. Con `items-stretch` a secas, una lista de alertas larga
+          hacía crecer la fila entera y dejaba las otras dos con un hueco al final.
+          Por debajo de `lg` las cards se apilan y cada una crece a su contenido. */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-stretch">
+        {/* Estado productivo */}
+        <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-sm flex flex-col">
+          <div className="flex items-start justify-between shrink-0">
             <div className="min-w-0">
-              <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Estado productivo</p>
+              <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">
+                Estado productivo
+              </p>
               <p className="text-2xl font-bold text-stone-900 mt-1.5">{vacasTotal}</p>
             </div>
-            <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ml-3" style={{ backgroundColor: "#fffbeb" }}>
+            <div
+              className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ml-3"
+              style={{ backgroundColor: "#fffbeb" }}
+            >
               <PiCow className="h-5 w-5" style={{ color: "#d97706" }} />
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-stone-100 grid grid-cols-3 gap-x-3 gap-y-2">
+          {/* Lista vertical, igual que estado reproductivo: al quedar las dos cards lado a
+              lado y estiradas a la misma altura, la rejilla de 3 columnas de antes dejaba
+              medio card vacío. */}
+          <div className="mt-3 pt-3 border-t border-stone-100 space-y-1.5">
             {desgloseProductivo.map(({ estado, total }) => (
               <Link
                 key={estado}
                 href={`/dashboard/animales?productivo=${estado}`}
-                className="flex items-center gap-1.5 rounded hover:bg-stone-50 -mx-1 px-1 transition-colors"
+                className="flex items-center justify-between rounded hover:bg-stone-50 -mx-1 px-1 py-0.5 transition-colors"
                 title={`Ver hembras en ${ESTADO_PRODUCTIVO_LABELS[estado]}`}
               >
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <span
+                    className="h-2 w-2 rounded-full shrink-0"
+                    style={{ backgroundColor: ESTADO_PRODUCTIVO_HEX[estado] }}
+                  />
+                  <span className="text-xs text-stone-600 truncate">
+                    {ESTADO_PRODUCTIVO_LABELS[estado]}
+                  </span>
+                </span>
                 <span
-                  className="h-2 w-2 rounded-full shrink-0"
-                  style={{ backgroundColor: ESTADO_PRODUCTIVO_HEX[estado] }}
-                />
-                <span
-                  className="text-xs font-semibold"
+                  className="text-xs font-semibold shrink-0"
                   style={{ color: ESTADO_PRODUCTIVO_HEX[estado] }}
                 >
                   {total}
-                </span>
-                <span className="text-xs truncate" style={{ color: ESTADO_PRODUCTIVO_HEX[estado] }}>
-                  {ESTADO_PRODUCTIVO_LABELS[estado]}
                 </span>
               </Link>
             ))}
           </div>
         </div>
-      </div>
 
-      {/* Alertas del hato + estado reproductivo — a lo ancho para no romper el grid de 5 KPIs.
-          En `lg` la altura de la fila la marca SOLO la card de estado reproductivo: la de
-          alertas va en `position: absolute`, así no aporta altura propia y desborda con scroll
-          en vez de estirar la fila. Con el `items-stretch` de siempre, una lista de alertas
-          larga hacía crecer la fila entera y dejaba estado reproductivo con un hueco al final.
-          Por debajo de `lg` las cards se apilan y cada una crece a su contenido. */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
         <div className="lg:col-span-2 relative flex min-h-0">
           <div className="flex w-full lg:absolute lg:inset-0">
             <AlertasCard alertas={alertas} canEdit={canWrite(role)} />
