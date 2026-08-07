@@ -7,12 +7,9 @@ import { requireRole } from "@/lib/auth/check-permissions";
 import type { ExtraccionLeche } from "@/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-async function upsertIngresoLeche(
-  fecha: string,
-  supabase: SupabaseClient
-): Promise<void> {
-  // 1. Get current leche price
-  const { data: precioRow } = await supabase
+/** Precio vigente del litro de leche, o `null` si aún no hay ninguno registrado. */
+async function precioLitroVigente(supabase: SupabaseClient): Promise<number | null> {
+  const { data } = await supabase
     .from("precios")
     .select("valor")
     .eq("tipo", "leche")
@@ -20,15 +17,40 @@ async function upsertIngresoLeche(
     .limit(1)
     .maybeSingle();
 
-  // 2. Sum litros for the day
-  const { data: extRows } = await supabase
+  return data?.valor ?? null;
+}
+
+/** Litros del día por destino. Puede haber varias extracciones en la misma fecha. */
+async function litrosDelDia(
+  fecha: string,
+  supabase: SupabaseClient
+): Promise<{ cantina: number; cria: number }> {
+  const { data } = await supabase
     .from("extracciones_leche")
-    .select("litros")
+    .select("litros_cantina, litros_cria")
     .eq("fecha", fecha);
 
-  const totalLitros = (extRows ?? []).reduce((sum, r) => sum + r.litros, 0);
+  return (data ?? []).reduce(
+    (acc, r) => ({
+      cantina: acc.cantina + r.litros_cantina,
+      cria: acc.cria + r.litros_cria,
+    }),
+    { cantina: 0, cria: 0 }
+  );
+}
 
-  // 3. Find existing auto-ingreso for this day
+/**
+ * Ingreso automático por la leche de **cantina** (la que se vende).
+ * Se recalcula entero en cada alta/edición/borrado de extracción de esa fecha, y se elimina
+ * si el día se queda sin litros de cantina o si no hay precio registrado.
+ */
+async function upsertIngresoLeche(
+  fecha: string,
+  supabase: SupabaseClient
+): Promise<void> {
+  const precio = await precioLitroVigente(supabase);
+  const { cantina } = await litrosDelDia(fecha, supabase);
+
   const { data: existing } = await supabase
     .from("ingresos")
     .select("id")
@@ -36,42 +58,114 @@ async function upsertIngresoLeche(
     .eq("source", "leche_extraccion")
     .maybeSingle();
 
-  // 4. If no price or no litros, delete auto-ingreso if it exists
-  if (!precioRow || totalLitros === 0) {
+  if (precio === null || cantina === 0) {
     if (existing?.id) {
       await supabase.from("ingresos").delete().eq("id", existing.id);
     }
     return;
   }
 
-  const valor = Math.round(totalLitros * precioRow.valor);
+  const valor = Math.round(cantina * precio);
 
-  // 5. Update or insert
   if (existing?.id) {
     await supabase.from("ingresos").update({ valor }).eq("id", existing.id);
-  } else {
-    // Lookup leche subconcepto
-    const { data: subconcepto } = await supabase
-      .from("subconceptos_ingreso")
-      .select("id")
-      .ilike("nombre", "%leche%")
-      .order("id", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (!subconcepto?.id) {
-      console.error("upsertIngresoLeche: no se encontró subconcepto 'leche' en subconceptos_ingreso");
-      return;
-    }
-
-    await supabase.from("ingresos").insert({
-      fecha,
-      subconcepto_id: subconcepto.id,
-      valor,
-      observaciones: "Auto-generado desde extracciones",
-      source: "leche_extraccion",
-    });
+    return;
   }
+
+  const { data: subconcepto } = await supabase
+    .from("subconceptos_ingreso")
+    .select("id")
+    .ilike("nombre", "%leche%")
+    .order("id", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (!subconcepto?.id) {
+    console.error("upsertIngresoLeche: no se encontró subconcepto 'leche' en subconceptos_ingreso");
+    return;
+  }
+
+  await supabase.from("ingresos").insert({
+    fecha,
+    subconcepto_id: subconcepto.id,
+    valor,
+    observaciones: "Auto-generado desde extracciones",
+    source: "leche_extraccion",
+  });
+}
+
+/** Subconcepto de gasto donde caen las leches de cría (creado por la migración, por tenant). */
+const SUBCONCEPTO_LECHE_CRIA = "Leche para crías";
+
+/**
+ * Gasto automático por la leche de **cría** (la que se queda en la finca para los terneros),
+ * valorada al mismo precio del litro que la que se vende. Espejo exacto de
+ * `upsertIngresoLeche`: se recalcula entero por fecha y se borra si el día se queda sin
+ * litros de cría o sin precio.
+ *
+ * Se marca `pagado: true` porque no es una factura pendiente de pagar a un tercero: es leche
+ * propia que no se vendió, así que no debe aparecer como deuda en el listado de gastos.
+ */
+async function upsertGastoLecheCria(
+  fecha: string,
+  supabase: SupabaseClient
+): Promise<void> {
+  const precio = await precioLitroVigente(supabase);
+  const { cria } = await litrosDelDia(fecha, supabase);
+
+  const { data: existing } = await supabase
+    .from("gastos")
+    .select("id")
+    .eq("fecha", fecha)
+    .eq("source", "leche_cria")
+    .maybeSingle();
+
+  if (precio === null || cria === 0) {
+    if (existing?.id) {
+      await supabase.from("gastos").delete().eq("id", existing.id);
+    }
+    return;
+  }
+
+  const valor = Math.round(cria * precio);
+
+  if (existing?.id) {
+    await supabase.from("gastos").update({ valor }).eq("id", existing.id);
+    return;
+  }
+
+  const { data: subconcepto } = await supabase
+    .from("subconceptos_gasto")
+    .select("id")
+    .eq("nombre", SUBCONCEPTO_LECHE_CRIA)
+    .order("id", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (!subconcepto?.id) {
+    console.error(
+      `upsertGastoLecheCria: no se encontró el subconcepto '${SUBCONCEPTO_LECHE_CRIA}' en subconceptos_gasto`
+    );
+    return;
+  }
+
+  await supabase.from("gastos").insert({
+    fecha,
+    subconcepto_id: subconcepto.id,
+    valor,
+    observaciones: "Auto-generado desde extracciones (leche para crías)",
+    pagado: true,
+    source: "leche_cria",
+  });
+}
+
+/** Recalcula los dos apuntes automáticos (ingreso de cantina + gasto de cría) de una fecha. */
+async function sincronizarApuntesLeche(
+  fecha: string,
+  supabase: SupabaseClient
+): Promise<void> {
+  await upsertIngresoLeche(fecha, supabase);
+  await upsertGastoLecheCria(fecha, supabase);
 }
 
 export async function getExtracciones(): Promise<ExtraccionLeche[]> {
@@ -85,9 +179,18 @@ export async function getExtracciones(): Promise<ExtraccionLeche[]> {
   return data;
 }
 
+/** Las tres rutas que muestran cifras derivadas de una extracción. */
+function revalidarVistasLeche() {
+  revalidatePath("/dashboard/extracciones");
+  revalidatePath("/dashboard/ingresos");
+  revalidatePath("/dashboard/gastos");
+  revalidatePath("/dashboard");
+}
+
 export async function createExtraccion(formData: {
   fecha: string;
-  litros: number;
+  litros_cantina: number;
+  litros_cria: number;
 }) {
   await requireRole(["admin", "user"]);
   const supabase = await createClient();
@@ -101,7 +204,8 @@ export async function createExtraccion(formData: {
 
   const { error } = await supabase.from("extracciones_leche").insert({
     fecha: formData.fecha,
-    litros: formData.litros,
+    litros_cantina: formData.litros_cantina,
+    litros_cria: formData.litros_cria,
     vacas_en_produccion: vacasRows?.length ?? null,
   });
 
@@ -110,16 +214,14 @@ export async function createExtraccion(formData: {
     throw new Error("No se pudo registrar la extracción");
   }
 
-  await upsertIngresoLeche(formData.fecha, supabase);
+  await sincronizarApuntesLeche(formData.fecha, supabase);
 
-  revalidatePath("/dashboard/extracciones");
-  revalidatePath("/dashboard/ingresos");
-  revalidatePath("/dashboard");
+  revalidarVistasLeche();
 }
 
 export async function updateExtraccion(
   id: number,
-  formData: { fecha: string; litros: number }
+  formData: { fecha: string; litros_cantina: number; litros_cria: number }
 ) {
   await requireRole(["admin", "user"]);
   const supabase = await createClient();
@@ -142,7 +244,8 @@ export async function updateExtraccion(
     .from("extracciones_leche")
     .update({
       fecha: formData.fecha,
-      litros: formData.litros,
+      litros_cantina: formData.litros_cantina,
+      litros_cria: formData.litros_cria,
       vacas_en_produccion: vacasRows?.length ?? null,
     })
     .eq("id", id);
@@ -152,14 +255,14 @@ export async function updateExtraccion(
     throw new Error("No se pudo actualizar la extracción");
   }
 
+  // Si cambió la fecha hay que recalcular también el día de origen, que puede haberse
+  // quedado sin litros (y por tanto sin ingreso ni gasto automáticos).
   if (oldRow && oldRow.fecha !== formData.fecha) {
-    await upsertIngresoLeche(oldRow.fecha, supabase);
+    await sincronizarApuntesLeche(oldRow.fecha, supabase);
   }
-  await upsertIngresoLeche(formData.fecha, supabase);
+  await sincronizarApuntesLeche(formData.fecha, supabase);
 
-  revalidatePath("/dashboard/extracciones");
-  revalidatePath("/dashboard/ingresos");
-  revalidatePath("/dashboard");
+  revalidarVistasLeche();
 }
 
 export async function deleteExtraccion(id: number) {
@@ -180,76 +283,39 @@ export async function deleteExtraccion(id: number) {
 
   if (error) throw new Error("No se pudo eliminar la extracción");
 
-  if (row?.fecha) await upsertIngresoLeche(row.fecha, supabase);
+  if (row?.fecha) await sincronizarApuntesLeche(row.fecha, supabase);
 
-  revalidatePath("/dashboard/extracciones");
-  revalidatePath("/dashboard/ingresos");
-  revalidatePath("/dashboard");
+  revalidarVistasLeche();
 }
 
 // === QUERIES ESPECÍFICAS PARA DASHBOARD ===
 
-export async function getLitrosDiaActual(): Promise<number> {
+/**
+ * Leche de hoy desglosada por destino, para la card del dashboard.
+ * `total` es lo que mide la productividad de las vacas (se ordeñó igual, se venda o no).
+ */
+export async function getLecheHoy(): Promise<{
+  cantina: number;
+  cria: number;
+  total: number;
+}> {
   const supabase = await createClient();
   const hoy = formatDate(new Date());
 
   const { data, error } = await supabase
     .from("extracciones_leche")
-    .select("litros")
+    .select("litros_cantina, litros_cria")
     .eq("fecha", hoy);
 
   if (error) throw new Error("No se pudieron cargar los datos de extracción del día");
-  return (data ?? []).reduce((sum, row) => sum + row.litros, 0);
-}
 
-export async function getLitrosMesActual(): Promise<number> {
-  const supabase = await createClient();
-  const now = new Date();
-  const start = formatDate(new Date(now.getFullYear(), now.getMonth(), 1));
-  const end = formatDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+  const { cantina, cria } = (data ?? []).reduce(
+    (acc, r) => ({
+      cantina: acc.cantina + r.litros_cantina,
+      cria: acc.cria + r.litros_cria,
+    }),
+    { cantina: 0, cria: 0 }
+  );
 
-  const { data, error } = await supabase
-    .from("extracciones_leche")
-    .select("litros")
-    .gte("fecha", start)
-    .lte("fecha", end);
-
-  if (error) throw new Error("No se pudieron cargar los datos de extracción del mes");
-  return (data ?? []).reduce((sum, row) => sum + row.litros, 0);
-}
-
-export async function getLecheMesQuincenas(): Promise<{
-  q1Litros: number;
-  q1Valor: number;
-  q2Litros: number;
-  q2Valor: number;
-}> {
-  const supabase = await createClient();
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-
-  const q1Start = formatDate(new Date(year, month, 1));
-  const q1End = formatDate(new Date(year, month, 15));
-  const q2Start = formatDate(new Date(year, month, 16));
-  const q2End = formatDate(new Date(year, month + 1, 0));
-
-  const [
-    { data: ext1 },
-    { data: ext2 },
-    { data: ing1 },
-    { data: ing2 },
-  ] = await Promise.all([
-    supabase.from("extracciones_leche").select("litros").gte("fecha", q1Start).lte("fecha", q1End),
-    supabase.from("extracciones_leche").select("litros").gte("fecha", q2Start).lte("fecha", q2End),
-    supabase.from("ingresos").select("valor").eq("source", "leche_extraccion").gte("fecha", q1Start).lte("fecha", q1End),
-    supabase.from("ingresos").select("valor").eq("source", "leche_extraccion").gte("fecha", q2Start).lte("fecha", q2End),
-  ]);
-
-  return {
-    q1Litros: (ext1 ?? []).reduce((s, r) => s + r.litros, 0),
-    q1Valor: (ing1 ?? []).reduce((s, r) => s + r.valor, 0),
-    q2Litros: (ext2 ?? []).reduce((s, r) => s + r.litros, 0),
-    q2Valor: (ing2 ?? []).reduce((s, r) => s + r.valor, 0),
-  };
+  return { cantina, cria, total: cantina + cria };
 }

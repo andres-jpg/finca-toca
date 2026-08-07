@@ -105,9 +105,10 @@ export function faltaRegistrarServicio(
  * - **Secado** y **parto probable** se cuentan desde `fecha` del último evento
  *   `inseminacion`/`monta`, nunca desde la palpación ni desde `created_at`.
  * - **Topizado**: 15 días desde el nacimiento, solo mientras la cría siga en estado `leche`.
- * - **Celo**: 50 días tras cerrarse la gestación —parto o aborto— mientras la vaca esté
- *   en pre-servicio, o el siguiente múltiplo de 20 días desde el último evento
- *   reproductivo si la vaca está vacía.
+ * - **Celo**: 60 días tras cerrarse la gestación —parto o aborto— mientras la vaca esté en
+ *   pre-servicio o servicio; para cualquier otra vaca en servicio (nunca parió, o volvió a
+ *   servicio tras una palpación con resultado "vacía"), el siguiente múltiplo de 20 días
+ *   desde su último evento reproductivo.
  */
 export function calcularAlertas(
   animales: AnimalParaAlertas[],
@@ -179,6 +180,7 @@ export function calcularAlertas(
     // Incluye `servicio` además de `pre_servicio`: el cron mueve la vaca a `servicio`
     // exactamente el día objetivo de esta alerta, así que filtrar solo por `pre_servicio`
     // la apagaría justo cuando vence. Sigue viva hasta que se registre el celo o el servicio.
+    let celoPostParto = false;
     if (
       (animal.estado_reproductivo === "pre_servicio" ||
         animal.estado_reproductivo === "servicio") &&
@@ -190,6 +192,7 @@ export function calcularAlertas(
         finGestacion.fecha
       );
       if (!yaEntroEnCelo) {
+        celoPostParto = true;
         const fechaCierre = parseFechaDB(finGestacion.fecha);
         const etiquetaCierre =
           finGestacion.tipo_evento === "aborto" ? "Aborto" : "Parto";
@@ -205,8 +208,12 @@ export function calcularAlertas(
       }
     }
 
-    // --- Celo de vaca vacía: ciclo estral de 20 días, avanzando hasta la próxima fecha ≥ hoy.
-    if (animal.estado_reproductivo === "vacia") {
+    // --- Celo cíclico en servicio: ciclo estral de 20 días, avanzando hasta la próxima
+    // fecha ≥ hoy. Cubre a cualquier vaca en "servicio" que no acabe de cerrar gestación
+    // (el bloque anterior ya la cubrió con la fecha de parto/aborto) — típicamente porque
+    // nunca hubo parto, o porque una palpación posterior la devolvió a "servicio" ("vacía"
+    // ya no es un estado propio) tras un servicio que no prendió.
+    if (animal.estado_reproductivo === "servicio" && !celoPostParto) {
       const base = ultimoDe(suyos, [
         "celo",
         "palpacion",
@@ -226,7 +233,7 @@ export function calcularAlertas(
             animal,
             "celo",
             addDays(fechaBase, ciclos * DIAS_CICLO_CELO),
-            `Vacía desde el ${fmt(fechaBase)}`,
+            `En servicio desde el ${fmt(fechaBase)}`,
             hoy
           )
         );

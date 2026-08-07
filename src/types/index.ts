@@ -73,13 +73,22 @@ export interface ExtraccionLeche {
   id: number;
   created_at: string;
   fecha: string;
-  litros: number;
+  /** Leche que se vende: genera el ingreso automático (`ingresos.source = 'leche_extraccion'`). */
+  litros_cantina: number;
+  /** Leche que se queda para las crías: genera el gasto automático (`gastos.source = 'leche_cria'`). */
+  litros_cria: number;
   vacas_en_produccion: number | null;
+}
+
+/** Total extraído del día: es lo que mide la productividad por vaca, no solo lo vendido. */
+export function litrosTotales(e: Pick<ExtraccionLeche, "litros_cantina" | "litros_cria">): number {
+  return e.litros_cantina + e.litros_cria;
 }
 
 export interface ExtraccionLecheFormData {
   fecha: Date;
-  litros: number;
+  litros_cantina: number;
+  litros_cria: number;
 }
 
 // ===== ANIMALES =====
@@ -89,7 +98,7 @@ export type AnimalRaza = "holstein" | "jersey" | "jerhol" | "normando" | "ayrshi
 
 /** Ciclo productivo: leche → levante_1 → levante_2 → produccion ⇄ secado (machos: … → reproductor). */
 export type EstadoProductivo = Database["public"]["Enums"]["estado_productivo"];
-/** Ciclo reproductivo (solo hembras): vacia → pre_servicio → por_confirmar → cargada / rechequeo. */
+/** Ciclo reproductivo (solo hembras): pre_servicio → servicio → por_confirmar → cargada / rechequeo / servicio (una palpación "vacía" vuelve directo a servicio, ya no es un estado propio). */
 export type EstadoReproductivo = Database["public"]["Enums"]["estado_reproductivo"];
 
 export interface Animal {
@@ -97,9 +106,11 @@ export interface Animal {
   created_at: string | null;
   identificador: string;
   nombre: string;
+  /** Solo diligenciado en el formulario de El Velero. */
+  nombre_largo: string | null;
   sexo: AnimalSexo;
   raza: AnimalRaza | null;
-  /** Composición racial en texto libre, ej. "AYR:88% x HOL:13%". Opcional. */
+  /** Composición racial en texto libre, ej. "AYR:88% x HOL:13%". Opcional, solo El Velero. */
   sangre: string | null;
   origen: VacaOrigen | null;
   estado_productivo: EstadoProductivo | null;
@@ -109,13 +120,23 @@ export interface Animal {
   numero_registro: string | null;
   madre_id: string | null;
   madre_nombre: string | null;
+  /** Nombre libre de la madre cuando el animal es de origen externo y no está registrada. */
+  madre_externa_nombre: string | null;
   padre_id: string | null;
   padre_nombre: string | null;
   padre_pajilla_nombre: string | null;
-  /** Nombre de un toro de monta natural que no es de la finca ni fue usado por pajilla. */
+  /**
+   * Nombre libre de un padre sin registro propio: toro de monta natural que no es de la
+   * finca ni fue usado por pajilla (origen finca), o el padre de un animal de origen externo.
+   */
   padre_alquiler_nombre: string | null;
-  /** Raza del toro de alquiler — no tiene un registro propio del que inferirla. */
+  /** Raza del padre libre — no tiene un registro propio del que inferirla. */
   padre_alquiler_raza: AnimalRaza | null;
+  /**
+   * Concentrado que se le debe dar a la vaca en **cada ordeño** del día. Se mete a mano,
+   * es informativo y no lo deriva ningún evento. `null` = sin definir (distinto de 0).
+   */
+  concentrado_por_ordeno: number | null;
   alta: boolean;
 }
 

@@ -55,6 +55,8 @@ const PADRE_TIPO_LABELS: Record<PadreTipo, string> = {
 interface FormValues {
   identificador: string;
   nombre: string;
+  /** Solo diligenciado en el formulario de El Velero. */
+  nombre_largo?: string;
   sexo: AnimalSexo;
   raza: AnimalRaza;
   sangre?: string | null;
@@ -65,19 +67,25 @@ interface FormValues {
   fecha_nacimiento?: Date | null;
   numero_registro?: string;
   madre_id?: string | null;
+  /** Texto libre, solo cuando `origen === "externa"` y la madre no está registrada. */
+  madre_externa_nombre?: string;
   padre_id?: string | null;
   padre_alquiler_nombre?: string;
   padre_alquiler_raza?: AnimalRaza | null;
+  /** Solo hembras. `null` = sin definir (el input vacío se normaliza a `null`). */
+  concentrado_por_ordeno?: number | null;
 }
 
 interface AnimalFormProps {
   animal?: Animal;
   animales: Animal[];
   lotesPajillas: PajillaDisponible[];
+  /** "Nombre largo" y "Sangre" (% de pureza) solo se ofrecen en el formulario de El Velero. */
+  esVelero: boolean;
   onSuccess: () => void;
 }
 
-export function AnimalForm({ animal, animales, lotesPajillas, onSuccess }: AnimalFormProps) {
+export function AnimalForm({ animal, animales, lotesPajillas, esVelero, onSuccess }: AnimalFormProps) {
   const getInitialPadreTipo = (): PadreTipo => {
     if (!animal) return "none";
     if (animal.padre_id) return "animal";
@@ -112,6 +120,7 @@ export function AnimalForm({ animal, animales, lotesPajillas, onSuccess }: Anima
     defaultValues: {
       identificador: animal?.identificador ?? "",
       nombre: animal?.nombre ?? "",
+      nombre_largo: animal?.nombre_largo ?? "",
       sexo: animal?.sexo ?? undefined,
       raza: animal?.raza ?? undefined,
       sangre: animal?.sangre ?? null,
@@ -124,9 +133,11 @@ export function AnimalForm({ animal, animales, lotesPajillas, onSuccess }: Anima
         : null,
       numero_registro: animal?.numero_registro ?? "",
       madre_id: animal?.madre_id ?? null,
+      madre_externa_nombre: animal?.madre_externa_nombre ?? "",
       padre_id: animal?.padre_id ?? null,
       padre_alquiler_nombre: animal?.padre_alquiler_nombre ?? "",
       padre_alquiler_raza: animal?.padre_alquiler_raza ?? null,
+      concentrado_por_ordeno: animal?.concentrado_por_ordeno ?? null,
     },
   });
 
@@ -183,9 +194,10 @@ export function AnimalForm({ animal, animales, lotesPajillas, onSuccess }: Anima
       const base = {
         identificador: data.identificador,
         nombre: data.nombre,
+        nombre_largo: esVelero ? data.nombre_largo?.trim() || null : null,
         sexo: data.sexo,
         raza: data.raza,
-        sangre: data.sangre || null,
+        sangre: esVelero ? data.sangre || null : null,
         origen: data.origen,
         estado_productivo: (data.estado_productivo || null) as EstadoProductivo | null,
         estado_reproductivo:
@@ -194,8 +206,10 @@ export function AnimalForm({ animal, animales, lotesPajillas, onSuccess }: Anima
             : null,
         fecha_compra: data.origen === "externa" ? data.fecha_compra : null,
         fecha_nacimiento: data.fecha_nacimiento || null,
-        numero_registro: data.origen === "externa" ? data.numero_registro : undefined,
+        numero_registro: data.numero_registro,
         madre_id: data.madre_id || null,
+        madre_externa_nombre:
+          data.origen === "externa" ? data.madre_externa_nombre?.trim() || null : null,
         padre_id: padreTipo === "animal" ? (data.padre_id || null) : null,
         padre_pajilla_id:
           padreTipo === "pajilla" && selectedPajillaToro ? selectedPajillaToro : null,
@@ -203,9 +217,19 @@ export function AnimalForm({ animal, animales, lotesPajillas, onSuccess }: Anima
           padreTipo === "pajilla" && !selectedPajillaToro
             ? (animal?.padre_pajilla_nombre ?? null)
             : null,
+        // El nombre de padre libre aplica a dos casos: el toro de alquiler (origen finca) y
+        // el padre de un animal de origen externo, que tampoco tiene registro propio.
         padre_alquiler_nombre:
-          padreTipo === "alquiler" ? data.padre_alquiler_nombre?.trim() || null : null,
-        padre_alquiler_raza: padreTipo === "alquiler" ? data.padre_alquiler_raza || null : null,
+          padreTipo === "alquiler" || data.origen === "externa"
+            ? data.padre_alquiler_nombre?.trim() || null
+            : null,
+        padre_alquiler_raza:
+          padreTipo === "alquiler" || data.origen === "externa"
+            ? data.padre_alquiler_raza || null
+            : null,
+        // Solo hembras: a un macho no se le ordeña. El input vacío llega ya como null.
+        concentrado_por_ordeno:
+          data.sexo === "hembra" ? (data.concentrado_por_ordeno ?? null) : null,
       };
 
       if (animal) {
@@ -273,67 +297,69 @@ export function AnimalForm({ animal, animales, lotesPajillas, onSuccess }: Anima
         </div>
       </div>
 
-      {/* Sangre: % de pureza, opcional. Hasta dos razas; la segunda se autocalcula a 100%. */}
-      <div className="space-y-2 rounded-lg border border-gray-200 p-3">
-        <Label>Sangre (% de pureza) — opcional</Label>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <Select
-              value={sangreRaza1 || "none"}
-              onValueChange={(val) => setSangreRaza1(val === "none" ? "" : (val as AnimalRaza))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Raza 1" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Sin definir</SelectItem>
-                {RAZAS.map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {RAZA_LABELS[r]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input
-              type="number"
-              min={1}
-              max={sangreRaza2 ? 99 : 100}
-              placeholder="% pureza"
-              disabled={!sangreRaza1}
-              value={sangrePct1}
-              onChange={(e) =>
-                setSangrePct1(e.target.value === "" ? "" : Number(e.target.value))
-              }
-            />
-          </div>
+      {/* Sangre: % de pureza, opcional. Hasta dos razas; la segunda se autocalcula a 100%. Solo El Velero. */}
+      {esVelero && (
+        <div className="space-y-2 rounded-lg border border-gray-200 p-3">
+          <Label>Sangre (% de pureza) — opcional</Label>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Select
+                value={sangreRaza1 || "none"}
+                onValueChange={(val) => setSangreRaza1(val === "none" ? "" : (val as AnimalRaza))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Raza 1" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin definir</SelectItem>
+                  {RAZAS.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {RAZA_LABELS[r]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                type="number"
+                min={1}
+                max={sangreRaza2 ? 99 : 100}
+                placeholder="% pureza"
+                disabled={!sangreRaza1}
+                value={sangrePct1}
+                onChange={(e) =>
+                  setSangrePct1(e.target.value === "" ? "" : Number(e.target.value))
+                }
+              />
+            </div>
 
-          <div className="space-y-1">
-            <Select
-              value={sangreRaza2 || "none"}
-              onValueChange={(val) => setSangreRaza2(val === "none" ? "" : (val as AnimalRaza))}
-              disabled={!sangreRaza1 || !sangrePct1}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Raza 2 (opcional)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Ninguna</SelectItem>
-                {RAZAS.filter((r) => r !== sangreRaza1).map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {RAZA_LABELS[r]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input type="number" placeholder="% pureza" disabled value={sangrePct2 ?? ""} />
+            <div className="space-y-1">
+              <Select
+                value={sangreRaza2 || "none"}
+                onValueChange={(val) => setSangreRaza2(val === "none" ? "" : (val as AnimalRaza))}
+                disabled={!sangreRaza1 || !sangrePct1}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Raza 2 (opcional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Ninguna</SelectItem>
+                  {RAZAS.filter((r) => r !== sangreRaza1).map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {RAZA_LABELS[r]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input type="number" placeholder="% pureza" disabled value={sangrePct2 ?? ""} />
+            </div>
           </div>
+          {watch("sangre") && (
+            <p className="text-xs text-gray-500">
+              Se guardará como: <span className="font-medium text-gray-700">{watch("sangre")}</span>
+            </p>
+          )}
         </div>
-        {watch("sangre") && (
-          <p className="text-xs text-gray-500">
-            Se guardará como: <span className="font-medium text-gray-700">{watch("sangre")}</span>
-          </p>
-        )}
-      </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
@@ -350,10 +376,33 @@ export function AnimalForm({ animal, animales, lotesPajillas, onSuccess }: Anima
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="nombre">Nombre</Label>
-          <Input id="nombre" type="text" placeholder="Ej: Vanessa" {...register("nombre")} />
-          {errors.nombre && <p className="text-sm text-red-500">{errors.nombre.message}</p>}
+          <Label htmlFor="numero_registro">Número de registro</Label>
+          <Input
+            id="numero_registro"
+            type="text"
+            placeholder="Ej: REG-0123 (opcional)"
+            {...register("numero_registro")}
+          />
         </div>
+      </div>
+
+      {/* Nombre largo: solo El Velero. */}
+      {esVelero && (
+        <div className="space-y-2">
+          <Label htmlFor="nombre_largo">Nombre largo</Label>
+          <Input
+            id="nombre_largo"
+            type="text"
+            placeholder="Nombre largo (opcional)"
+            {...register("nombre_largo")}
+          />
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <Label htmlFor="nombre">Nombre</Label>
+        <Input id="nombre" type="text" placeholder="Ej: Vanessa" {...register("nombre")} />
+        {errors.nombre && <p className="text-sm text-red-500">{errors.nombre.message}</p>}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -433,6 +482,32 @@ export function AnimalForm({ animal, animales, lotesPajillas, onSuccess }: Anima
         </div>
       )}
 
+      {/* Concentrado por ordeño: solo hembras, a un macho no se le ordeña. */}
+      {sexoValue === "hembra" && (
+        <div className="space-y-2">
+          <Label htmlFor="concentrado_por_ordeno">Concentrado por ordeño</Label>
+          <Input
+            id="concentrado_por_ordeno"
+            type="number"
+            step="0.1"
+            min="0"
+            max="100"
+            placeholder="Ej: 2 (opcional)"
+            {...register("concentrado_por_ordeno", {
+              // El input vacío llega como "" y `valueAsNumber` lo convertiría en NaN,
+              // que Zod rechaza. Se normaliza a null = "sin definir".
+              setValueAs: (v) => (v === "" || v === null ? null : Number(v)),
+            })}
+          />
+          <p className="text-xs text-gray-400">
+            Cantidad que se le da en cada ordeño del día, no el total diario.
+          </p>
+          {errors.concentrado_por_ordeno && (
+            <p className="text-sm text-red-500">{errors.concentrado_por_ordeno.message}</p>
+          )}
+        </div>
+      )}
+
       <div className="space-y-2">
         <Label>Fecha de nacimiento</Label>
         <DatePicker
@@ -453,12 +528,22 @@ export function AnimalForm({ animal, animales, lotesPajillas, onSuccess }: Anima
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="numero_registro">Número de registro</Label>
+            <Label htmlFor="madre_externa_nombre">Nombre de la madre</Label>
             <Input
-              id="numero_registro"
+              id="madre_externa_nombre"
               type="text"
-              placeholder="Ej: REG-0123 (opcional)"
-              {...register("numero_registro")}
+              placeholder="Nombre de la madre (opcional)"
+              {...register("madre_externa_nombre")}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="padre_externo_nombre">Nombre del padre</Label>
+            <Input
+              id="padre_externo_nombre"
+              type="text"
+              placeholder="Nombre del padre (opcional)"
+              {...register("padre_alquiler_nombre")}
             />
           </div>
         </>

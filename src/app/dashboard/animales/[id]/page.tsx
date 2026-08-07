@@ -4,8 +4,9 @@ import { getEventosAnimal } from "@/features/eventos-animal/actions/eventos.acti
 import { getLotesPajillas } from "@/features/inventario/pajillas/actions/pajillas.actions";
 import { getAlertasAnimal } from "@/features/alertas/actions/alertas.queries";
 import { AnimalFicha } from "@/features/animales/components/animal-ficha";
-import { formatEdad } from "@/lib/animales/estados";
+import { calcularDiasEnLeche, formatEdad } from "@/lib/animales/estados";
 import { canDelete, canWrite, checkRoutePermission } from "@/lib/auth/check-permissions";
+import { getTenantActual } from "@/lib/auth/get-tenant";
 
 export default async function AnimalFichaPage({
   params,
@@ -14,12 +15,14 @@ export default async function AnimalFichaPage({
 }) {
   const { id } = await params;
 
-  const [userRole, animal, animales, lotesPajillas] = await Promise.all([
+  const [userRole, animal, animales, lotesPajillas, tenant] = await Promise.all([
     checkRoutePermission(["admin", "viewer"]),
     getAnimalById(id),
     getAnimalesDeAlta(),
     getLotesPajillas(),
+    getTenantActual(),
   ]);
+  const esVelero = tenant?.slug === "el-velero";
 
   if (!animal) notFound();
 
@@ -40,8 +43,12 @@ export default async function AnimalFichaPage({
       alertas={alertas}
       faltaServicio={faltaServicio}
       edad={formatEdad(animal.fecha_nacimiento)}
+      // Se calcula aquí, en el servidor, por la misma razón que la edad: `parseFechaDB`
+      // resuelve en la zona local y en Vercel es UTC frente al UTC-5 del navegador.
+      diasEnLeche={calcularDiasEnLeche(animal.estado_productivo, eventos)}
       canEdit={canEdit}
       canDelete={canDelete(userRole)}
+      esVelero={esVelero}
     />
   );
 }

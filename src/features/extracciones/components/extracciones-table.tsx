@@ -13,7 +13,7 @@ import { deleteExtraccion } from "@/features/extracciones/actions/extracciones.a
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { MonthPicker } from "@/components/shared/month-picker";
-import type { ExtraccionLeche } from "@/types";
+import { litrosTotales, type ExtraccionLeche } from "@/types";
 
 function RowActions({ extraccion }: { extraccion: ExtraccionLeche }) {
   const [editOpen, setEditOpen] = useState(false);
@@ -58,7 +58,7 @@ function RowActions({ extraccion }: { extraccion: ExtraccionLeche }) {
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         onConfirm={handleDelete}
-        itemName={`extracción del ${extraccionDate} (${extraccion.litros}L)`}
+        itemName={`extracción del ${extraccionDate} (${litrosTotales(extraccion).toFixed(1)}L)`}
       />
     </>
   );
@@ -88,9 +88,25 @@ export function ExtraccionesTable({ extracciones, canEdit }: ExtraccionesTablePr
         cell: ({ getValue }) => format(new Date(getValue<string>() + "T00:00:00"), "dd/MM/yyyy", { locale: es }),
       },
       {
-        accessorKey: "litros",
-        header: "Litros",
+        accessorKey: "litros_cantina",
+        header: "Cantina",
         cell: ({ getValue }) => `${getValue<number>().toFixed(1)} L`,
+      },
+      {
+        accessorKey: "litros_cria",
+        header: "Cría",
+        cell: ({ getValue }) => {
+          const val = getValue<number>();
+          return val > 0 ? `${val.toFixed(1)} L` : <span className="text-gray-400">—</span>;
+        },
+      },
+      {
+        id: "total",
+        header: "Total",
+        accessorFn: (row) => litrosTotales(row),
+        cell: ({ getValue }) => (
+          <span className="font-medium">{getValue<number>().toFixed(1)} L</span>
+        ),
       },
     ];
 

@@ -15,7 +15,7 @@ export const RAZA_LABELS: Record<AnimalRaza, string> = {
   jerhol: "Jerhol",
   normando: "Normando",
   ayrshire: "Ayrshire",
-  cruce: "Cruce",
+  cruce: "Otra",
 };
 
 /** Código corto de cada raza, usado para componer el campo `sangre` (ej. "AYR:88% x HOL:13%"). */

@@ -11,6 +11,8 @@ export const animalSchema = z
       .string()
       .min(1, "El nombre es obligatorio")
       .max(100, "Máximo 100 caracteres"),
+    /** Solo diligenciado en el formulario de El Velero. */
+    nombre_largo: z.string().optional().nullable(),
     sexo: z.enum(["hembra", "macho"], { message: "Selecciona el sexo del animal" }),
     raza: z.enum(["holstein", "jersey", "jerhol", "normando", "ayrshire", "cruce"], {
       message: "Selecciona la raza del animal",
@@ -23,7 +25,29 @@ export const animalSchema = z
     fecha_nacimiento: z.date().optional().nullable(),
     numero_registro: z.string().optional(),
     madre_id: z.string().uuid().optional().nullable(),
+    /** Texto libre, solo cuando `origen === "externa"` y la madre no está registrada. */
+    madre_externa_nombre: z.string().optional().nullable(),
     padre_id: z.string().uuid().optional().nullable(),
+    /**
+     * Nombre libre de un padre sin registro propio: toro de alquiler (origen finca) o el
+     * padre de un animal de origen externo. Debe estar en el schema — sin declarar aquí,
+     * Zod lo descarta del resultado parseado y el formulario nunca llega a enviarlo.
+     */
+    padre_alquiler_nombre: z.string().optional().nullable(),
+    padre_alquiler_raza: z
+      .enum(["holstein", "jersey", "jerhol", "normando", "ayrshire", "cruce"])
+      .optional()
+      .nullable(),
+    /**
+     * Concentrado por ordeño (solo hembras). Se acepta `null` para "sin definir"; el input
+     * vacío llega como `NaN` desde `valueAsNumber`, y se normaliza a `null` en el formulario.
+     */
+    concentrado_por_ordeno: z
+      .number()
+      .min(0, "No puede ser negativo")
+      .max(100, "Valor máximo: 100")
+      .optional()
+      .nullable(),
   })
   .superRefine((data, ctx) => {
     const productivosValidos: readonly string[] = ESTADOS_PRODUCTIVOS_POR_SEXO[data.sexo];

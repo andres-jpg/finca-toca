@@ -27,11 +27,22 @@ export const MESES_LEVANTE_2 = 18;
 export const DIAS_TOPIZADO = 15;
 /**
  * Período de espera voluntario: días tras cerrarse la gestación (parto o aborto) durante
- * los que la vaca no se sirve. Gobierna dos cosas a la vez, y por eso es una sola constante:
- * la fecha objetivo de la alerta de celo y el pase automático `pre_servicio` → `servicio`
- * que hace el cron diario (`sincronizarPaseAServicio`).
+ * los que la vaca no se sirve. Es la **fecha objetivo de la alerta de celo**: el día 60 la
+ * alerta marca "hoy" y a partir del 61 queda "vencida".
  */
 export const DIAS_CELO_POST_PARTO = 60;
+/**
+ * Días tras el parto/aborto en que el cron pasa la vaca de `pre_servicio` a `servicio`.
+ *
+ * Es **uno más** que `DIAS_CELO_POST_PARTO` a propósito: así el día objetivo de la alerta
+ * (el 60) la vaca todavía se ve en `pre_servicio`, y el pase ocurre al día siguiente, justo
+ * cuando la alerta de celo vence. Antes ambas cosas compartían constante y la vaca ya
+ * aparecía en `servicio` el mismo día en que la alerta pedía observar el celo.
+ *
+ * La alerta de celo sigue cubriendo `pre_servicio` **y** `servicio` (ver `calcularAlertas`):
+ * el pase no debe apagarla, solo se resuelve al registrar el celo o el servicio.
+ */
+export const DIAS_PASE_A_SERVICIO = DIAS_CELO_POST_PARTO + 1;
 /** Duración del ciclo estral: cada cuántos días reprogramar el celo de una vaca vacía. */
 export const DIAS_CICLO_CELO = 20;
 
@@ -116,7 +127,6 @@ export const ESTADOS_PRODUCTIVOS_POR_SEXO: Record<AnimalSexo, EstadoProductivo[]
 export const ESTADOS_REPRODUCTIVOS: EstadoReproductivo[] = [
   "pre_puber",
   "puber",
-  "vacia",
   "pre_servicio",
   "servicio",
   "por_confirmar",
@@ -127,7 +137,6 @@ export const ESTADOS_REPRODUCTIVOS: EstadoReproductivo[] = [
 export const ESTADO_REPRODUCTIVO_LABELS: Record<EstadoReproductivo, string> = {
   pre_puber: "Pre-púber",
   puber: "Púber",
-  vacia: "Vacía",
   pre_servicio: "Pre-servicio",
   servicio: "Servicio",
   por_confirmar: "Por confirmar",
@@ -138,7 +147,6 @@ export const ESTADO_REPRODUCTIVO_LABELS: Record<EstadoReproductivo, string> = {
 export const ESTADO_REPRODUCTIVO_COLORS: Record<EstadoReproductivo, string> = {
   pre_puber: "bg-sky-100 text-sky-700 hover:bg-sky-100",
   puber: "bg-indigo-100 text-indigo-700 hover:bg-indigo-100",
-  vacia: "bg-slate-100 text-slate-700 hover:bg-slate-100",
   pre_servicio: "bg-teal-100 text-teal-700 hover:bg-teal-100",
   servicio: "bg-cyan-100 text-cyan-700 hover:bg-cyan-100",
   por_confirmar: "bg-amber-100 text-amber-700 hover:bg-amber-100",
@@ -149,7 +157,6 @@ export const ESTADO_REPRODUCTIVO_COLORS: Record<EstadoReproductivo, string> = {
 export const ESTADO_REPRODUCTIVO_HEX: Record<EstadoReproductivo, string> = {
   pre_puber: "#0ea5e9",
   puber: "#6366f1",
-  vacia: "#64748b",
   pre_servicio: "#14b8a6",
   servicio: "#0891b2",
   por_confirmar: "#d97706",
@@ -261,6 +268,57 @@ export function formatEdad(
   return restoMeses === 0 ? texto : `${texto} y ${plural(restoMeses, "mes", "meses")}`;
 }
 
+/** Lo mínimo que necesita `calcularDiasEnLeche` de cada evento. */
+export interface EventoParaDiasEnLeche {
+  tipo_evento: TipoEvento;
+  fecha: string;
+}
+
+/**
+ * Días en leche (DEL): días transcurridos desde que arrancó la lactancia actual.
+ *
+ * La lactancia **arranca** con un `parto` o un `aborto` (ambos devuelven la vaca a ordeño) y
+ * **se cierra** con un `secado`, que pone el contador a 0 hasta el siguiente parto/aborto.
+ * Por eso solo miran estos tres tipos de evento: gana el más reciente.
+ *
+ * Se cuenta desde `eventos_animal.fecha`, nunca desde `created_at` ni desde la fecha en que
+ * se cambió el estado — mismo criterio que las alertas de secado y parto: el ganadero puede
+ * registrar el parto con retraso y la fecha real solo está en el evento.
+ *
+ * Devuelve `null` si no hay ningún evento de estos: sin fecha base no se inventa un número
+ * (igual que `faltaRegistrarServicio` en las alertas).
+ *
+ * Debe llamarse desde el servidor y pasarse ya calculado al cliente, como `formatEdad()`:
+ * `parseFechaDB` resuelve en la zona local, que en Vercel es UTC y en el navegador UTC-5.
+ */
+export function calcularDiasEnLeche(
+  estadoProductivo: EstadoProductivo | null,
+  eventos: EventoParaDiasEnLeche[],
+  hoy: Date = new Date()
+): number | null {
+  // Una vaca en secado no está en leche aunque no se haya registrado el evento de secado
+  // (el estado se puede haber puesto a mano). El estado manda sobre el historial aquí.
+  if (estadoProductivo === "secado") return 0;
+
+  const relevantes = eventos.filter(
+    (e) => e.tipo_evento === "secado" || TIPOS_EVENTO_FIN_GESTACION.includes(e.tipo_evento)
+  );
+  if (relevantes.length === 0) return null;
+
+  // Orden determinista: por fecha y, a igualdad de fecha, el secado se considera posterior
+  // (una vaca secada el mismo día que se registra el parto queda seca, no en leche).
+  const ordenados = [...relevantes].sort((a, b) => {
+    if (a.fecha !== b.fecha) return a.fecha.localeCompare(b.fecha);
+    return Number(a.tipo_evento === "secado") - Number(b.tipo_evento === "secado");
+  });
+
+  const ultimo = ordenados[ordenados.length - 1];
+  if (ultimo.tipo_evento === "secado") return 0;
+
+  // Sin negativos: un parto con fecha futura (dedazo al teclear) cuenta como 0, no como -N.
+  return Math.max(0, differenceInCalendarDays(hoy, parseFechaDB(ultimo.fecha)));
+}
+
 /**
  * Transición de estados que provoca registrar un evento.
  * Devuelve solo los ejes que cambian; `{}` significa "el evento no mueve el estado".
@@ -275,8 +333,11 @@ export function estadoDesdeEvento(
       return { reproductivo: "por_confirmar" };
     case "palpacion":
     case "confirmacion_prenez":
-      // Los tres resultados posibles coinciden 1:1 con estados reproductivos.
-      return resultado ? { reproductivo: resultado } : {};
+      // "cargada" y "rechequeo" coinciden 1:1 con el estado reproductivo. "vacía" no es un
+      // estado propio — la vaca vuelve directo al pool de servicio en vez de quedar en un
+      // estado de espera aparte.
+      if (!resultado) return {};
+      return { reproductivo: resultado === "vacia" ? "servicio" : resultado };
     case "parto":
     // El aborto cierra la gestación igual que un parto: la vaca vuelve a ordeño y
     // reinicia el ciclo reproductivo desde pre-servicio.

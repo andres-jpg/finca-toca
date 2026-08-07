@@ -10,7 +10,13 @@ export function AnimalGenealogy({ animal }: AnimalGenealogyProps) {
   const hasPadre = animal.padre !== null;
   const hasMadre = animal.madre !== null;
 
-  if (!hasPadre && !hasMadre && !animal.padre_pajilla_nombre && !animal.padre_alquiler_nombre) {
+  if (
+    !hasPadre &&
+    !hasMadre &&
+    !animal.padre_pajilla_nombre &&
+    !animal.padre_alquiler_nombre &&
+    !animal.madre_externa_nombre
+  ) {
     return (
       <p className="text-sm text-gray-400">Sin información genealógica registrada.</p>
     );
@@ -37,9 +43,15 @@ export function AnimalGenealogy({ animal }: AnimalGenealogyProps) {
         ) : animal.padre_alquiler_nombre ? (
           <div>
             <span className="text-sm font-medium text-gray-800">{animal.padre_alquiler_nombre}</span>
-            <span className="ml-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
-              alquiler
-            </span>
+            {animal.origen === "externa" ? (
+              <span className="ml-2 text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded px-1.5 py-0.5">
+                externa
+              </span>
+            ) : (
+              <span className="ml-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                alquiler
+              </span>
+            )}
             {animal.padre_alquiler_raza && (
               <p className="text-xs text-gray-500 mt-0.5">
                 {RAZA_LABELS[animal.padre_alquiler_raza]}
@@ -60,6 +72,13 @@ export function AnimalGenealogy({ animal }: AnimalGenealogyProps) {
           >
             #{animal.madre.identificador} — {animal.madre.nombre}
           </Link>
+        ) : animal.madre_externa_nombre ? (
+          <div>
+            <span className="text-sm font-medium text-gray-800">{animal.madre_externa_nombre}</span>
+            <span className="ml-2 text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded px-1.5 py-0.5">
+              externa
+            </span>
+          </div>
         ) : (
           <span className="text-sm text-gray-400">No registrada</span>
         )}

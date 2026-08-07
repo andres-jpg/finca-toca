@@ -3,19 +3,22 @@ import { getLotesPajillas } from "@/features/inventario/pajillas/actions/pajilla
 import { AnimalesTable } from "@/features/animales/components/animales-table";
 import { ESTADOS_PRODUCTIVOS, ESTADOS_REPRODUCTIVOS } from "@/lib/animales/estados";
 import { canWrite, checkRoutePermission } from "@/lib/auth/check-permissions";
+import { getTenantActual } from "@/lib/auth/get-tenant";
 
 export default async function AnimalesPage({
   searchParams,
 }: {
   searchParams: Promise<{ productivo?: string; reproductivo?: string }>;
 }) {
-  const [params, userRole, animales, lotesPajillas] = await Promise.all([
+  const [params, userRole, animales, lotesPajillas, tenant] = await Promise.all([
     searchParams,
     checkRoutePermission(["admin", "viewer"]),
     getAnimales(),
     getLotesPajillas(),
+    getTenantActual(),
   ]);
   const canEdit = canWrite(userRole);
+  const esVelero = tenant?.slug === "el-velero";
 
   // Los contadores del dashboard enlazan aquí; se validan para no aceptar valores arbitrarios.
   const filtroProductivoInicial =
@@ -32,6 +35,7 @@ export default async function AnimalesPage({
       animales={animales}
       lotesPajillas={lotesPajillas}
       canEdit={canEdit}
+      esVelero={esVelero}
       filtroProductivoInicial={filtroProductivoInicial}
       filtroReproductivoInicial={filtroReproductivoInicial}
     />

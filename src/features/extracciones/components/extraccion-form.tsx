@@ -18,7 +18,8 @@ import type { ExtraccionLeche } from "@/types";
 
 interface FormValues {
   fecha: string;
-  litros: number;
+  litros_cantina: number;
+  litros_cria: number;
 }
 
 interface ExtraccionFormProps {
@@ -38,14 +39,20 @@ export function ExtraccionForm({
     register,
     handleSubmit,
     setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(extraccionSchema) as any,
     defaultValues: {
       fecha: extraccion?.fecha ?? formatDate(new Date()),
-      litros: extraccion?.litros ?? 0,
+      litros_cantina: extraccion?.litros_cantina ?? 0,
+      litros_cria: extraccion?.litros_cria ?? 0,
     },
   });
+
+  const cantina = watch("litros_cantina");
+  const cria = watch("litros_cria");
+  const total = (Number(cantina) || 0) + (Number(cria) || 0);
 
   const onSubmit = async (data: FormValues) => {
     try {
@@ -80,20 +87,47 @@ export function ExtraccionForm({
         )}
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="litros">Litros</Label>
-        <Input
-          id="litros"
-          type="number"
-          step="0.1"
-          min="0"
-          max="1000"
-          placeholder="0.0"
-          {...register("litros", { valueAsNumber: true })}
-        />
-        {errors.litros && (
-          <p className="text-sm text-red-500">{errors.litros.message}</p>
-        )}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="litros_cantina">Cantina</Label>
+          <Input
+            id="litros_cantina"
+            type="number"
+            step="0.1"
+            min="0"
+            max="1000"
+            placeholder="0.0"
+            {...register("litros_cantina", { valueAsNumber: true })}
+          />
+          <p className="text-xs text-gray-400">Leche que se vende — genera el ingreso.</p>
+          {errors.litros_cantina && (
+            <p className="text-sm text-red-500">{errors.litros_cantina.message}</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="litros_cria">Cría</Label>
+          <Input
+            id="litros_cria"
+            type="number"
+            step="0.1"
+            min="0"
+            max="1000"
+            placeholder="0.0"
+            {...register("litros_cria", { valueAsNumber: true })}
+          />
+          <p className="text-xs text-gray-400">
+            Leche que se queda en la finca — genera el gasto.
+          </p>
+          {errors.litros_cria && (
+            <p className="text-sm text-red-500">{errors.litros_cria.message}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 flex items-center justify-between">
+        <span className="text-xs text-gray-500">Total extraído</span>
+        <span className="text-sm font-semibold text-gray-800">{total.toFixed(1)} L</span>
       </div>
 
       <div className="flex gap-2 pt-4">

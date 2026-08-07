@@ -57,11 +57,13 @@ function RowActions({
   animales,
   lotesPajillas,
   canEdit,
+  esVelero,
 }: {
   animal: Animal;
   animales: Animal[];
   lotesPajillas: PajillaDisponible[];
   canEdit: boolean;
+  esVelero: boolean;
 }) {
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
@@ -115,6 +117,7 @@ function RowActions({
             animal={animal}
             animales={animales}
             lotesPajillas={lotesPajillas}
+            esVelero={esVelero}
             onSuccess={() => setEditOpen(false)}
           />
         </EntityModal>
@@ -136,6 +139,8 @@ interface AnimalesTableProps {
   animales: Animal[];
   lotesPajillas: PajillaDisponible[];
   canEdit: boolean;
+  /** El formulario de creación/edición ofrece "Nombre largo" y "Sangre" solo para El Velero. */
+  esVelero: boolean;
   /** Filtros iniciales desde los enlaces del dashboard (?productivo= / ?reproductivo=). */
   filtroProductivoInicial?: string;
   filtroReproductivoInicial?: string;
@@ -145,6 +150,7 @@ export function AnimalesTable({
   animales,
   lotesPajillas,
   canEdit,
+  esVelero,
   filtroProductivoInicial = TODOS,
   filtroReproductivoInicial = TODOS,
 }: AnimalesTableProps) {
@@ -293,11 +299,12 @@ export function AnimalesTable({
             animales={animalesDeAlta}
             lotesPajillas={lotesPajillas}
             canEdit={canEdit}
+            esVelero={esVelero}
           />
         ),
       },
     ],
-    [canEdit, animalesDeAlta, lotesPajillas]
+    [canEdit, animalesDeAlta, lotesPajillas, esVelero]
   );
 
   return (
@@ -408,6 +415,7 @@ export function AnimalesTable({
           <AnimalForm
             animales={animalesDeAlta}
             lotesPajillas={lotesPajillas}
+            esVelero={esVelero}
             onSuccess={() => setModalOpen(false)}
           />
         </EntityModal>

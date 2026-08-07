@@ -46,7 +46,7 @@ async function nombreToroDeLote(
 }
 
 const SELECT_FIELDS =
-  "id, created_at, identificador, nombre, sexo, raza, sangre, origen, estado_productivo, estado_reproductivo, fecha_compra, fecha_nacimiento, numero_registro, madre_id, padre_id, padre_pajilla_nombre, padre_alquiler_nombre, padre_alquiler_raza, alta, madre:madre_id(nombre), padre:padre_id(nombre)";
+  "id, created_at, identificador, nombre, nombre_largo, sexo, raza, sangre, origen, estado_productivo, estado_reproductivo, fecha_compra, fecha_nacimiento, numero_registro, madre_id, madre_externa_nombre, padre_id, padre_pajilla_nombre, padre_alquiler_nombre, padre_alquiler_raza, concentrado_por_ordeno, alta, madre:madre_id(nombre), padre:padre_id(nombre)";
 
 function mapRow(row: any): Animal {
   const madreRaw = Array.isArray(row.madre) ? row.madre[0] : row.madre;
@@ -56,6 +56,7 @@ function mapRow(row: any): Animal {
     created_at: row.created_at,
     identificador: row.identificador,
     nombre: row.nombre,
+    nombre_largo: row.nombre_largo ?? null,
     sexo: row.sexo,
     raza: row.raza,
     sangre: row.sangre ?? null,
@@ -67,11 +68,13 @@ function mapRow(row: any): Animal {
     numero_registro: row.numero_registro,
     madre_id: row.madre_id,
     madre_nombre: madreRaw?.nombre ?? null,
+    madre_externa_nombre: row.madre_externa_nombre ?? null,
     padre_id: row.padre_id,
     padre_nombre: padreRaw?.nombre ?? null,
     padre_pajilla_nombre: row.padre_pajilla_nombre ?? null,
     padre_alquiler_nombre: row.padre_alquiler_nombre ?? null,
     padre_alquiler_raza: row.padre_alquiler_raza ?? null,
+    concentrado_por_ordeno: row.concentrado_por_ordeno ?? null,
     alta: row.alta,
   };
 }
@@ -147,6 +150,8 @@ export async function getAnimalById(id: string): Promise<AnimalDetalle | null> {
 interface AnimalFormData {
   identificador: string;
   nombre: string;
+  /** Solo diligenciado en el formulario de El Velero. */
+  nombre_largo?: string | null;
   sexo: AnimalSexo;
   raza?: AnimalRaza | null;
   /** Composición racial en texto libre, ej. "AYR:88% x HOL:13%". Opcional. */
@@ -158,14 +163,21 @@ interface AnimalFormData {
   fecha_nacimiento?: Date | null;
   numero_registro?: string;
   madre_id?: string | null;
+  /** Texto libre, solo cuando `origen === "externa"` y la madre no está registrada. */
+  madre_externa_nombre?: string | null;
   padre_id?: string | null;
   /** Lote de pajillas del que salió el padre (`pajillas.id`). Solo se usa para el nombre. */
   padre_pajilla_id?: string | null;
   padre_pajilla_nombre_keep?: string | null;
-  /** Nombre de un toro de monta natural que no es de la finca ni vino de una pajilla. */
+  /**
+   * Nombre libre de un padre sin registro propio: toro de monta natural que no es de la
+   * finca ni vino de una pajilla (origen finca), o el padre de un animal de origen externo.
+   */
   padre_alquiler_nombre?: string | null;
-  /** Raza del toro de alquiler — no tiene un registro propio del que inferirla. */
+  /** Raza del padre libre — no tiene un registro propio del que inferirla. */
   padre_alquiler_raza?: AnimalRaza | null;
+  /** Concentrado por ordeño (manual, solo hembras). `null` = sin definir. */
+  concentrado_por_ordeno?: number | null;
 }
 
 async function assertIdentificadorDisponible(
@@ -222,6 +234,7 @@ export async function createAnimal(formData: AnimalFormData) {
   const { error } = await supabase.from("animales").insert({
     identificador: formData.identificador,
     nombre: formData.nombre,
+    nombre_largo: formData.nombre_largo || null,
     sexo: formData.sexo,
     raza: formData.raza || null,
     sangre: formData.sangre || null,
@@ -233,10 +246,15 @@ export async function createAnimal(formData: AnimalFormData) {
     fecha_nacimiento: formData.fecha_nacimiento ? formatDate(formData.fecha_nacimiento) : null,
     numero_registro: formData.numero_registro || null,
     madre_id: formData.madre_id || null,
+    madre_externa_nombre:
+      formData.origen === "externa" ? formData.madre_externa_nombre?.trim() || null : null,
     padre_id: padreId,
     padre_pajilla_nombre: padrePajillaNombre,
     padre_alquiler_nombre: formData.padre_alquiler_nombre || null,
     padre_alquiler_raza: formData.padre_alquiler_nombre ? formData.padre_alquiler_raza || null : null,
+    // Solo tiene sentido en hembras: a un macho no se le ordeña.
+    concentrado_por_ordeno:
+      formData.sexo === "hembra" ? (formData.concentrado_por_ordeno ?? null) : null,
   });
 
   if (error) throw new Error("No se pudo registrar el animal");
@@ -280,6 +298,7 @@ export async function updateAnimal(id: string, formData: AnimalFormData) {
     .update({
       identificador: formData.identificador,
       nombre: formData.nombre,
+      nombre_largo: formData.nombre_largo || null,
       sexo: formData.sexo,
       raza: formData.raza || null,
       sangre: formData.sangre || null,
@@ -290,10 +309,14 @@ export async function updateAnimal(id: string, formData: AnimalFormData) {
       fecha_nacimiento: formData.fecha_nacimiento ? formatDate(formData.fecha_nacimiento) : null,
       numero_registro: formData.numero_registro || null,
       madre_id: formData.madre_id || null,
+      madre_externa_nombre:
+        formData.origen === "externa" ? formData.madre_externa_nombre?.trim() || null : null,
       padre_id: padreId,
       padre_pajilla_nombre: padrePajillaNombre,
       padre_alquiler_nombre: formData.padre_alquiler_nombre || null,
       padre_alquiler_raza: formData.padre_alquiler_nombre ? formData.padre_alquiler_raza || null : null,
+      concentrado_por_ordeno:
+        formData.sexo === "hembra" ? (formData.concentrado_por_ordeno ?? null) : null,
     })
     .eq("id", id);
 
