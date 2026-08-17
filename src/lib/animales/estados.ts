@@ -76,6 +76,8 @@ export const TIPOS_EVENTO_PARA_ALERTAS: TipoEvento[] = [
   "secado",
   "topizado",
   "celo",
+  // La vacunación no mueve ningún estado, pero su fecha de revacunación genera alerta.
+  "vacunacion",
 ];
 
 // ===== Estado productivo =====

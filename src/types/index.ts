@@ -33,6 +33,8 @@ export interface Gasto {
   pagado: boolean;
   observaciones: string | null;
   pago: Pago | null;
+  /** NULL = manual; 'leche_cria' y 'arriendo_abono' = generado por otro módulo. */
+  source: string | null;
 }
 
 // ===== CONCEPTOS DE INGRESO =====
@@ -160,6 +162,9 @@ export type TipoEvento =
 /** Resultado de una palpación / confirmación de preñez. */
 export type ResultadoPalpacion = "cargada" | "rechequeo" | "vacia";
 
+/** Plazo hasta la siguiente vacuna. `personalizada` = el usuario escribe la fecha. */
+export type PeriodoRevacunacion = "1_mes" | "6_meses" | "1_anio" | "personalizada";
+
 export interface EventoAnimal {
   id: string;
   created_at: string;
@@ -174,10 +179,16 @@ export interface EventoAnimal {
   pajilla_id: string | null;
   /** Monta: toro que cubrió (`animales.id`). */
   toro_id: string | null;
+  /** Vacunación: ¿hay que volver a vacunar? NULL en el resto de tipos. */
+  requiere_revacunacion: boolean | null;
+  /** Vacunación: plazo elegido. Se guarda para poder recalcular la fecha al editar. */
+  periodo_revacunacion: PeriodoRevacunacion | null;
+  /** Vacunación: fecha de la próxima vacuna; es la que dispara la alerta. */
+  fecha_revacunacion: string | null;
 }
 
 // ===== ALERTAS =====
-export type TipoAlerta = "parto" | "secado" | "topizado" | "celo";
+export type TipoAlerta = "parto" | "secado" | "topizado" | "celo" | "revacunacion";
 export type SeveridadAlerta = "vencida" | "hoy" | "proxima";
 
 export interface Alerta {
@@ -251,6 +262,35 @@ export interface PajillaDisponible {
   toro_ref_id: string;
   fecha_compra: string;
   cantidad_disponible: number;
+}
+
+// ===== ARRIENDOS =====
+export interface AbonoArriendo {
+  id: string;
+  arriendo_id: string;
+  fecha: string;
+  valor: number;
+  observaciones: string | null;
+  /** Gasto espejo (`gastos.source = 'arriendo_abono'`). NULL si se borró a mano. */
+  gasto_id: number | null;
+  created_at: string;
+}
+
+export interface Arriendo {
+  id: string;
+  arrendatario: string;
+  finca_nombre: string;
+  fecha_inicio: string;
+  fecha_fin: string;
+  canon: number;
+  observaciones: string | null;
+  created_at: string;
+  /** Ordenados del abono más reciente al más antiguo. */
+  abonos: AbonoArriendo[];
+  /** Suma de los abonos. **Derivado en cada lectura**, no se guarda en la tabla. */
+  total_abonado: number;
+  /** `canon - total_abonado`. Negativo = se abonó de más. También derivado. */
+  saldo: number;
 }
 
 // ===== ROLES DE USUARIO =====

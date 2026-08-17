@@ -22,7 +22,8 @@ import {
   ESTADO_PRODUCTIVO_LABELS,
   ESTADO_REPRODUCTIVO_LABELS,
 } from "@/lib/animales/estados";
-import { RAZAS, RAZA_LABELS, construirSangre, parseSangre } from "@/lib/animales/razas";
+import { RAZAS, RAZA_LABELS } from "@/lib/animales/razas";
+import { SangreSelector } from "@/features/animales/components/sangre-selector";
 import { toast } from "sonner";
 import type {
   Animal,
@@ -101,14 +102,6 @@ export function AnimalForm({ animal, animales, lotesPajillas, esVelero, onSucces
   // lote de origen casi siempre está ya agotado. Aquí solo se registra de qué toro vino.
   const lotesParaPadre = lotesPajillas;
 
-  // Sangre: selector guiado de hasta dos razas + %. Se compone en `sangre` (FormValues) cada
-  // vez que cambia alguno de los tres inputs; parseSangre() reconstruye el estado al editar.
-  const sangreInicial = parseSangre(animal?.sangre);
-  const [sangreRaza1, setSangreRaza1] = useState<AnimalRaza | "">(sangreInicial?.raza1 ?? "");
-  const [sangrePct1, setSangrePct1] = useState<number | "">(sangreInicial?.pct1 ?? "");
-  const [sangreRaza2, setSangreRaza2] = useState<AnimalRaza | "">(sangreInicial?.raza2 ?? "");
-  const sangrePct2 = sangreRaza2 ? Math.max(0, 100 - (Number(sangrePct1) || 0)) : null;
-
   const {
     register,
     handleSubmit,
@@ -172,14 +165,6 @@ export function AnimalForm({ animal, animales, lotesPajillas, esVelero, onSucces
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sexoValue]);
-
-  useEffect(() => {
-    setValue(
-      "sangre",
-      construirSangre(sangreRaza1 || null, Number(sangrePct1) || null, sangreRaza2 || null, sangrePct2)
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sangreRaza1, sangrePct1, sangreRaza2]);
 
   const handlePadreTipoChange = (tipo: PadreTipo) => {
     setPadreTipo(tipo);
@@ -297,68 +282,13 @@ export function AnimalForm({ animal, animales, lotesPajillas, esVelero, onSucces
         </div>
       </div>
 
-      {/* Sangre: % de pureza, opcional. Hasta dos razas; la segunda se autocalcula a 100%. Solo El Velero. */}
+      {/* Sangre: % de pureza, opcional. Hasta tres razas (la tercera solo si las dos
+          primeras no llegan al 100%). Solo El Velero. */}
       {esVelero && (
-        <div className="space-y-2 rounded-lg border border-gray-200 p-3">
-          <Label>Sangre (% de pureza) — opcional</Label>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Select
-                value={sangreRaza1 || "none"}
-                onValueChange={(val) => setSangreRaza1(val === "none" ? "" : (val as AnimalRaza))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Raza 1" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin definir</SelectItem>
-                  {RAZAS.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {RAZA_LABELS[r]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                type="number"
-                min={1}
-                max={sangreRaza2 ? 99 : 100}
-                placeholder="% pureza"
-                disabled={!sangreRaza1}
-                value={sangrePct1}
-                onChange={(e) =>
-                  setSangrePct1(e.target.value === "" ? "" : Number(e.target.value))
-                }
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Select
-                value={sangreRaza2 || "none"}
-                onValueChange={(val) => setSangreRaza2(val === "none" ? "" : (val as AnimalRaza))}
-                disabled={!sangreRaza1 || !sangrePct1}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Raza 2 (opcional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Ninguna</SelectItem>
-                  {RAZAS.filter((r) => r !== sangreRaza1).map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {RAZA_LABELS[r]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input type="number" placeholder="% pureza" disabled value={sangrePct2 ?? ""} />
-            </div>
-          </div>
-          {watch("sangre") && (
-            <p className="text-xs text-gray-500">
-              Se guardará como: <span className="font-medium text-gray-700">{watch("sangre")}</span>
-            </p>
-          )}
-        </div>
+        <SangreSelector
+          value={animal?.sangre}
+          onChange={(sangre) => setValue("sangre", sangre)}
+        />
       )}
 
       <div className="grid grid-cols-2 gap-4">

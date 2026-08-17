@@ -19,8 +19,10 @@ import {
   Route,
   Banknote,
   History,
+  KeyRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { slugTieneModulo, type ModuloOpcional } from "@/lib/tenants/modulos";
 import type { UserRole } from "@/types";
 import { GiCheeseWedge } from "react-icons/gi";
 import { PiCow } from "react-icons/pi";
@@ -31,6 +33,8 @@ type NavItem = {
   icon: React.ElementType;
   allowedRoles: UserRole[];
   hideInPWA?: boolean;
+  /** Si está, la opción solo se muestra a los clientes que tengan ese módulo. */
+  modulo?: ModuloOpcional;
 };
 
 const navItems: NavItem[] = [
@@ -69,6 +73,13 @@ const navItems: NavItem[] = [
     label: "Inventario",
     icon: Package,
     allowedRoles: ["admin", "viewer"] as UserRole[],
+  },
+  {
+    href: "/dashboard/arriendos",
+    label: "Arriendos",
+    icon: KeyRound,
+    allowedRoles: ["admin", "viewer"] as UserRole[],
+    modulo: "arriendos",
   },
   {
     href: "/dashboard/configuracion",
@@ -137,6 +148,8 @@ interface SidebarProps {
   role?: UserRole | null;
   /** Nombre del cliente (finca) de la sesión. `null` en roles de cooperativa. */
   tenantNombre?: string | null;
+  /** Slug del cliente: filtra las opciones de módulos que no tiene todo el mundo. */
+  tenantSlug?: string | null;
   mobileMenuOpen?: boolean;
   onCloseMobileMenu?: () => void;
 }
@@ -152,6 +165,7 @@ const roleConfig: Record<UserRole, { label: string; classes: string }> = {
 export function Sidebar({
   role,
   tenantNombre = null,
+  tenantSlug = null,
   mobileMenuOpen = false,
   onCloseMobileMenu,
 }: SidebarProps = {}) {
@@ -168,6 +182,9 @@ export function Sidebar({
   const allowedItems = navItems.filter((item) => {
     if (!role || !item.allowedRoles.includes(role)) return false;
     if (isPWA && item.hideInPWA && role === "cooperativa_user") return false;
+    // Esconder la opción es solo cosmético: la página y los Server Actions repiten la
+    // comprobación del módulo en el servidor.
+    if (item.modulo && !slugTieneModulo(tenantSlug, item.modulo)) return false;
     return true;
   });
 

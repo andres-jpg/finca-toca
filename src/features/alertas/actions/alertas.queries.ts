@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { TIPOS_EVENTO_PARA_ALERTAS } from "@/lib/animales/estados";
 import {
   calcularAlertas,
+  dentroDelHorizonte,
   faltaRegistrarServicio,
   type AnimalParaAlertas,
   type EventoParaAlertas,
@@ -11,7 +12,8 @@ import type { Alerta } from "@/types";
 
 const CAMPOS_ANIMAL =
   "id, nombre, identificador, sexo, origen, fecha_nacimiento, estado_productivo, estado_reproductivo";
-const CAMPOS_EVENTO = "animal_id, tipo_evento, fecha, resultado";
+const CAMPOS_EVENTO =
+  "animal_id, tipo_evento, fecha, resultado, requiere_revacunacion, periodo_revacunacion, fecha_revacunacion";
 
 /** Horizonte por defecto (días) de campana y dashboard: vencidas + la próxima semana. */
 export const HORIZONTE_ALERTAS_DIAS = 7;
@@ -41,12 +43,15 @@ const cargarDatos = cache(async function cargarDatos() {
   };
 });
 
-/** Alertas vencidas y las que caen dentro del horizonte indicado. */
+/**
+ * Alertas vencidas y las que caen dentro del horizonte indicado. La revacunación tiene
+ * ventana propia (8 días) y `dentroDelHorizonte` la respeta en vez de recortarla a 7.
+ */
 export const getAlertas = cache(async function getAlertas(
   horizonteDias: number = HORIZONTE_ALERTAS_DIAS
 ): Promise<Alerta[]> {
   const { animales, eventos } = await cargarDatos();
-  return calcularAlertas(animales, eventos).filter((a) => a.dias_restantes <= horizonteDias);
+  return calcularAlertas(animales, eventos).filter((a) => dentroDelHorizonte(a, horizonteDias));
 });
 
 /** Todas las alertas pendientes de un animal, sin horizonte, para su ficha. */

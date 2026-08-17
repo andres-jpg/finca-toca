@@ -11,6 +11,8 @@ interface DashboardLayoutClientProps {
   userRole: UserRole | null;
   /** Nombre del cliente para la marca de la barra lateral; `null` en roles de cooperativa. */
   tenantNombre: string | null;
+  /** Slug del cliente: decide qué módulos opcionales aparecen en el menú. */
+  tenantSlug: string | null;
   /** Se reenvía tal cual al Header: se renderiza en el servidor pese a este boundary. */
   alertasSlot?: React.ReactNode;
   children: React.ReactNode;
@@ -20,6 +22,7 @@ export function DashboardLayoutClient({
   email,
   userRole,
   tenantNombre,
+  tenantSlug,
   alertasSlot,
   children,
 }: DashboardLayoutClientProps) {
@@ -37,6 +40,7 @@ export function DashboardLayoutClient({
         <Sidebar
           role={userRole}
           tenantNombre={tenantNombre}
+          tenantSlug={tenantSlug}
           mobileMenuOpen={mobileMenuOpen}
           onCloseMobileMenu={() => setMobileMenuOpen(false)}
         />

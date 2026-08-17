@@ -15,6 +15,12 @@ interface DatePickerProps {
   placeholder?: string;
   /** Año de inicio para el dropdown de años. Por defecto 30 años atrás. */
   fromYear?: number;
+  /**
+   * Año final del dropdown. Por defecto el actual, porque casi todas las fechas de la app
+   * son pasadas; los contratos de arriendo terminan en años futuros y lo suben.
+   * No aplica si `disableFuture` está activo.
+   */
+  toYear?: number;
   /** Si es true, no permite seleccionar fechas futuras (posteriores a hoy). */
   disableFuture?: boolean;
 }
@@ -26,6 +32,7 @@ export function DatePicker({
   onChange,
   placeholder = "Seleccionar fecha",
   fromYear = CURRENT_YEAR - 30,
+  toYear = CURRENT_YEAR,
   disableFuture = false,
 }: DatePickerProps) {
   const [open, setOpen] = useState(false);
@@ -55,7 +62,7 @@ export function DatePicker({
           locale={es}
           captionLayout="dropdown"
           startMonth={new Date(fromYear, 0)}
-          endMonth={disableFuture ? new Date() : new Date(CURRENT_YEAR, 11)}
+          endMonth={disableFuture ? new Date() : new Date(toYear, 11)}
           initialFocus
         />
       </PopoverContent>
