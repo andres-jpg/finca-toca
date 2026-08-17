@@ -9,7 +9,13 @@ import {
   TIPOS_EVENTO_CON_TRANSICION,
   estadoDesdeEvento,
 } from "@/lib/animales/estados";
-import type { EventoAnimal, ResultadoPalpacion, TipoEvento } from "@/types";
+import { calcularFechaRevacunacion } from "@/lib/animales/revacunacion";
+import type {
+  EventoAnimal,
+  PeriodoRevacunacion,
+  ResultadoPalpacion,
+  TipoEvento,
+} from "@/types";
 
 interface EventoFormData {
   animal_id: string;
@@ -23,6 +29,12 @@ interface EventoFormData {
   pajilla_id?: string | null;
   /** Monta: `animales.id` del toro. */
   toro_id?: string | null;
+  /** Vacunación: ¿hay que volver a vacunar? */
+  requiere_revacunacion?: boolean | null;
+  /** Vacunación: plazo hasta la siguiente. */
+  periodo_revacunacion?: PeriodoRevacunacion | null;
+  /** Vacunación: solo se usa con el plazo `personalizada`; el resto se calculan. */
+  fecha_revacunacion?: Date | null;
 }
 
 /** Lo mínimo que hay que leer del evento antes de borrarlo para poder recalcular el estado. */
@@ -181,6 +193,48 @@ function revalidarAnimal(animalId: string) {
   revalidatePath("/dashboard");
 }
 
+/**
+ * Campos de revacunación, solo para vacunaciones que la piden. La fecha se **recalcula
+ * aquí** desde el plazo elegido en vez de fiarse de la que mandó el cliente: así, si se
+ * corrige la fecha de la vacunación, la de revacunación la sigue sin quedar desfasada.
+ * Con el plazo `personalizada` sí manda la que escribió el usuario.
+ *
+ * Devuelve los tres campos a NULL en cualquier otro caso, para que cambiar el tipo de
+ * evento al editar no deje colgada una alerta de una vacunación que ya no existe.
+ */
+function filasRevacunacion(formData: EventoFormData) {
+  const vacio = {
+    requiere_revacunacion: null,
+    periodo_revacunacion: null,
+    fecha_revacunacion: null,
+  };
+
+  if (formData.tipo_evento !== "vacunacion") return vacio;
+  if (!formData.requiere_revacunacion) {
+    // Se guarda el "No" explícito: distingue "no hace falta" de una vacunación antigua
+    // registrada antes de que existiera este control.
+    return { ...vacio, requiere_revacunacion: false };
+  }
+
+  const fecha = calcularFechaRevacunacion(
+    formData.fecha,
+    formData.periodo_revacunacion,
+    formData.fecha_revacunacion
+  );
+
+  // Sin fecha resoluble no se puede marcar como "requiere revacunación": lo rechazaría el
+  // CHECK de la tabla. El formulario ya lo valida antes, esto es la red de seguridad.
+  if (!fecha) {
+    throw new Error("Indica en cuánto tiempo hay que revacunar o la fecha de la próxima vacuna");
+  }
+
+  return {
+    requiere_revacunacion: true,
+    periodo_revacunacion: formData.periodo_revacunacion ?? null,
+    fecha_revacunacion: formatDate(fecha),
+  };
+}
+
 function filasEvento(formData: EventoFormData) {
   return {
     tipo_evento: formData.tipo_evento,
@@ -190,6 +244,7 @@ function filasEvento(formData: EventoFormData) {
     resultado: formData.resultado || null,
     pajilla_id: formData.pajilla_id || null,
     toro_id: formData.toro_id || null,
+    ...filasRevacunacion(formData),
   };
 }
 
@@ -206,6 +261,9 @@ export async function createEventoAnimal(formData: EventoFormData) {
   await requireRole(["admin", "user"]);
   const supabase = await createClient();
 
+  // Se arman las filas antes de tocar inventario: `filasEvento` puede lanzar (revacunación
+  // sin fecha resoluble) y hacerlo después dejaría la pajilla descontada sin evento.
+  const filas = filasEvento(formData);
   const pajillaId = pajillaConsumida(formData);
 
   // El stock se descuenta primero: si no quedan pajillas del lote, `ajustarStockPajilla`
@@ -215,7 +273,7 @@ export async function createEventoAnimal(formData: EventoFormData) {
   const { error } = await supabase.from("eventos_animal").insert({
     animal_id: formData.animal_id,
     animal_tipo: formData.animal_tipo,
-    ...filasEvento(formData),
+    ...filas,
   });
 
   if (error) {
@@ -231,6 +289,9 @@ export async function createEventoAnimal(formData: EventoFormData) {
 export async function updateEventoAnimal(id: string, formData: EventoFormData) {
   await requireRole(["admin", "user"]);
   const supabase = await createClient();
+
+  // Igual que en el alta: primero las filas, que pueden lanzar, y después el inventario.
+  const filas = filasEvento(formData);
 
   // Se lee la pajilla anterior para compensar el inventario: cambiar de lote devuelve una
   // al viejo y descuenta del nuevo; quitar la pajilla (o cambiar de tipo de evento) devuelve.
@@ -253,7 +314,7 @@ export async function updateEventoAnimal(id: string, formData: EventoFormData) {
 
   const { error } = await supabase
     .from("eventos_animal")
-    .update(filasEvento(formData))
+    .update(filas)
     .eq("id", id);
 
   if (error) {

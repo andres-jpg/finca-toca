@@ -9,14 +9,20 @@ import {
   TIPOS_EVENTO_FIN_GESTACION,
   parseFechaDB,
 } from "@/lib/animales/estados";
+import {
+  DIAS_AVISO_REVACUNACION,
+  PERIODO_REVACUNACION_DETALLE,
+} from "@/lib/animales/revacunacion";
 import { formatDate } from "@/lib/utils";
 import type {
   Alerta,
   AnimalSexo,
   EstadoProductivo,
   EstadoReproductivo,
+  PeriodoRevacunacion,
   ResultadoPalpacion,
   SeveridadAlerta,
+  TipoAlerta,
   TipoEvento,
   VacaOrigen,
 } from "@/types";
@@ -39,6 +45,23 @@ export interface EventoParaAlertas {
   tipo_evento: TipoEvento;
   fecha: string;
   resultado: ResultadoPalpacion | null;
+  /** Solo en vacunación; opcionales para que `EventoAnimal` siga satisfaciendo el tipo. */
+  requiere_revacunacion?: boolean | null;
+  periodo_revacunacion?: PeriodoRevacunacion | null;
+  fecha_revacunacion?: string | null;
+}
+
+/**
+ * Tipos que se avisan con su propia antelación en vez de con el horizonte que pida el
+ * consumidor (7 días en campana y dashboard). La revacunación se pide a 8 días, así que
+ * sin esto el primer día de su ventana se quedaría fuera de la campana.
+ */
+const HORIZONTE_PROPIO: Partial<Record<TipoAlerta, number>> = {
+  revacunacion: DIAS_AVISO_REVACUNACION,
+};
+
+export function dentroDelHorizonte(alerta: Alerta, horizontePorDefecto: number): boolean {
+  return alerta.dias_restantes <= (HORIZONTE_PROPIO[alerta.tipo] ?? horizontePorDefecto);
 }
 
 const fmt = (d: Date) => format(d, "dd/MM/yyyy", { locale: es });
@@ -109,6 +132,9 @@ export function faltaRegistrarServicio(
  *   pre-servicio o servicio; para cualquier otra vaca en servicio (nunca parió, o volvió a
  *   servicio tras una palpación con resultado "vacía"), el siguiente múltiplo de 20 días
  *   desde su último evento reproductivo.
+ * - **Revacunación**: 8 días antes de la fecha marcada en la última vacunación. Aplica a
+ *   machos y hembras, y es la única alerta con ventana propia (el resto se emiten siempre
+ *   y las recorta el horizonte del consumidor).
  */
 export function calcularAlertas(
   animales: AnimalParaAlertas[],
@@ -147,6 +173,30 @@ export function calcularAlertas(
           hoy
         )
       );
+    }
+
+    // --- Revacunación: 8 días antes de la fecha fijada al vacunar. Va antes del corte por
+    //     sexo porque los machos también se vacunan.
+    //     Solo manda la **última** vacunación del animal: registrar la siguiente cierra
+    //     sola la alerta anterior, igual que un secado cierra la suya.
+    const ultimaVacuna = ultimoDe(suyos, ["vacunacion"]);
+    if (ultimaVacuna?.requiere_revacunacion && ultimaVacuna.fecha_revacunacion) {
+      const objetivo = parseFechaDB(ultimaVacuna.fecha_revacunacion);
+      // Ventana propia: no se avisa con meses de antelación, solo al acercarse la fecha.
+      if (differenceInCalendarDays(objetivo, hoy) <= DIAS_AVISO_REVACUNACION) {
+        const plazo = ultimaVacuna.periodo_revacunacion
+          ? ` · ${PERIODO_REVACUNACION_DETALLE[ultimaVacuna.periodo_revacunacion]}`
+          : "";
+        alertas.push(
+          construir(
+            animal,
+            "revacunacion",
+            objetivo,
+            `Vacunación del ${fmt(parseFechaDB(ultimaVacuna.fecha))}${plazo}`,
+            hoy
+          )
+        );
+      }
     }
 
     if (animal.sexo !== "hembra") continue;

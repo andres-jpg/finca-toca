@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Plus, Pencil, Trash2, CalendarDays, Eye } from "lucide-react";
+import { Plus, Pencil, Trash2, CalendarDays, Eye, Zap } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/shared/data-table";
 import { EntityModal } from "@/components/shared/entity-modal";
@@ -15,6 +15,12 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { MonthPicker } from "@/components/shared/month-picker";
 import type { Gasto, ConceptoGasto } from "@/types";
+
+/** Módulo que mantiene cada gasto automático (`gastos.source`). */
+const ORIGEN_AUTO: Record<string, string> = {
+  leche_cria: "Generado desde las extracciones (leche para crías)",
+  arriendo_abono: "Generado desde un abono de arriendo",
+};
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -113,6 +119,10 @@ function RowActions({
   const gastoDate = format(new Date(gasto.fecha + "T00:00:00"), "dd/MM/yyyy", { locale: es });
   const gastoValue = `$${gasto.valor.toLocaleString("es-CO", { minimumFractionDigits: 0 })}`;
 
+  // Los gastos con `source` los mantiene otro módulo (extracciones, arriendos): editarlos o
+  // borrarlos aquí los dejaría desincronizados con su origen, que es quien manda.
+  const auto = gasto.source !== null;
+
   return (
     <>
       <div className="flex items-center gap-1">
@@ -123,7 +133,16 @@ function RowActions({
         >
           <Eye className="h-3.5 w-3.5" />
         </button>
-        {canEdit && (
+        {auto && (
+          <span
+            className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200"
+            title={ORIGEN_AUTO[gasto.source!] ?? "Gasto generado automáticamente"}
+          >
+            <Zap className="h-3 w-3" />
+            Auto
+          </span>
+        )}
+        {canEdit && !auto && (
           <>
             <button
               onClick={() => setEditOpen(true)}
@@ -147,7 +166,7 @@ function RowActions({
         <GastoDetail gasto={gasto} />
       </EntityModal>
 
-      {canEdit && (
+      {canEdit && !auto && (
         <>
           <EntityModal open={editOpen} onClose={() => setEditOpen(false)} title="Editar gasto">
             <GastoForm gasto={gasto} conceptos={conceptos} onSuccess={() => setEditOpen(false)} />

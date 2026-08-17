@@ -40,6 +40,7 @@ export default async function DashboardLayout({
       email={session.user.email ?? ""}
       userRole={userRole}
       tenantNombre={tenant?.nombre ?? null}
+      tenantSlug={tenant?.slug ?? null}
       alertasSlot={alertasSlot}
     >
       {children}

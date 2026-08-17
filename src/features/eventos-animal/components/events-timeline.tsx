@@ -20,6 +20,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PERIODO_REVACUNACION_LABELS } from "@/lib/animales/revacunacion";
 import type { EventoAnimal, ResultadoPalpacion, TipoEvento } from "@/types";
 
 type TipoConfig = { label: string; icon: React.ElementType; color: string; bg: string };
@@ -113,6 +114,16 @@ export function EventsTimeline({
                   </span>
                 )}
               </div>
+              {evento.tipo_evento === "vacunacion" && evento.requiere_revacunacion &&
+                evento.fecha_revacunacion && (
+                  <p className="mt-1 text-xs font-medium text-blue-700">
+                    Revacunar el{" "}
+                    {format(parseISO(evento.fecha_revacunacion), "dd/MM/yyyy", { locale: es })}
+                    {evento.periodo_revacunacion &&
+                      evento.periodo_revacunacion !== "personalizada" &&
+                      ` (${PERIODO_REVACUNACION_LABELS[evento.periodo_revacunacion]})`}
+                  </p>
+                )}
               {evento.descripcion && (
                 <p className="mt-1 text-sm text-gray-700">{evento.descripcion}</p>
               )}

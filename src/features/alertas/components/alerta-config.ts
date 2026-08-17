@@ -1,4 +1,4 @@
-import { Baby, Flame, Milk, Scissors } from "lucide-react";
+import { Baby, Flame, Milk, Scissors, Syringe } from "lucide-react";
 import type { Alerta, SeveridadAlerta, TipoAlerta } from "@/types";
 
 export const ALERTA_CONFIG: Record<
@@ -9,6 +9,7 @@ export const ALERTA_CONFIG: Record<
   secado: { label: "Pasar a secado", icon: Milk, color: "#d97706", bg: "#fffbeb" },
   topizado: { label: "Topizado", icon: Scissors, color: "#7c3aed", bg: "#f5f3ff" },
   celo: { label: "Celo", icon: Flame, color: "#ea580c", bg: "#fff7ed" },
+  revacunacion: { label: "Revacunación", icon: Syringe, color: "#2563eb", bg: "#eff6ff" },
 };
 
 export const SEVERIDAD_CLASSES: Record<SeveridadAlerta, string> = {

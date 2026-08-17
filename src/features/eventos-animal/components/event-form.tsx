@@ -24,7 +24,14 @@ import {
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/shared/date-picker";
 import { proyeccionesServicio } from "@/lib/animales/estados";
-import { RAZAS, RAZA_LABELS, construirSangre } from "@/lib/animales/razas";
+import {
+  DIAS_AVISO_REVACUNACION,
+  PERIODOS_REVACUNACION,
+  PERIODO_REVACUNACION_LABELS,
+  calcularFechaRevacunacion,
+} from "@/lib/animales/revacunacion";
+import { RAZAS, RAZA_LABELS } from "@/lib/animales/razas";
+import { SangreSelector } from "@/features/animales/components/sangre-selector";
 import { toast } from "sonner";
 import type {
   Animal,
@@ -32,6 +39,7 @@ import type {
   AnimalSexo,
   EventoAnimal,
   PajillaDisponible,
+  PeriodoRevacunacion,
   ResultadoPalpacion,
   TipoEvento,
 } from "@/types";
@@ -95,6 +103,9 @@ interface FormValues {
   resultado?: ResultadoPalpacion | null;
   pajilla_id?: string | null;
   toro_id?: string | null;
+  requiere_revacunacion?: boolean | null;
+  periodo_revacunacion?: PeriodoRevacunacion | null;
+  fecha_revacunacion?: Date | null;
 }
 
 export function EventForm({
@@ -137,17 +148,8 @@ export function EventForm({
   const [criaNombreLargo, setCriaNombreLargo] = useState("");
   const [criaNombre, setCriaNombre] = useState("");
   const [criaRaza, setCriaRaza] = useState<AnimalRaza | "">(madre?.raza ?? "");
-  // Sangre: mismo selector guiado que el alta normal (hasta dos razas + %), solo El Velero.
-  const [criaSangreRaza1, setCriaSangreRaza1] = useState<AnimalRaza | "">("");
-  const [criaSangrePct1, setCriaSangrePct1] = useState<number | "">("");
-  const [criaSangreRaza2, setCriaSangreRaza2] = useState<AnimalRaza | "">("");
-  const criaSangrePct2 = criaSangreRaza2 ? Math.max(0, 100 - (Number(criaSangrePct1) || 0)) : null;
-  const criaSangre = construirSangre(
-    criaSangreRaza1 || null,
-    Number(criaSangrePct1) || null,
-    criaSangreRaza2 || null,
-    criaSangrePct2
-  );
+  // Sangre: mismo selector guiado que el alta normal, solo El Velero.
+  const [criaSangre, setCriaSangre] = useState<string | null>(null);
   // El padre de la cría no se elige a mano: se infiere del último servicio (monta o
   // inseminación) registrado en la vaca. La única alternativa manual es un toro de alquiler,
   // para el caso de una monta natural que no quedó registrada como evento.
@@ -173,6 +175,11 @@ export function EventForm({
       resultado: evento?.resultado ?? null,
       pajilla_id: evento?.pajilla_id ?? null,
       toro_id: evento?.toro_id ?? null,
+      requiere_revacunacion: evento?.requiere_revacunacion ?? false,
+      periodo_revacunacion: evento?.periodo_revacunacion ?? null,
+      fecha_revacunacion: evento?.fecha_revacunacion
+        ? new Date(evento.fecha_revacunacion + "T00:00:00")
+        : null,
     },
   });
 
@@ -181,6 +188,9 @@ export function EventForm({
   const resultadoValue = watch("resultado");
   const pajillaValue = watch("pajilla_id");
   const toroValue = watch("toro_id");
+  const requiereRevacunacion = watch("requiere_revacunacion");
+  const periodoRevacunacion = watch("periodo_revacunacion");
+  const fechaRevacunacionValue = watch("fecha_revacunacion");
 
   // Se ocultan los lotes agotados, salvo el que ya tenga este evento: al editar una
   // inseminación su lote puede estar a 0 precisamente porque gastó la última pajilla,
@@ -192,6 +202,13 @@ export function EventForm({
   const esServicio = tipoValue === "inseminacion" || tipoValue === "monta";
   const esConfirmacion =
     tipoValue === "palpacion" || tipoValue === "confirmacion_prenez";
+  const esVacunacion = tipoValue === "vacunacion";
+
+  // Previsualización de la fecha que se guardará: con un plazo predefinido sale de la
+  // fecha del evento, así que el usuario ve enseguida si se equivocó de día.
+  const proximaVacunacion = esVacunacion && requiereRevacunacion
+    ? calcularFechaRevacunacion(fechaValue, periodoRevacunacion, fechaRevacunacionValue)
+    : null;
   // La cría solo se crea junto con un parto nuevo — al editar uno ya existente la cría
   // ya se creó la primera vez, así que el subformulario no vuelve a aparecer.
   const mostrarCriaForm = tipoValue === "parto" && !isEditing;
@@ -212,6 +229,14 @@ export function EventForm({
       resultado: esConfirmacion ? data.resultado : null,
       pajilla_id: data.tipo_evento === "inseminacion" ? data.pajilla_id : null,
       toro_id: data.tipo_evento === "monta" ? data.toro_id : null,
+      requiere_revacunacion: esVacunacion ? !!data.requiere_revacunacion : null,
+      periodo_revacunacion:
+        esVacunacion && data.requiere_revacunacion ? data.periodo_revacunacion : null,
+      // Solo viaja la fecha manual; con un plazo predefinido la calcula el Server Action.
+      fecha_revacunacion:
+        esVacunacion && data.periodo_revacunacion === "personalizada"
+          ? data.fecha_revacunacion
+          : null,
     };
 
     try {
@@ -377,72 +402,7 @@ export function EventForm({
           </div>
 
           {/* Sangre: % de pureza, opcional. Solo El Velero — mismo selector que el alta normal. */}
-          {esVelero && (
-            <div className="space-y-2 rounded-lg border border-gray-200 p-3">
-              <Label className="text-xs text-gray-500">Sangre (% de pureza) — opcional</Label>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Select
-                    value={criaSangreRaza1 || "none"}
-                    onValueChange={(val) =>
-                      setCriaSangreRaza1(val === "none" ? "" : (val as AnimalRaza))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Raza 1" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sin definir</SelectItem>
-                      {RAZAS.map((r) => (
-                        <SelectItem key={r} value={r}>
-                          {RAZA_LABELS[r]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={criaSangreRaza2 ? 99 : 100}
-                    placeholder="% pureza"
-                    disabled={!criaSangreRaza1}
-                    value={criaSangrePct1}
-                    onChange={(e) =>
-                      setCriaSangrePct1(e.target.value === "" ? "" : Number(e.target.value))
-                    }
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Select
-                    value={criaSangreRaza2 || "none"}
-                    onValueChange={(val) =>
-                      setCriaSangreRaza2(val === "none" ? "" : (val as AnimalRaza))
-                    }
-                    disabled={!criaSangreRaza1 || !criaSangrePct1}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Raza 2 (opcional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Ninguna</SelectItem>
-                      {RAZAS.filter((r) => r !== criaSangreRaza1).map((r) => (
-                        <SelectItem key={r} value={r}>
-                          {RAZA_LABELS[r]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input type="number" placeholder="% pureza" disabled value={criaSangrePct2 ?? ""} />
-                </div>
-              </div>
-              {criaSangre && (
-                <p className="text-xs text-gray-500">
-                  Se guardará como: <span className="font-medium text-gray-700">{criaSangre}</span>
-                </p>
-              )}
-            </div>
-          )}
+          {esVelero && <SangreSelector onChange={setCriaSangre} />}
 
           <div className="grid grid-cols-2 gap-3">
             <Input
@@ -586,6 +546,102 @@ export function EventForm({
               ))}
             </SelectContent>
           </Select>
+        </div>
+      )}
+
+      {/* Vacunación: control de cuándo toca volver a vacunar */}
+      {esVacunacion && (
+        <div className="space-y-3 rounded-lg border border-gray-200 p-3">
+          <div className="space-y-2">
+            <Label>¿Requiere revacunación?</Label>
+            <Select
+              value={requiereRevacunacion ? "si" : "no"}
+              onValueChange={(val) => {
+                const requiere = val === "si";
+                setValue("requiere_revacunacion", requiere, { shouldValidate: true });
+                if (!requiere) {
+                  setValue("periodo_revacunacion", null);
+                  setValue("fecha_revacunacion", null);
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="no">No</SelectItem>
+                <SelectItem value="si">Sí</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {requiereRevacunacion && (
+            <>
+              <div className="space-y-2">
+                <Label>¿En cuánto tiempo?</Label>
+                <Select
+                  value={periodoRevacunacion ?? ""}
+                  onValueChange={(val) => {
+                    setValue("periodo_revacunacion", val as PeriodoRevacunacion, {
+                      shouldValidate: true,
+                    });
+                    // Cambiar a un plazo predefinido descarta la fecha escrita a mano:
+                    // a partir de ahí manda el cálculo desde la fecha del evento.
+                    if (val !== "personalizada") setValue("fecha_revacunacion", null);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar plazo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PERIODOS_REVACUNACION.map((p) => (
+                      <SelectItem key={p} value={p}>
+                        {PERIODO_REVACUNACION_LABELS[p]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.periodo_revacunacion && (
+                  <p className="text-sm text-red-500">
+                    {errors.periodo_revacunacion.message}
+                  </p>
+                )}
+              </div>
+
+              {periodoRevacunacion === "personalizada" && (
+                <div className="space-y-2">
+                  <Label>Fecha de la próxima vacunación</Label>
+                  <DatePicker
+                    value={fechaRevacunacionValue ?? undefined}
+                    onChange={(date) =>
+                      setValue("fecha_revacunacion", date, { shouldValidate: true })
+                    }
+                    placeholder="Seleccionar fecha"
+                    toYear={new Date().getFullYear() + 10}
+                  />
+                  {errors.fecha_revacunacion && (
+                    <p className="text-sm text-red-500">
+                      {errors.fecha_revacunacion.message}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {proximaVacunacion && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                  <p>
+                    Próxima vacunación:{" "}
+                    <span className="font-medium">
+                      {format(proximaVacunacion, "dd/MM/yyyy", { locale: es })}
+                    </span>
+                  </p>
+                  <p className="text-blue-600">
+                    La alerta aparecerá {DIAS_AVISO_REVACUNACION} días antes.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 

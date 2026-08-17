@@ -11,7 +11,7 @@ export async function getGastos(): Promise<Gasto[]> {
   const { data, error } = await supabase
     .from("gastos")
     .select(
-      "id, fecha, subconcepto_id, valor, proveedor, numero_factura, pagado, observaciones, subconceptos_gasto(nombre, conceptos_gasto(nombre)), pagos(forma_pago, tipo_cuenta, banco, numero_cuenta)"
+      "id, fecha, subconcepto_id, valor, proveedor, numero_factura, pagado, observaciones, source, subconceptos_gasto(nombre, conceptos_gasto(nombre)), pagos(forma_pago, tipo_cuenta, banco, numero_cuenta)"
     )
     .order("fecha", { ascending: false });
 
@@ -29,6 +29,7 @@ export async function getGastos(): Promise<Gasto[]> {
     pagado: row.pagado,
     observaciones: row.observaciones,
     pago: Array.isArray(row.pagos) ? (row.pagos[0] ?? null) : (row.pagos ?? null),
+    source: row.source ?? null,
   }));
 }
 

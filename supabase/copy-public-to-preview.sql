@@ -45,6 +45,8 @@ SET session_replication_role = 'replica';
 -- 2. VACIAR TABLAS PREVIEW
 -- =============================================
 TRUNCATE
+  preview.arriendos_abonos,
+  preview.arriendos,
   preview.user_itinerarios,
   preview.pagos_finca,
   preview.itinerarios_fincas,
@@ -138,6 +140,11 @@ INSERT INTO preview.precios            SELECT * FROM public.precios;
 -- Pajillas y eventos (orden idéntico; incluyen proveedor y pajilla_id)
 INSERT INTO preview.pajillas       SELECT * FROM public.pajillas;
 INSERT INTO preview.eventos_animal SELECT * FROM public.eventos_animal;
+
+-- Arriendos y sus abonos (orden idéntico). Van después de `gastos` porque
+-- `arriendos_abonos.gasto_id` apunta ahí y la copia de gastos conserva los ids.
+INSERT INTO preview.arriendos        SELECT * FROM public.arriendos;
+INSERT INTO preview.arriendos_abonos SELECT * FROM public.arriendos_abonos;
 
 -- Cooperativa — no lleva tenant_id: es otro negocio, una sola cooperativa.
 -- (columnas en distinto orden, public tiene gaps)
