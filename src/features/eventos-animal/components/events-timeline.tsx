@@ -53,7 +53,7 @@ const TIPO_FALLBACK: TipoConfig = {
 const RESULTADO_LABELS: Record<ResultadoPalpacion, string> = {
   cargada: "Cargada",
   rechequeo: "Rechequeo",
-  vacia: "Vacía",
+  servicio: "Servicio",
 };
 
 /** Etiqueta legible de un tipo de evento, para textos fuera del timeline (diálogos, toasts). */

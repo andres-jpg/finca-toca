@@ -322,6 +322,40 @@ export function calcularDiasEnLeche(
 }
 
 /**
+ * Días en leche que tenía el animal en una fecha concreta — para copiar automáticamente el
+ * dato en una medición de leche registrada a posteriori (ver `mediciones-leche`).
+ *
+ * Misma lógica que `calcularDiasEnLeche()` pero con dos diferencias: no aplica el atajo
+ * "estado actual = secado ⇒ 0" (no es aplicable a una fecha pasada, el estado de hoy no dice
+ * nada sobre el de entonces) y solo mira eventos con `fecha <= fecha` — un parto o secado
+ * *posterior* a la medición no puede haber determinado cuántos días en leche tenía ese día.
+ *
+ * Devuelve `null` sin parto/aborto previo a esa fecha (sin fecha base no se inventa un
+ * número, igual que `calcularDiasEnLeche`).
+ */
+export function calcularDiasEnLecheEnFecha(
+  eventos: EventoParaDiasEnLeche[],
+  fecha: string
+): number | null {
+  const relevantes = eventos.filter(
+    (e) =>
+      e.fecha <= fecha &&
+      (e.tipo_evento === "secado" || TIPOS_EVENTO_FIN_GESTACION.includes(e.tipo_evento))
+  );
+  if (relevantes.length === 0) return null;
+
+  const ordenados = [...relevantes].sort((a, b) => {
+    if (a.fecha !== b.fecha) return a.fecha.localeCompare(b.fecha);
+    return Number(a.tipo_evento === "secado") - Number(b.tipo_evento === "secado");
+  });
+
+  const ultimo = ordenados[ordenados.length - 1];
+  if (ultimo.tipo_evento === "secado") return 0;
+
+  return Math.max(0, differenceInCalendarDays(parseFechaDB(fecha), parseFechaDB(ultimo.fecha)));
+}
+
+/**
  * Transición de estados que provoca registrar un evento.
  * Devuelve solo los ejes que cambian; `{}` significa "el evento no mueve el estado".
  */
@@ -335,11 +369,11 @@ export function estadoDesdeEvento(
       return { reproductivo: "por_confirmar" };
     case "palpacion":
     case "confirmacion_prenez":
-      // "cargada" y "rechequeo" coinciden 1:1 con el estado reproductivo. "vacía" no es un
-      // estado propio — la vaca vuelve directo al pool de servicio en vez de quedar en un
-      // estado de espera aparte.
+      // El resultado de la palpación ("cargada" | "rechequeo" | "servicio") coincide 1:1
+      // con el estado reproductivo: una vaca que no quedó preñada vuelve directo al pool
+      // de servicio en vez de quedar en un estado de espera aparte.
       if (!resultado) return {};
-      return { reproductivo: resultado === "vacia" ? "servicio" : resultado };
+      return { reproductivo: resultado };
     case "parto":
     // El aborto cierra la gestación igual que un parto: la vaca vuelve a ordeño y
     // reinicia el ciclo reproductivo desde pre-servicio.
