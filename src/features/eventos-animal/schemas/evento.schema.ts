@@ -26,7 +26,7 @@ export const eventoSchema = z
     fecha: z.date({ message: "La fecha es obligatoria" }),
     descripcion: z.string().optional(),
     responsable: z.string().optional(),
-    resultado: z.enum(["cargada", "rechequeo", "vacia"]).optional().nullable(),
+    resultado: z.enum(["cargada", "rechequeo", "servicio"]).optional().nullable(),
     pajilla_id: z.string().uuid().optional().nullable(),
     toro_id: z.string().optional().nullable(),
     requiere_revacunacion: z.boolean().optional().nullable(),

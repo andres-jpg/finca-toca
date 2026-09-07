@@ -100,7 +100,7 @@ export type AnimalRaza = "holstein" | "jersey" | "jerhol" | "normando" | "ayrshi
 
 /** Ciclo productivo: leche → levante_1 → levante_2 → produccion ⇄ secado (machos: … → reproductor). */
 export type EstadoProductivo = Database["public"]["Enums"]["estado_productivo"];
-/** Ciclo reproductivo (solo hembras): pre_servicio → servicio → por_confirmar → cargada / rechequeo / servicio (una palpación "vacía" vuelve directo a servicio, ya no es un estado propio). */
+/** Ciclo reproductivo (solo hembras): pre_servicio → servicio → por_confirmar → cargada / rechequeo / servicio (una palpación sin preñez vuelve directo a servicio, ya no es un estado propio). */
 export type EstadoReproductivo = Database["public"]["Enums"]["estado_reproductivo"];
 
 export interface Animal {
@@ -160,7 +160,7 @@ export type TipoEvento =
   | "observacion";
 
 /** Resultado de una palpación / confirmación de preñez. */
-export type ResultadoPalpacion = "cargada" | "rechequeo" | "vacia";
+export type ResultadoPalpacion = "cargada" | "rechequeo" | "servicio";
 
 /** Plazo hasta la siguiente vacuna. `personalizada` = el usuario escribe la fecha. */
 export type PeriodoRevacunacion = "1_mes" | "6_meses" | "1_anio" | "personalizada";
@@ -223,6 +223,21 @@ export interface AnimalDetalle extends Animal {
   padre: { id: string; identificador: string; nombre: string } | null;
   madre: { id: string; identificador: string; nombre: string } | null;
   crias: CriaAnimal[];
+}
+
+// ===== CONTROL LECHERO: MEDICIONES MENSUALES =====
+export interface MedicionLecheAnimal {
+  id: string;
+  animal_id: string;
+  fecha: string;
+  litros: number;
+  /**
+   * Días en leche que tenía el animal en `fecha`, derivado con `calcularDiasEnLecheEnFecha()`
+   * — no es una columna, igual que el resto de campos calculados de la ficha (edad, DEL de
+   * hoy). `null` = no había parto/aborto registrado antes de esa fecha.
+   */
+  dias_en_leche: number | null;
+  created_at: string;
 }
 
 // ===== INVENTARIO: PAJILLAS =====

@@ -20,6 +20,7 @@ import {
 import { EventForm } from "@/features/eventos-animal/components/event-form";
 import { deleteEventoAnimal } from "@/features/eventos-animal/actions/eventos.actions";
 import { AlertasAnimal } from "@/features/alertas/components/alertas-animal";
+import { MedicionesLechePanel } from "@/features/mediciones-leche/components/mediciones-leche-panel";
 import {
   ESTADO_PRODUCTIVO_COLORS,
   ESTADO_PRODUCTIVO_LABELS,
@@ -32,6 +33,7 @@ import type {
   AnimalDetalle,
   EventoAnimal,
   Animal,
+  MedicionLecheAnimal,
   PajillaDisponible,
 } from "@/types";
 
@@ -56,6 +58,8 @@ interface AnimalFichaProps {
   lotesPajillas: PajillaDisponible[];
   alertas: Alerta[];
   faltaServicio: boolean;
+  /** Mediciones mensuales de leche del animal, solo hembras (`[]` en machos). */
+  mediciones: MedicionLecheAnimal[];
   /** Ya formateada en el servidor (`formatEdad`); `null` si no hay fecha de nacimiento. */
   edad: string | null;
   /**
@@ -76,6 +80,7 @@ export function AnimalFicha({
   lotesPajillas,
   alertas,
   faltaServicio,
+  mediciones,
   edad,
   diasEnLeche,
   canEdit,
@@ -241,6 +246,24 @@ export function AnimalFicha({
           canEdit={canEdit}
         />
       </section>
+
+      {/* Control lechero: mediciones mensuales de leche */}
+      {animal.sexo === "hembra" && (
+        <section>
+          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
+            Control lechero
+          </h2>
+          <div className="rounded-lg border border-gray-200 p-4">
+            <MedicionesLechePanel
+              animalId={animal.id}
+              mediciones={mediciones}
+              eventosPrevios={eventos}
+              canEdit={canEdit}
+              canDelete={canDelete}
+            />
+          </div>
+        </section>
+      )}
 
       {/* Historial de eventos */}
       <section>

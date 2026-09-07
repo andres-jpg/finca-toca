@@ -130,8 +130,8 @@ export function faltaRegistrarServicio(
  * - **Topizado**: 15 días desde el nacimiento, solo mientras la cría siga en estado `leche`.
  * - **Celo**: 60 días tras cerrarse la gestación —parto o aborto— mientras la vaca esté en
  *   pre-servicio o servicio; para cualquier otra vaca en servicio (nunca parió, o volvió a
- *   servicio tras una palpación con resultado "vacía"), el siguiente múltiplo de 20 días
- *   desde su último evento reproductivo.
+ *   servicio tras una palpación con resultado "servicio", es decir que no quedó preñada),
+ *   el siguiente múltiplo de 20 días desde su último evento reproductivo.
  * - **Revacunación**: 8 días antes de la fecha marcada en la última vacunación. Aplica a
  *   machos y hembras, y es la única alerta con ventana propia (el resto se emiten siempre
  *   y las recorta el horizonte del consumidor).
@@ -261,8 +261,8 @@ export function calcularAlertas(
     // --- Celo cíclico en servicio: ciclo estral de 20 días, avanzando hasta la próxima
     // fecha ≥ hoy. Cubre a cualquier vaca en "servicio" que no acabe de cerrar gestación
     // (el bloque anterior ya la cubrió con la fecha de parto/aborto) — típicamente porque
-    // nunca hubo parto, o porque una palpación posterior la devolvió a "servicio" ("vacía"
-    // ya no es un estado propio) tras un servicio que no prendió.
+    // nunca hubo parto, o porque una palpación posterior con resultado "servicio" la
+    // devolvió ahí tras un servicio que no prendió.
     if (animal.estado_reproductivo === "servicio" && !celoPostParto) {
       const base = ultimoDe(suyos, [
         "celo",

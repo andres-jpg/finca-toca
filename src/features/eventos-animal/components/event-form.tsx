@@ -64,7 +64,7 @@ const TIPO_LABELS: Record<TipoEvento, string> = {
 const RESULTADO_LABELS: Record<ResultadoPalpacion, string> = {
   cargada: "Cargada — preñez confirmada",
   rechequeo: "Rechequeo — repetir revisión",
-  vacia: "Vacía — no quedó preñada",
+  servicio: "Servicio — no quedó preñada",
 };
 
 /** Nota que se muestra bajo el selector para explicar el efecto en el estado del animal. */

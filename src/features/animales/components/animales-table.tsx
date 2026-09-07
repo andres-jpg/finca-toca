@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, ArrowUpCircle, Eye, RefreshCw } from "lucide-react";
+import { Plus, Pencil, Trash2, ArrowUpCircle, Eye, RefreshCw, FileSpreadsheet } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/shared/data-table";
 import { EntityModal } from "@/components/shared/entity-modal";
@@ -164,6 +164,7 @@ export function AnimalesTable({
 
   const router = useRouter();
   const [recalculando, startRecalculo] = useTransition();
+  const [exportando, setExportando] = useState(false);
 
   const animalesDeAlta = useMemo(() => animales.filter((a) => a.alta), [animales]);
   const animalesDeBaja = useMemo(() => animales.filter((a) => !a.alta), [animales]);
@@ -216,6 +217,32 @@ export function AnimalesTable({
         );
       }
     });
+  };
+
+  const handleExport = async () => {
+    setExportando(true);
+    try {
+      const params = new URLSearchParams({
+        sexo: sexoFiltro,
+        productivo: productivoFiltro,
+        reproductivo: reproductivoFiltro,
+        alta: String(!mostrarDeBaja),
+      });
+      const res = await fetch(`/api/informes-animales?${params}`);
+      if (!res.ok) throw new Error((await res.text()) || "Error al generar el reporte");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `animales_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Reporte descargado");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo generar el reporte");
+    } finally {
+      setExportando(false);
+    }
   };
 
   const columns: ColumnDef<Animal>[] = useMemo(
@@ -331,6 +358,10 @@ export function AnimalesTable({
                 {animalesDeBaja.length}
               </span>
             )}
+          </Button>
+          <Button variant="outline" onClick={handleExport} disabled={exportando}>
+            <FileSpreadsheet className="h-4 w-4 mr-2" />
+            {exportando ? "Generando…" : "Exportar Excel"}
           </Button>
           {canEdit && (
             <Button variant="outline" onClick={handleRecalcular} disabled={recalculando}>
