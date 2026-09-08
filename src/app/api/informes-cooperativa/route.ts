@@ -99,13 +99,16 @@ type ColLayout = {
   colPrecioL: number;
   colTotalLitros: number;
   colPrecioBruto: number;
-  colDesFedegan: number;
+  // null cuando ninguna fila del informe tiene descuento Fedegan (rutas exentas —
+  // ver lib/cooperativa/fedegan.ts): la columna se omite por completo en vez de
+  // mostrarse siempre en $0.
+  colDesFedegan: number | null;
   colDescuentoAlmacen: number;
   colPrecioNeto: number;
   totalCols: number;
 };
 
-function computeColLayout(numDates: number, hasRutaCol: boolean): ColLayout {
+function computeColLayout(numDates: number, hasRutaCol: boolean, hasFedeganCol: boolean): ColLayout {
   const colId = 1;
   const colFinca = 2;
   const colRuta = hasRutaCol ? 3 : null;
@@ -114,8 +117,8 @@ function computeColLayout(numDates: number, hasRutaCol: boolean): ColLayout {
   const colPrecioL = lastDayCol + 1;
   const colTotalLitros = colPrecioL + 1;
   const colPrecioBruto = colTotalLitros + 1;
-  const colDesFedegan = colPrecioBruto + 1;
-  const colDescuentoAlmacen = colDesFedegan + 1;
+  const colDesFedegan = hasFedeganCol ? colPrecioBruto + 1 : null;
+  const colDescuentoAlmacen = (colDesFedegan ?? colPrecioBruto) + 1;
   const colPrecioNeto = colDescuentoAlmacen + 1;
   return {
     colId,
@@ -133,6 +136,12 @@ function computeColLayout(numDates: number, hasRutaCol: boolean): ColLayout {
   };
 }
 
+// Ninguna fila con fedeganPct > 0 ⇒ la columna "Des. Fedegan" no aporta nada (siempre
+// sería $0) y se omite de la Hoja 1. Ver lib/cooperativa/fedegan.ts para las rutas exentas.
+function hayFedeganEnFilas(filas: { fedeganPct: number }[]): boolean {
+  return filas.some((f) => f.fedeganPct > 0);
+}
+
 function setColumnWidths(ws: ExcelJS.Worksheet, layout: ColLayout, isSameMonth: boolean) {
   ws.getColumn(layout.colId).width = 6;
   ws.getColumn(layout.colFinca).width = 28;
@@ -141,7 +150,7 @@ function setColumnWidths(ws: ExcelJS.Worksheet, layout: ColLayout, isSameMonth: 
   ws.getColumn(layout.colPrecioL).width = 12;
   ws.getColumn(layout.colTotalLitros).width = 14;
   ws.getColumn(layout.colPrecioBruto).width = 16;
-  ws.getColumn(layout.colDesFedegan).width = 15;
+  if (layout.colDesFedegan) ws.getColumn(layout.colDesFedegan).width = 15;
   ws.getColumn(layout.colDescuentoAlmacen).width = 16;
   ws.getColumn(layout.colPrecioNeto).width = 14;
 }
@@ -180,7 +189,7 @@ function writeHeaderRow(
   row.getCell(layout.colPrecioL).value = "Precio/L";
   row.getCell(layout.colTotalLitros).value = "Total Litros";
   row.getCell(layout.colPrecioBruto).value = "Precio Bruto";
-  row.getCell(layout.colDesFedegan).value = "Des. Fedegan";
+  if (layout.colDesFedegan) row.getCell(layout.colDesFedegan).value = "Des. Fedegan";
   row.getCell(layout.colDescuentoAlmacen).value = "Descuento almacén";
   row.getCell(layout.colPrecioNeto).value = "Precio Neto";
   for (let c = 1; c <= layout.totalCols; c++) styleHeader(row.getCell(c));
@@ -214,7 +223,7 @@ function writeFilaFinca(
   const lPrecioL = colLetter(layout.colPrecioL);
   const lTotalLitros = colLetter(layout.colTotalLitros);
   const lPrecioBruto = colLetter(layout.colPrecioBruto);
-  const lDesFedegan = colLetter(layout.colDesFedegan);
+  const lDesFedegan = layout.colDesFedegan ? colLetter(layout.colDesFedegan) : null;
   const lDescuentoAlmacen = colLetter(layout.colDescuentoAlmacen);
   const lDayFrom = colLetter(layout.firstDayCol);
   const lDayTo = colLetter(layout.lastDayCol);
@@ -229,16 +238,22 @@ function writeFilaFinca(
   cBruto.value = { formula: `${lPrecioL}${rowNum}*${lTotalLitros}${rowNum}` };
   styleSummary(cBruto);
 
-  const cFedegan = row.getCell(layout.colDesFedegan);
-  cFedegan.value = { formula: `${lPrecioBruto}${rowNum}*${fila.fedeganPct}` };
-  styleSummary(cFedegan);
+  if (layout.colDesFedegan) {
+    const cFedegan = row.getCell(layout.colDesFedegan);
+    cFedegan.value = { formula: `${lPrecioBruto}${rowNum}*${fila.fedeganPct}` };
+    styleSummary(cFedegan);
+  }
 
   const cDescuento = row.getCell(layout.colDescuentoAlmacen);
   cDescuento.value = 0;
   styleSummary(cDescuento);
 
   const cNeto = row.getCell(layout.colPrecioNeto);
-  cNeto.value = { formula: `${lPrecioBruto}${rowNum}-${lDesFedegan}${rowNum}-${lDescuentoAlmacen}${rowNum}` };
+  cNeto.value = {
+    formula: lDesFedegan
+      ? `${lPrecioBruto}${rowNum}-${lDesFedegan}${rowNum}-${lDescuentoAlmacen}${rowNum}`
+      : `${lPrecioBruto}${rowNum}-${lDescuentoAlmacen}${rowNum}`,
+  };
   styleSummary(cNeto);
 }
 
@@ -297,7 +312,7 @@ function writeSummaryRow(
   const moneyCols: [number, boolean][] = [
     [layout.colTotalLitros, false],
     [layout.colPrecioBruto, true],
-    [layout.colDesFedegan, true],
+    ...(layout.colDesFedegan ? ([[layout.colDesFedegan, true]] as [number, boolean][]) : []),
     [layout.colDescuentoAlmacen, true],
     [layout.colPrecioNeto, true],
   ];
@@ -314,7 +329,7 @@ function buildSheet1Simple(
   dates: string[],
   isSameMonth: boolean,
 ): { ws: ExcelJS.Worksheet; voucherRows: VoucherRowInfo[]; layout: ColLayout } {
-  const layout = computeColLayout(dates.length, false);
+  const layout = computeColLayout(dates.length, false, hayFedeganEnFilas(informe.filas));
   const ws = wb.addWorksheet(informe.periodoLabel.slice(0, 31));
   ws.views = [{ state: "frozen", xSplit: 0, ySplit: 3, topLeftCell: "A4" }];
 
@@ -343,7 +358,7 @@ function buildSheet1Itinerario(
   dates: string[],
   isSameMonth: boolean,
 ): { ws: ExcelJS.Worksheet; voucherRows: VoucherRowInfo[]; layout: ColLayout } {
-  const layout = computeColLayout(dates.length, true);
+  const layout = computeColLayout(dates.length, true, hayFedeganEnFilas(informe.filas));
   const ws = wb.addWorksheet(informe.periodoLabel.slice(0, 31));
   ws.views = [{ state: "frozen", xSplit: 0, ySplit: 3, topLeftCell: "A4" }];
 
@@ -376,7 +391,11 @@ function buildSheet1General(
   dates: string[],
   isSameMonth: boolean,
 ): { ws: ExcelJS.Worksheet; voucherRows: VoucherRowInfo[]; layout: ColLayout } {
-  const layout = computeColLayout(dates.length, false);
+  const layout = computeColLayout(
+    dates.length,
+    false,
+    hayFedeganEnFilas(informe.rutas.flatMap((r) => r.filas)),
+  );
   const ws = wb.addWorksheet(informe.periodoLabel.slice(0, 31));
   ws.views = [{ state: "frozen", xSplit: 0, ySplit: 3, topLeftCell: "A4" }];
 
@@ -609,12 +628,15 @@ function buildSheet2Comprobantes(
     ws.getColumn(colLabel).width = COL_WIDTH;
   }
 
+  // hasFedegan por comprobante nunca es true cuando la Hoja 1 omite la columna
+  // (colDesFedegan es null exactamente cuando ninguna fila tiene descuento), así que
+  // este placeholder nunca se dereferencia — ver writeVoucher.
   const cols: Sheet1ColRefs = {
     lId: colLetter(layout.colId),
     lFinca: colLetter(layout.colFinca),
     lTotalLitros: colLetter(layout.colTotalLitros),
     lPrecioBruto: colLetter(layout.colPrecioBruto),
-    lDesFedegan: colLetter(layout.colDesFedegan),
+    lDesFedegan: layout.colDesFedegan ? colLetter(layout.colDesFedegan) : "",
     lDescuentoAlmacen: colLetter(layout.colDescuentoAlmacen),
   };
 
