@@ -47,3 +47,24 @@ export function agruparPorSeveridad(alertas: Alerta[]) {
   }
   return grupos.filter((g) => g.alertas.length > 0);
 }
+
+/**
+ * Agrupa por tipo para la tarjeta-acordeón del dashboard. El orden de los grupos sale
+ * gratis del orden de entrada: `calcularAlertas()` ya devuelve `alertas` ordenado por
+ * `fecha_objetivo` ascendente, así que el tipo con la alerta más urgente aparece primero
+ * sin tener que recalcular severidad aquí.
+ */
+export function agruparPorTipo(alertas: Alerta[]): { tipo: TipoAlerta; alertas: Alerta[] }[] {
+  const grupos: { tipo: TipoAlerta; alertas: Alerta[] }[] = [];
+  const indicePorTipo = new Map<TipoAlerta, number>();
+  for (const alerta of alertas) {
+    const indice = indicePorTipo.get(alerta.tipo);
+    if (indice === undefined) {
+      indicePorTipo.set(alerta.tipo, grupos.length);
+      grupos.push({ tipo: alerta.tipo, alertas: [alerta] });
+    } else {
+      grupos[indice].alertas.push(alerta);
+    }
+  }
+  return grupos;
+}
