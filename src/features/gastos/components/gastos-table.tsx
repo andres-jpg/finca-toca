@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Plus, Pencil, Trash2, CalendarDays, Eye, Zap } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye, Zap } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/shared/data-table";
 import { EntityModal } from "@/components/shared/entity-modal";
@@ -13,7 +13,7 @@ import { deleteGasto } from "@/features/gastos/actions/gastos.actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { MonthPicker } from "@/components/shared/month-picker";
+import { PeriodoFiltroControl, fechaEnPeriodo, type PeriodoFiltro } from "@/components/shared/periodo-filtro";
 import type { Gasto, ConceptoGasto } from "@/types";
 
 /** Módulo que mantiene cada gasto automático (`gastos.source`). */
@@ -192,14 +192,12 @@ interface GastosTableProps {
 
 export function GastosTable({ gastos, conceptos, canEdit }: GastosTableProps) {
   const [modalOpen, setModalOpen] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(new Date());
+  const [periodo, setPeriodo] = useState<PeriodoFiltro>({ tipo: "mes", mes: new Date() });
 
-  const filteredGastos = useMemo(() => {
-    const year = selectedMonth.getFullYear();
-    const month = String(selectedMonth.getMonth() + 1).padStart(2, "0");
-    const prefix = `${year}-${month}`;
-    return gastos.filter((gasto) => gasto.fecha.startsWith(prefix));
-  }, [gastos, selectedMonth]);
+  const filteredGastos = useMemo(
+    () => gastos.filter((gasto) => fechaEnPeriodo(gasto.fecha, periodo)),
+    [gastos, periodo],
+  );
 
   const columns: ColumnDef<Gasto>[] = useMemo(
     () => [
@@ -273,7 +271,7 @@ export function GastosTable({ gastos, conceptos, canEdit }: GastosTableProps) {
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-gray-800 tracking-tight">Gastos</h2>
           <p className="text-sm text-gray-500 mt-0.5">
-            {filteredGastos.length} registro(s) este mes
+            {filteredGastos.length} registro(s) {periodo.tipo === "mes" ? "este mes" : "en el rango seleccionado"}
           </p>
         </div>
         {canEdit && (
@@ -284,14 +282,7 @@ export function GastosTable({ gastos, conceptos, canEdit }: GastosTableProps) {
         )}
       </div>
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-white rounded-xl border border-gray-200 px-4 py-3 shadow-sm">
-        <div className="flex items-center gap-2 text-gray-500 shrink-0">
-          <CalendarDays className="h-4 w-4" />
-          <span className="text-sm font-medium">Filtrar por mes</span>
-        </div>
-        <div className="h-4 w-px bg-gray-200 hidden sm:block" />
-        <MonthPicker value={selectedMonth} onChange={setSelectedMonth} />
-      </div>
+      <PeriodoFiltroControl value={periodo} onChange={setPeriodo} />
 
       <DataTable data={filteredGastos} columns={columns} filterPlaceholder="  Buscar por concepto, proveedor, factura..." />
 

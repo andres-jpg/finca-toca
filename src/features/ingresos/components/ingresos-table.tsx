@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Plus, Pencil, Trash2, CalendarDays, Zap } from "lucide-react";
+import { Plus, Pencil, Trash2, Zap } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/shared/data-table";
 import { EntityModal } from "@/components/shared/entity-modal";
@@ -12,7 +12,7 @@ import { IngresoForm } from "@/features/ingresos/components/ingreso-form";
 import { deleteIngreso } from "@/features/ingresos/actions/ingresos.actions";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { MonthPicker } from "@/components/shared/month-picker";
+import { PeriodoFiltroControl, fechaEnPeriodo, type PeriodoFiltro } from "@/components/shared/periodo-filtro";
 import type { Ingreso, ConceptoIngreso, Animal } from "@/types";
 
 function RowActions({
@@ -103,14 +103,12 @@ interface IngresosTableProps {
 
 export function IngresosTable({ ingresos, conceptos, vacas, toros, canEdit }: IngresosTableProps) {
   const [modalOpen, setModalOpen] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(new Date());
+  const [periodo, setPeriodo] = useState<PeriodoFiltro>({ tipo: "mes", mes: new Date() });
 
-  const filteredIngresos = useMemo(() => {
-    const year = selectedMonth.getFullYear();
-    const month = String(selectedMonth.getMonth() + 1).padStart(2, "0");
-    const prefix = `${year}-${month}`;
-    return ingresos.filter((ingreso) => ingreso.fecha.startsWith(prefix));
-  }, [ingresos, selectedMonth]);
+  const filteredIngresos = useMemo(
+    () => ingresos.filter((ingreso) => fechaEnPeriodo(ingreso.fecha, periodo)),
+    [ingresos, periodo],
+  );
 
   const columns: ColumnDef<Ingreso>[] = useMemo(
     () => [
@@ -160,7 +158,7 @@ export function IngresosTable({ ingresos, conceptos, vacas, toros, canEdit }: In
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-gray-800 tracking-tight">Ingresos</h2>
           <p className="text-sm text-gray-500 mt-0.5">
-            {filteredIngresos.length} registro(s) este mes
+            {filteredIngresos.length} registro(s) {periodo.tipo === "mes" ? "este mes" : "en el rango seleccionado"}
           </p>
         </div>
         {canEdit && (
@@ -171,14 +169,7 @@ export function IngresosTable({ ingresos, conceptos, vacas, toros, canEdit }: In
         )}
       </div>
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-white rounded-xl border border-gray-200 px-4 py-3 shadow-sm">
-        <div className="flex items-center gap-2 text-gray-500 shrink-0">
-          <CalendarDays className="h-4 w-4" />
-          <span className="text-sm font-medium">Filtrar por mes</span>
-        </div>
-        <div className="h-4 w-px bg-gray-200 hidden sm:block" />
-        <MonthPicker value={selectedMonth} onChange={setSelectedMonth} />
-      </div>
+      <PeriodoFiltroControl value={periodo} onChange={setPeriodo} />
 
       <DataTable data={filteredIngresos} columns={columns} filterPlaceholder="" />
 
