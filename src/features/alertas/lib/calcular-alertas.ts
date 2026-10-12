@@ -214,7 +214,12 @@ export function calcularAlertas(
         servicio.tipo_evento === "monta" ? "Monta" : "Inseminación";
       const detalle = `${etiquetaServicio} del ${fmt(fechaServicio)}`;
 
-      if (!existeDesde(suyos, ["secado"], servicio.fecha)) {
+      // El secado solo aplica a vacas en Producción: una ya secada, o aún en levante,
+      // no necesita el aviso aunque esté cargada.
+      if (
+        animal.estado_productivo === "produccion" &&
+        !existeDesde(suyos, ["secado"], servicio.fecha)
+      ) {
         alertas.push(
           construir(animal, "secado", addMonths(fechaServicio, MESES_SECADO), detalle, hoy)
         );

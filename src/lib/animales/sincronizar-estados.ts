@@ -1,9 +1,11 @@
 import { addDays } from "date-fns";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  DIAS_PASE_A_POR_CONFIRMAR,
   DIAS_PASE_A_SERVICIO,
   ORDEN_REPRODUCTIVO_JUVENIL,
   TIPOS_EVENTO_FIN_GESTACION,
+  TIPOS_EVENTO_SERVICIO,
   estadoProductivoPorEdad,
   estadoReproductivoPorCrianza,
   parseFechaDB,
@@ -225,7 +227,77 @@ export async function sincronizarPaseAServicio(
 }
 
 /**
- * Las dos sincronizaciones automáticas que corren juntas: avance productivo por edad
+ * Pasa a `por_confirmar` las vacas `servida` que llevan `DIAS_PASE_A_POR_CONFIRMAR` (40)
+ * días desde su última inseminación/monta (la fecha del evento, nunca `created_at`).
+ * Del día 0 al 39 la vaca permanece en `servida`. Una `servida` sin evento de servicio no
+ * tiene fecha base y se queda como está.
+ */
+export async function sincronizarPaseAPorConfirmar(
+  supabase: ClienteSupabase,
+  hoy: Date = new Date()
+): Promise<ResultadoSincronizacion> {
+  const { data, error } = await supabase
+    .from("animales")
+    .select("id, identificador")
+    .eq("alta", true)
+    .eq("sexo", "hembra")
+    .eq("estado_reproductivo", "servida");
+
+  if (error) throw new Error("No se pudieron leer las vacas servidas");
+
+  const candidatas = (data ?? []) as { id: string; identificador: string }[];
+  if (candidatas.length === 0) return { revisados: 0, actualizados: [] };
+
+  const { data: eventosData, error: eventosError } = await supabase
+    .from("eventos_animal")
+    .select("animal_id, fecha")
+    .in(
+      "animal_id",
+      candidatas.map((c) => c.id)
+    )
+    .in("tipo_evento", [...TIPOS_EVENTO_SERVICIO]);
+
+  if (eventosError) throw new Error("No se pudieron leer los servicios para el pase a por confirmar");
+
+  const ultimoServicio = new Map<string, string>();
+  for (const evento of (eventosData ?? []) as { animal_id: string; fecha: string }[]) {
+    const previo = ultimoServicio.get(evento.animal_id);
+    if (!previo || evento.fecha > previo) ultimoServicio.set(evento.animal_id, evento.fecha);
+  }
+
+  const actualizados: ResultadoSincronizacion["actualizados"] = [];
+
+  for (const vaca of candidatas) {
+    const servicio = ultimoServicio.get(vaca.id);
+    if (!servicio) continue;
+
+    const objetivo = addDays(parseFechaDB(servicio), DIAS_PASE_A_POR_CONFIRMAR);
+    if (hoy < objetivo) continue;
+
+    const { error: updateError } = await supabase
+      .from("animales")
+      .update({ estado_reproductivo: "por_confirmar" })
+      .eq("id", vaca.id)
+      // No pisar un evento que haya cambiado el estado entre el SELECT y el UPDATE.
+      .eq("estado_reproductivo", "servida");
+
+    if (updateError) {
+      throw new Error(`No se pudo pasar a por confirmar a ${vaca.identificador}`);
+    }
+
+    actualizados.push({
+      id: vaca.id,
+      identificador: vaca.identificador,
+      de: "servida",
+      a: "por_confirmar",
+    });
+  }
+
+  return { revisados: candidatas.length, actualizados };
+}
+
+/**
+ * Las sincronizaciones automáticas que corren juntas: avance productivo por edad
  * y pase reproductivo `pre_servicio` → `servicio`. Es lo que ejecutan el cron diario
  * y el botón "Recalcular estados".
  */
@@ -235,9 +307,14 @@ export async function sincronizarEstadosAnimales(
 ): Promise<ResultadoSincronizacion> {
   const porEdad = await sincronizarEstadosPorEdad(supabase, hoy);
   const aServicio = await sincronizarPaseAServicio(supabase, hoy);
+  const aPorConfirmar = await sincronizarPaseAPorConfirmar(supabase, hoy);
 
   return {
-    revisados: porEdad.revisados + aServicio.revisados,
-    actualizados: [...porEdad.actualizados, ...aServicio.actualizados],
+    revisados: porEdad.revisados + aServicio.revisados + aPorConfirmar.revisados,
+    actualizados: [
+      ...porEdad.actualizados,
+      ...aServicio.actualizados,
+      ...aPorConfirmar.actualizados,
+    ],
   };
 }

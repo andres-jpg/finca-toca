@@ -45,6 +45,11 @@ export const DIAS_CELO_POST_PARTO = 60;
 export const DIAS_PASE_A_SERVICIO = DIAS_CELO_POST_PARTO + 1;
 /** Duración del ciclo estral: cada cuántos días reprogramar el celo de una vaca vacía. */
 export const DIAS_CICLO_CELO = 20;
+/**
+ * Días tras la inseminación/monta en que la vaca pasa de `servida` a `por_confirmar`:
+ * hasta el día 39 queda como "Servida" y el día 40 ya toca confirmar la preñez.
+ */
+export const DIAS_PASE_A_POR_CONFIRMAR = 40;
 
 /** Eventos que registran un servicio y por tanto fijan la fecha base de secado y parto. */
 export const TIPOS_EVENTO_SERVICIO = ["inseminacion", "monta"] as const;
@@ -131,6 +136,7 @@ export const ESTADOS_REPRODUCTIVOS: EstadoReproductivo[] = [
   "puber",
   "pre_servicio",
   "servicio",
+  "servida",
   "por_confirmar",
   "rechequeo",
   "cargada",
@@ -141,6 +147,7 @@ export const ESTADO_REPRODUCTIVO_LABELS: Record<EstadoReproductivo, string> = {
   puber: "Púber",
   pre_servicio: "Pre-servicio",
   servicio: "Servicio",
+  servida: "Servida",
   por_confirmar: "Por confirmar",
   rechequeo: "Rechequeo",
   cargada: "Cargada",
@@ -151,6 +158,7 @@ export const ESTADO_REPRODUCTIVO_COLORS: Record<EstadoReproductivo, string> = {
   puber: "bg-indigo-100 text-indigo-700 hover:bg-indigo-100",
   pre_servicio: "bg-teal-100 text-teal-700 hover:bg-teal-100",
   servicio: "bg-cyan-100 text-cyan-700 hover:bg-cyan-100",
+  servida: "bg-lime-100 text-lime-700 hover:bg-lime-100",
   por_confirmar: "bg-amber-100 text-amber-700 hover:bg-amber-100",
   rechequeo: "bg-orange-100 text-orange-700 hover:bg-orange-100",
   cargada: "bg-emerald-100 text-emerald-700 hover:bg-emerald-100",
@@ -161,6 +169,7 @@ export const ESTADO_REPRODUCTIVO_HEX: Record<EstadoReproductivo, string> = {
   puber: "#6366f1",
   pre_servicio: "#14b8a6",
   servicio: "#0891b2",
+  servida: "#65a30d",
   por_confirmar: "#d97706",
   rechequeo: "#f97316",
   cargada: "#059669",
@@ -366,7 +375,8 @@ export function estadoDesdeEvento(
   switch (tipoEvento) {
     case "inseminacion":
     case "monta":
-      return { reproductivo: "por_confirmar" };
+      // Servida durante los primeros días; el cron la pasa a `por_confirmar` al día 40.
+      return { reproductivo: "servida" };
     case "palpacion":
     case "confirmacion_prenez":
       // El resultado de la palpación ("cargada" | "rechequeo" | "servicio") coincide 1:1
