@@ -1066,6 +1066,7 @@ export type Database = {
         | "puber"
         | "pre_servicio"
         | "servicio"
+        | "servida"
         | "por_confirmar"
         | "rechequeo"
         | "cargada"
@@ -1231,6 +1232,7 @@ export const Constants = {
         "puber",
         "pre_servicio",
         "servicio",
+        "servida",
         "por_confirmar",
         "rechequeo",
         "cargada",

@@ -20,6 +20,7 @@ import {
   Banknote,
   History,
   KeyRound,
+  CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { slugTieneModulo, type ModuloOpcional } from "@/lib/tenants/modulos";
@@ -66,6 +67,12 @@ const navItems: NavItem[] = [
     href: "/dashboard/animales",
     label: "Animales",
     icon: PiCow,
+    allowedRoles: ["admin", "viewer"] as UserRole[],
+  },
+  {
+    href: "/dashboard/informe-avanzado",
+    label: "Informe avanzado",
+    icon: CalendarClock,
     allowedRoles: ["admin", "viewer"] as UserRole[],
   },
   {

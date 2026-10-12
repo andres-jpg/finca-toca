@@ -248,7 +248,7 @@ export function AnimalFicha({
       </section>
 
       {/* Control lechero: mediciones mensuales de leche */}
-      {animal.sexo === "hembra" && (
+      {animal.sexo === "hembra" && animal.estado_productivo === "produccion" && (
         <section>
           <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
             Control lechero

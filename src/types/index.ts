@@ -100,7 +100,7 @@ export type AnimalRaza = "holstein" | "jersey" | "jerhol" | "normando" | "ayrshi
 
 /** Ciclo productivo: leche → levante_1 → levante_2 → produccion ⇄ secado (machos: … → reproductor). */
 export type EstadoProductivo = Database["public"]["Enums"]["estado_productivo"];
-/** Ciclo reproductivo (solo hembras): pre_servicio → servicio → por_confirmar → cargada / rechequeo / servicio (una palpación sin preñez vuelve directo a servicio, ya no es un estado propio). */
+/** Ciclo reproductivo (solo hembras): pre_servicio → servicio → servida (40 días) → por_confirmar → cargada / rechequeo / servicio (una palpación sin preñez vuelve directo a servicio, ya no es un estado propio). */
 export type EstadoReproductivo = Database["public"]["Enums"]["estado_reproductivo"];
 
 export interface Animal {

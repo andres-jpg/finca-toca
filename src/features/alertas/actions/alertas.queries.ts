@@ -69,3 +69,16 @@ export const getAlertasAnimal = cache(async function getAlertasAnimal(
     faltaServicio: faltaRegistrarServicio(animal, suyos),
   };
 });
+
+/**
+ * Alertas de secado y parto probable en una ventana más amplia que la de la campana
+ * (informe avanzado): vencidas más las que caen en los próximos `dias` días.
+ */
+export const getAlertasVentana = cache(async function getAlertasVentana(
+  dias: number
+): Promise<Alerta[]> {
+  const { animales, eventos } = await cargarDatos();
+  return calcularAlertas(animales, eventos).filter(
+    (a) => (a.tipo === "secado" || a.tipo === "parto") && a.dias_restantes <= dias
+  );
+});
