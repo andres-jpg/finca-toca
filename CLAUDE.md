@@ -293,14 +293,45 @@ CRON_SECRET                          # server-only — Bearer que valida /api/cr
 
 Both required vars are set in `.env.local`. The app uses the modern publishable key format (`sb_publishable_...`), not the legacy anon JWT.
 
-Hay **dos proyectos Supabase separados**, ambos con el schema `public`: producción y staging. Los clientes (`lib/supabase/{server,client,admin}.ts`) ya no eligen schema — usan el `public` por defecto —, así que cambiar de entorno es solo cambiar `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY` / `SUPABASE_SERVICE_ROLE_KEY`. En Vercel: **Production → proyecto de producción; Preview (`develop`) → proyecto de staging**. `NEXT_PUBLIC_SUPABASE_SCHEMA` ya no existe (no lo reintroduzcas) y el schema `preview` del proyecto de producción es un resto que se borrará en CO-19 tras validar staging. En local, `.env.local` apunta a staging, nunca a producción.
+Hay **dos proyectos Supabase separados**, ambos con el schema `public`: producción y staging. Los clientes (`lib/supabase/{server,client,admin}.ts`) ya no eligen schema — usan el `public` por defecto —, así que cambiar de entorno es solo cambiar `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY` / `SUPABASE_SERVICE_ROLE_KEY`. En Vercel: **Production → proyecto de producción; Preview (`develop`) → proyecto de staging**. `NEXT_PUBLIC_SUPABASE_SCHEMA` ya no existe (no lo reintroduzcas) y el schema `preview` del proyecto de producción es un resto que se borrará en CO-19 tras validar staging. En local, `.env.local` apunta a la **Supabase local** (ver *Desarrollo local*); si alguna vez lo apuntas a un proyecto remoto, que sea staging, nunca producción.
+
+### Desarrollo local
+
+Toda la base corre en local con el CLI de Supabase (necesita **Docker** en marcha). Flujo:
+
+```bash
+cp .env.local.example .env.local   # una vez; rellena las dos claves con la salida de `pnpm db:status`
+pnpm db:start                      # Postgres + Auth + PostgREST + Studio (http://127.0.0.1:54323)
+pnpm db:reset                      # aplica supabase/migrations/ y luego supabase/seed.sql
+pnpm dev
+```
+
+`pnpm db:stop` apaga el stack. `pnpm db:reset` borra y recrea la base local entera: úsalo cada vez que quieras volver a los datos de ejemplo.
+
+**Usuarios de prueba** (`supabase/seed.sql`; contraseña `password123`, **solo local**):
+
+| Email | Rol | Cliente |
+|---|---|---|
+| `admin@vb.test` | `admin` | Villa Blanca (demo) |
+| `user@vb.test` | `user` | Villa Blanca (demo) |
+| `viewer@vb.test` | `viewer` | Villa Blanca (demo) |
+| `admin@velero.test` | `admin` | El Velero (demo) |
+| `coop.admin@test` | `cooperativa_admin` | — |
+| `coop.user@test` | `cooperativa_user` | — (itinerario 1) |
+
+- Cada cliente trae 3 animales, 5 eventos, 10 días de extracciones, el catálogo de conceptos/subconceptos, un precio de leche, un lote de pajillas y un gasto/ingreso de ejemplo; la cooperativa trae 2 fincas, 1 ruta, 1 itinerario y 5 recolecciones. Las fechas son relativas a `current_date`, así que el dashboard del mes en curso nunca sale vacío.
+- Los tenants del seed usan los **slugs reales** (`villa-blanca`, `el-velero`) y solo el nombre dice "demo": el código los compara (módulo Arriendos de Villa Blanca, campos de sangre de El Velero), y con otros slugs esas pantallas no se verían en local.
+- En el seed, `tenant_id` va **siempre explícito**: su `DEFAULT tenant_actual()` depende de `auth.uid()` y el seed corre sin sesión (devolvería NULL). Las tablas con id serial (`fincas_cooperativa`, `rutas_cooperativa`) no llevan id fijo, o la secuencia se quedaría en 1 y el siguiente alta desde la app chocaría.
+- **No ejecutes `seed.sql` contra staging ni producción**: crea usuarios con contraseña conocida.
+
+**Tras cada migración: `pnpm db:types`.** Regenera `src/lib/supabase/database.types.ts` desde la base local (de ahí sale `UserRole` y los enums). Si cambias el esquema, commitea migración y tipos juntos. El script usa `--schema public` para que no entre `graphql_public`. Usa un CLI reciente (`brew upgrade supabase`): las versiones antiguas generan el mismo esquema pero omiten `__InternalSupabase` y cambian unos paréntesis de los tipos auxiliares, y eso ensucia el diff. Sin Docker, los mismos tipos se pueden sacar de staging (mismo esquema).
 
 ### Migraciones
 
 La fuente de verdad del esquema es `supabase/migrations/` (CLI de Supabase). `20261019000000_baseline.sql` es el esquema `public` completo de producción a 2026-10-19, sin datos; recrea un proyecto vacío: se aplicó a staging (FIN-81) y el esquema resultante coincide con producción. Los `.sql` fechados anteriores y los scripts del antiguo schema `preview` viven en `supabase/legacy/` **solo como historia** — no se ejecutan ni se editan. `supabase/README.md` documenta el enlace a staging y los usuarios de prueba.
 
 Flujo de un cambio de esquema: **local → `db diff` → PR → staging → prod**.
-1. Edita el esquema (en local o contra staging) y genera el fichero con `pnpm db:diff <nombre>` → `supabase/migrations/<timestamp>_<nombre>.sql`. Revísalo a mano: el diff no captura bien `GRANT`/`REVOKE`, ni cambios de datos.
+1. Edita el esquema en local y genera el fichero con `pnpm db:diff <nombre>` → `supabase/migrations/<timestamp>_<nombre>.sql`. Revísalo a mano: el diff no captura bien `GRANT`/`REVOKE`, ni cambios de datos.
 2. Abre la PR con la migración junto al código que la usa.
 3. Aplícala a staging (`supabase link --project-ref <staging>` + `pnpm db:push:staging`) y valida en el preview de `develop`.
 4. Solo tras validar, aplícala a producción (`supabase link --project-ref <prod>` + `supabase db push`), con el proyecto enlazado comprobado a mano antes de empujar.

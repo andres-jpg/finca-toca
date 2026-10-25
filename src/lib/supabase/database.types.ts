@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.18"
   }
   public: {
     Tables: {
@@ -130,6 +130,105 @@ export type Database = {
           },
         ]
       }
+      arriendos: {
+        Row: {
+          arrendatario: string
+          canon: number
+          created_at: string
+          fecha_fin: string
+          fecha_inicio: string
+          finca_nombre: string
+          id: string
+          observaciones: string | null
+          tenant_id: string
+        }
+        Insert: {
+          arrendatario: string
+          canon: number
+          created_at?: string
+          fecha_fin: string
+          fecha_inicio: string
+          finca_nombre: string
+          id?: string
+          observaciones?: string | null
+          tenant_id?: string
+        }
+        Update: {
+          arrendatario?: string
+          canon?: number
+          created_at?: string
+          fecha_fin?: string
+          fecha_inicio?: string
+          finca_nombre?: string
+          id?: string
+          observaciones?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arriendos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arriendos_abonos: {
+        Row: {
+          arriendo_id: string
+          created_at: string
+          fecha: string
+          gasto_id: number | null
+          id: string
+          observaciones: string | null
+          tenant_id: string
+          valor: number
+        }
+        Insert: {
+          arriendo_id: string
+          created_at?: string
+          fecha: string
+          gasto_id?: number | null
+          id?: string
+          observaciones?: string | null
+          tenant_id?: string
+          valor: number
+        }
+        Update: {
+          arriendo_id?: string
+          created_at?: string
+          fecha?: string
+          gasto_id?: number | null
+          id?: string
+          observaciones?: string | null
+          tenant_id?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arriendos_abonos_arriendo_id_fkey"
+            columns: ["arriendo_id"]
+            isOneToOne: false
+            referencedRelation: "arriendos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arriendos_abonos_gasto_id_fkey"
+            columns: ["gasto_id"]
+            isOneToOne: false
+            referencedRelation: "gastos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arriendos_abonos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conceptos_gasto: {
         Row: {
           id: number
@@ -189,8 +288,11 @@ export type Database = {
           created_at: string | null
           descripcion: string | null
           fecha: string
+          fecha_revacunacion: string | null
           id: string
           pajilla_id: string | null
+          periodo_revacunacion: string | null
+          requiere_revacunacion: boolean | null
           responsable: string | null
           resultado: string | null
           tenant_id: string
@@ -203,8 +305,11 @@ export type Database = {
           created_at?: string | null
           descripcion?: string | null
           fecha: string
+          fecha_revacunacion?: string | null
           id?: string
           pajilla_id?: string | null
+          periodo_revacunacion?: string | null
+          requiere_revacunacion?: boolean | null
           responsable?: string | null
           resultado?: string | null
           tenant_id?: string
@@ -217,8 +322,11 @@ export type Database = {
           created_at?: string | null
           descripcion?: string | null
           fecha?: string
+          fecha_revacunacion?: string | null
           id?: string
           pajilla_id?: string | null
+          periodo_revacunacion?: string | null
+          requiere_revacunacion?: boolean | null
           responsable?: string | null
           resultado?: string | null
           tenant_id?: string
@@ -473,6 +581,41 @@ export type Database = {
             columns: ["itinerario_id"]
             isOneToOne: false
             referencedRelation: "itinerarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mediciones_leche_animal: {
+        Row: {
+          animal_id: string
+          created_at: string
+          fecha: string
+          id: string
+          litros: number
+          tenant_id: string
+        }
+        Insert: {
+          animal_id: string
+          created_at?: string
+          fecha: string
+          id?: string
+          litros: number
+          tenant_id?: string
+        }
+        Update: {
+          animal_id?: string
+          created_at?: string
+          fecha?: string
+          id?: string
+          litros?: number
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mediciones_leche_animal_animal_id_fkey"
+            columns: ["animal_id"]
+            isOneToOne: false
+            referencedRelation: "animales"
             referencedColumns: ["id"]
           },
         ]
@@ -1098,12 +1241,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1127,11 +1270,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1152,11 +1295,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1177,11 +1320,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1194,11 +1337,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

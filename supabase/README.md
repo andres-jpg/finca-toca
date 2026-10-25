@@ -25,9 +25,15 @@ Ambos usan el schema `public`. Ya no existe `NEXT_PUBLIC_SUPABASE_SCHEMA`.
 > producción, así que no uses staging para medir rendimiento. Si más adelante hace falta, se recrea en
 > `eu-west-1` aplicando la baseline.
 
+## Desarrollo local
+
+`supabase/seed.sql` se ejecuta con `pnpm db:reset` (datos ficticios y usuarios con contraseña `password123`,
+**solo local**). El flujo completo y la tabla de usuarios están en CLAUDE.md, sección *Desarrollo local*.
+
 ## Variables de entorno
 
-`.env.local` (gitignored) apunta a **staging**:
+Para desarrollo normal usa la Supabase local (plantilla en `.env.local.example`). Si necesitas probar contra
+staging, `.env.local` (gitignored) apunta a **staging**:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://wiquvwviaawvpjkthdam.supabase.co
