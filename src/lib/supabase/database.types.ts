@@ -12,6 +12,23 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.18"
   }
+  cafe: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       animales: {
@@ -1351,6 +1368,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  cafe: {
+    Enums: {},
+  },
   public: {
     Enums: {
       animal_raza: [
