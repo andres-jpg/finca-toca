@@ -11,6 +11,26 @@ import {
   GastosCooperativaChart,
   LitrosPorDiaSerieChart,
 } from "@/charts/cooperativa-chart-wrappers";
+import { aLista, aUno, type Rel } from "@/lib/supabase/relaciones";
+
+/** Finca tal como la devuelve el select de `fetchRecMes` (con sus rutas e itinerarios). */
+type FincaRec = {
+  nombre: string;
+  rutas_fincas: Rel<{ rutas_cooperativa: Rel<{ nombre: string }> }>;
+  itinerarios_fincas: Rel<{ itinerarios: Rel<{ nombre: string }> }>;
+};
+
+type RecMes = {
+  litros: number;
+  precio_litro: number;
+  fecha: string;
+  fincas_cooperativa: Rel<FincaRec>;
+};
+
+/** Nombres de las rutas de una finca (vacío si no tiene). */
+function nombresRuta(finca: FincaRec | null | undefined): string[] {
+  return aLista(finca?.rutas_fincas).map((rf) => aUno(rf.rutas_cooperativa)?.nombre ?? "Sin ruta");
+}
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -35,7 +55,7 @@ function ChartSkeleton() {
 const fetchAllRecCooperativa = cache(async function fetchAllRecCooperativa() {
   const supabase = await createClient();
   const PAGE = 1000;
-  const all: any[] = [];
+  const all: { fecha: string; litros: number; precio_litro: number }[] = [];
   let from = 0;
   while (true) {
     const { data, error } = await supabase
@@ -53,7 +73,7 @@ const fetchAllRecCooperativa = cache(async function fetchAllRecCooperativa() {
 
 async function TrendChartSection({ mes, anio }: { mes: number; anio: number }) {
   const allRecData = await fetchAllRecCooperativa();
-  const trendData = allRecData.map((r: any) => ({
+  const trendData = allRecData.map((r) => ({
     fecha: r.fecha as string,
     litros: Number(r.litros),
   }));
@@ -62,7 +82,7 @@ async function TrendChartSection({ mes, anio }: { mes: number; anio: number }) {
 
 async function GastosChartSection() {
   const allRecData = await fetchAllRecCooperativa();
-  const gastosData = allRecData.map((r: any) => ({
+  const gastosData = allRecData.map((r) => ({
     fecha: r.fecha as string,
     litros: Number(r.litros),
     precio_litro: Number(r.precio_litro),
@@ -91,7 +111,7 @@ export default async function CooperativaDashboardPage({
 
   async function fetchRecMes() {
     const PAGE = 1000;
-    const all: any[] = [];
+    const all: RecMes[] = [];
     let from = 0;
     while (true) {
       const { data, error } = await supabase
@@ -129,41 +149,34 @@ export default async function CooperativaDashboardPage({
   ]);
 
   // KPIs del mes
-  const totalLitros = registros.reduce((s, r: any) => s + Number(r.litros), 0);
+  const totalLitros = registros.reduce((s, r) => s + Number(r.litros), 0);
   const totalValor = registros.reduce(
-    (s, r: any) => s + Number(r.litros) * Number(r.precio_litro),
+    (s, r) => s + Number(r.litros) * Number(r.precio_litro),
     0
   );
 
   // Quincenas y aportación Fedegan (0.75%)
   const APORTACION_PCT = 0.0075;
-  const q1Registros = registros.filter((r: any) => parseInt(r.fecha.split("-")[2]) <= 15);
-  const q2Registros = registros.filter((r: any) => parseInt(r.fecha.split("-")[2]) > 15);
+  const q1Registros = registros.filter((r) => parseInt(r.fecha.split("-")[2]) <= 15);
+  const q2Registros = registros.filter((r) => parseInt(r.fecha.split("-")[2]) > 15);
   const quincenas = {
-    q1Litros: q1Registros.reduce((s: number, r: any) => s + Number(r.litros), 0),
-    q1Valor: q1Registros.reduce((s: number, r: any) => s + Number(r.litros) * Number(r.precio_litro), 0),
-    q2Litros: q2Registros.reduce((s: number, r: any) => s + Number(r.litros), 0),
-    q2Valor: q2Registros.reduce((s: number, r: any) => s + Number(r.litros) * Number(r.precio_litro), 0),
+    q1Litros: q1Registros.reduce((s: number, r) => s + Number(r.litros), 0),
+    q1Valor: q1Registros.reduce((s: number, r) => s + Number(r.litros) * Number(r.precio_litro), 0),
+    q2Litros: q2Registros.reduce((s: number, r) => s + Number(r.litros), 0),
+    q2Valor: q2Registros.reduce((s: number, r) => s + Number(r.litros) * Number(r.precio_litro), 0),
   };
   const q1Aportacion = quincenas.q1Valor * APORTACION_PCT;
   const q2Aportacion = quincenas.q2Valor * APORTACION_PCT;
   const fincasActivasCount = (fincasActivas ?? []).length;
   const rutasCount = (rutasData ?? []).length;
   const fincasConRecoleccion = new Set(
-    registros.map((r: any) => {
-      const f = Array.isArray(r.fincas_cooperativa)
-        ? r.fincas_cooperativa[0]
-        : r.fincas_cooperativa;
-      return f?.nombre;
-    })
+    registros.map((r) => aUno(r.fincas_cooperativa)?.nombre)
   ).size;
 
   // Estado de itinerarios hoy: fincas visitadas (con recolección) vs. total de fincas asignadas
-  const fincasVisitadasHoy = new Set((recoleccionesHoy ?? []).map((r: any) => r.finca_id));
-  const estadoItinerarios = (itinerariosData ?? []).map((it: any) => {
-    const fincaIds: number[] = Array.isArray(it.itinerarios_fincas)
-      ? it.itinerarios_fincas.map((iff: any) => iff.finca_id)
-      : [];
+  const fincasVisitadasHoy = new Set((recoleccionesHoy ?? []).map((r) => r.finca_id));
+  const estadoItinerarios = (itinerariosData ?? []).map((it) => {
+    const fincaIds: number[] = aLista(it.itinerarios_fincas).map((iff) => iff.finca_id);
     const total = fincaIds.length;
     const visitadas = fincaIds.filter((id) => fincasVisitadasHoy.has(id)).length;
     return { id: it.id, nombre: it.nombre as string, visitadas, total };
@@ -173,25 +186,14 @@ export default async function CooperativaDashboardPage({
 
   // Litros por ruta
   const rutaMap = new Map<string, number>();
-  registros.forEach((r: any) => {
-    const finca = Array.isArray(r.fincas_cooperativa)
-      ? r.fincas_cooperativa[0]
-      : r.fincas_cooperativa;
-    const rutasFincas = finca?.rutas_fincas;
-    const rutas: any[] = Array.isArray(rutasFincas)
-      ? rutasFincas
-      : rutasFincas
-      ? [rutasFincas]
-      : [];
+  registros.forEach((r) => {
+    const finca = aUno(r.fincas_cooperativa);
+    const rutas = nombresRuta(finca);
     if (rutas.length === 0) {
       const key = "Sin ruta";
       rutaMap.set(key, (rutaMap.get(key) ?? 0) + Number(r.litros));
     } else {
-      rutas.forEach((rf: any) => {
-        const rutaObj = Array.isArray(rf.rutas_cooperativa)
-          ? rf.rutas_cooperativa[0]
-          : rf.rutas_cooperativa;
-        const rutaNombre = rutaObj?.nombre ?? "Sin ruta";
+      rutas.forEach((rutaNombre) => {
         rutaMap.set(rutaNombre, (rutaMap.get(rutaNombre) ?? 0) + Number(r.litros));
       });
     }
@@ -203,18 +205,14 @@ export default async function CooperativaDashboardPage({
 
   // Litros por finca (con rutas para filtrado en el chart)
   const fincaDataMap = new Map<string, { litros: number; rutas: Set<string> }>();
-  registros.forEach((r: any) => {
-    const finca = Array.isArray(r.fincas_cooperativa)
-      ? r.fincas_cooperativa[0]
-      : r.fincas_cooperativa;
+  registros.forEach((r) => {
+    const finca = aUno(r.fincas_cooperativa);
     const nombre = finca?.nombre ?? "Desconocida";
     const entry = fincaDataMap.get(nombre) ?? { litros: 0, rutas: new Set<string>() };
     entry.litros += Number(r.litros);
-    const rutasFincas = finca?.rutas_fincas;
-    const rfList: any[] = Array.isArray(rutasFincas) ? rutasFincas : rutasFincas ? [rutasFincas] : [];
-    rfList.forEach((rf: any) => {
-      const rutaObj = Array.isArray(rf.rutas_cooperativa) ? rf.rutas_cooperativa[0] : rf.rutas_cooperativa;
-      if (rutaObj?.nombre) entry.rutas.add(rutaObj.nombre);
+    aLista(finca?.rutas_fincas).forEach((rf) => {
+      const rutaNombre = aUno(rf.rutas_cooperativa)?.nombre;
+      if (rutaNombre) entry.rutas.add(rutaNombre);
     });
     fincaDataMap.set(nombre, entry);
   });
@@ -225,15 +223,12 @@ export default async function CooperativaDashboardPage({
   }));
 
   // Litros por día y por ruta / por itinerario, para el mes filtrado
-  function groupByDiaYSerie(getNombres: (finca: any) => string[]) {
+  function groupByDiaYSerie(getNombres: (finca: FincaRec | null) => string[]) {
     const diaMap = new Map<number, Map<string, number>>();
     const seriesSet = new Set<string>();
-    registros.forEach((r: any) => {
+    registros.forEach((r) => {
       const dia = parseInt(r.fecha.split("-")[2], 10);
-      const finca = Array.isArray(r.fincas_cooperativa)
-        ? r.fincas_cooperativa[0]
-        : r.fincas_cooperativa;
-      const nombres = getNombres(finca);
+      const nombres = getNombres(aUno(r.fincas_cooperativa));
       const dayMap = diaMap.get(dia) ?? new Map<string, number>();
       nombres.forEach((nombre) => {
         seriesSet.add(nombre);
@@ -254,28 +249,15 @@ export default async function CooperativaDashboardPage({
     return { data, series };
   }
 
-  const litrosPorDiaRuta = groupByDiaYSerie((finca: any) => {
-    const rutasFincas = finca?.rutas_fincas;
-    const rutas: any[] = Array.isArray(rutasFincas) ? rutasFincas : rutasFincas ? [rutasFincas] : [];
-    if (rutas.length === 0) return ["Sin ruta"];
-    return rutas.map((rf: any) => {
-      const rutaObj = Array.isArray(rf.rutas_cooperativa) ? rf.rutas_cooperativa[0] : rf.rutas_cooperativa;
-      return rutaObj?.nombre ?? "Sin ruta";
-    });
+  const litrosPorDiaRuta = groupByDiaYSerie((finca) => {
+    const rutas = nombresRuta(finca);
+    return rutas.length === 0 ? ["Sin ruta"] : rutas;
   });
 
-  const litrosPorDiaItinerario = groupByDiaYSerie((finca: any) => {
-    const itinerariosFincas = finca?.itinerarios_fincas;
-    const itinerarios: any[] = Array.isArray(itinerariosFincas)
-      ? itinerariosFincas
-      : itinerariosFincas
-      ? [itinerariosFincas]
-      : [];
+  const litrosPorDiaItinerario = groupByDiaYSerie((finca) => {
+    const itinerarios = aLista(finca?.itinerarios_fincas);
     if (itinerarios.length === 0) return ["Sin itinerario"];
-    return itinerarios.map((iff: any) => {
-      const itObj = Array.isArray(iff.itinerarios) ? iff.itinerarios[0] : iff.itinerarios;
-      return itObj?.nombre ?? "Sin itinerario";
-    });
+    return itinerarios.map((iff) => aUno(iff.itinerarios)?.nombre ?? "Sin itinerario");
   });
 
   return (

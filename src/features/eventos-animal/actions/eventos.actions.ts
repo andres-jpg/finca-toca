@@ -10,6 +10,7 @@ import {
   estadoDesdeEvento,
 } from "@/lib/animales/estados";
 import { calcularFechaRevacunacion } from "@/lib/animales/revacunacion";
+import type { TablesUpdate } from "@/lib/supabase/database.types";
 import type {
   EventoAnimal,
   PeriodoRevacunacion,
@@ -95,7 +96,7 @@ async function aplicarTransicionEstado(
     estadoDesdeEvento(e.tipo_evento, e.resultado)
   );
 
-  const update: Record<string, string> = {};
+  const update: TablesUpdate<"animales"> = {};
 
   if (transicion.productivo && !efectosPosteriores.some((e) => e.productivo)) {
     update.estado_productivo = transicion.productivo;
@@ -159,7 +160,7 @@ async function recalcularEstadoTrasBorrado(
   const posteriores = restantes.filter((e) => e.fecha > evento.fecha);
   const previos = restantes.filter((e) => e.fecha <= evento.fecha);
 
-  const update: Record<string, string> = {};
+  const update: TablesUpdate<"animales"> = {};
 
   if (borrado.productivo && !posteriores.some((e) => efecto(e).productivo)) {
     const anterior = previos.map(efecto).find((t) => t.productivo)?.productivo;

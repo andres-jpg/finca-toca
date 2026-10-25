@@ -51,7 +51,7 @@ export function RutaForm({ ruta, fincas, fincaRutaMap, onSuccess }: RutaFormProp
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<RutaFormValues>({
-    resolver: zodResolver(rutaSchema) as any,
+    resolver: zodResolver(rutaSchema),
     defaultValues: {
       nombre: ruta?.nombre ?? "",
       finca_ids: initialAssigned.map((f) => f.id),

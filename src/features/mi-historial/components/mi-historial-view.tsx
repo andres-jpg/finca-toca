@@ -60,6 +60,9 @@ export function MiHistorialView() {
   }, []);
 
   useEffect(() => {
+    // Carga inicial y al recuperar la conexión: `cargar` marca "cargando" antes de pedir los
+    // datos, y ese estado es justo lo que ve el usuario mientras tanto.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (isOnline) cargar();
   }, [isOnline, cargar]);
 

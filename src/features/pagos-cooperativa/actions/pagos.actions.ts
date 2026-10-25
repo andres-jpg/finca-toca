@@ -7,14 +7,21 @@ import { getCurrentUser } from "@/lib/auth/get-user-role";
 import { fetchAllRecolecciones, fechaHaceNDias } from "@/lib/cooperativa/recolecciones";
 import { getItinerarioAsignado } from "@/features/itinerarios/actions/itinerarios.actions";
 import type { PagoFinca } from "@/types";
+import type { Tables, TablesUpdate } from "@/lib/supabase/database.types";
+import { aLista, aUno, type Rel } from "@/lib/supabase/relaciones";
 import type { ActivarPagoItem, FincaConLitros, ItinerarioGroup } from "../schemas/pago.schema";
 
 const PAGO_SELECT =
   "id, finca_id, itinerario_id, fecha_inicio, fecha_fin, litros, estado, responsable, fecha_marcado, activado_por, marcado_por, created_at, fincas_cooperativa(nombre), itinerarios(nombre)";
 
-function mapPagoRow(row: any): PagoFinca {
-  const fc = Array.isArray(row.fincas_cooperativa) ? row.fincas_cooperativa[0] : row.fincas_cooperativa;
-  const it = Array.isArray(row.itinerarios) ? row.itinerarios[0] : row.itinerarios;
+type PagoRow = Omit<Tables<"pagos_finca">, "updated_at"> & {
+  fincas_cooperativa: Rel<{ nombre: string }>;
+  itinerarios: Rel<{ nombre: string }>;
+};
+
+function mapPagoRow(row: PagoRow): PagoFinca {
+  const fc = aUno(row.fincas_cooperativa);
+  const it = aUno(row.itinerarios);
   return {
     id: row.id,
     finca_id: row.finca_id,
@@ -24,12 +31,12 @@ function mapPagoRow(row: any): PagoFinca {
     fecha_inicio: row.fecha_inicio,
     fecha_fin: row.fecha_fin,
     litros: Number(row.litros),
-    estado: row.estado,
-    responsable: row.responsable,
+    estado: row.estado as PagoFinca["estado"], // CHECK en BD
+    responsable: row.responsable as PagoFinca["responsable"], // CHECK en BD
     fecha_marcado: row.fecha_marcado,
     activado_por: row.activado_por,
     marcado_por: row.marcado_por,
-    created_at: row.created_at,
+    created_at: row.created_at ?? "",
   };
 }
 
@@ -51,7 +58,7 @@ export async function getFincasConLitrosPorRuta(
 
   if (error || !rutaFincas) return [];
 
-  const fincaIds = rutaFincas.map((rf: any) => rf.finca_id as number);
+  const fincaIds = rutaFincas.map((rf) => rf.finca_id as number);
   if (fincaIds.length === 0) return [];
 
   // Litros por finca en el período
@@ -64,16 +71,9 @@ export async function getFincasConLitrosPorRuta(
   // Resolver emails de conductores en batch
   const conductorUserIds = new Set<string>();
   for (const rf of rutaFincas) {
-    const fc = Array.isArray((rf as any).fincas_cooperativa)
-      ? (rf as any).fincas_cooperativa[0]
-      : (rf as any).fincas_cooperativa;
-    const itf = fc?.itinerarios_fincas;
-    const itfRow = Array.isArray(itf) ? itf[0] : itf;
-    const it = itfRow?.itinerarios;
-    const itRow = Array.isArray(it) ? it[0] : it;
-    const ui = itRow?.user_itinerarios;
-    const uiRows: any[] = Array.isArray(ui) ? ui : ui ? [ui] : [];
-    for (const u of uiRows) if (u?.user_id) conductorUserIds.add(u.user_id);
+    const fc = aUno(rf.fincas_cooperativa);
+    const itRow = aUno(aUno(fc?.itinerarios_fincas)?.itinerarios);
+    for (const u of aLista(itRow?.user_itinerarios)) if (u?.user_id) conductorUserIds.add(u.user_id);
   }
 
   const emailMap = new Map<string, string>();
@@ -87,21 +87,14 @@ export async function getFincasConLitrosPorRuta(
   // Construir fincas con litros
   const fincaRows: FincaConLitros[] = [];
   for (const rf of rutaFincas) {
-    const fc = Array.isArray((rf as any).fincas_cooperativa)
-      ? (rf as any).fincas_cooperativa[0]
-      : (rf as any).fincas_cooperativa;
+    const fc = aUno(rf.fincas_cooperativa);
     if (!fc) continue;
 
     const litros = litrosPorFinca.get(rf.finca_id) ?? 0;
     if (litros === 0) continue; // excluir fincas sin recolección en el período
 
-    const itf = fc?.itinerarios_fincas;
-    const itfRow = Array.isArray(itf) ? itf[0] : itf;
-    const it = itfRow?.itinerarios;
-    const itRow = Array.isArray(it) ? it[0] : it;
-    const ui = itRow?.user_itinerarios;
-    const uiRows: any[] = Array.isArray(ui) ? ui : ui ? [ui] : [];
-    const conductorUserId = uiRows[0]?.user_id ?? null;
+    const itRow = aUno(aUno(fc.itinerarios_fincas)?.itinerarios);
+    const conductorUserId = aLista(itRow?.user_itinerarios)[0]?.user_id ?? null;
 
     fincaRows.push({
       finca_id: rf.finca_id,
@@ -110,7 +103,7 @@ export async function getFincasConLitrosPorRuta(
       itinerario_nombre: itRow?.nombre ?? null,
       conductor_email: conductorUserId ? (emailMap.get(conductorUserId) ?? null) : null,
       litros,
-      metodo_pago: fc.metodo_pago ?? "conductor",
+      metodo_pago: (fc.metodo_pago ?? "conductor") as FincaConLitros["metodo_pago"], // CHECK en BD
     });
   }
 
@@ -207,7 +200,7 @@ export async function getMisPagos(): Promise<PagoFinca[]> {
   // Paginado por la misma razón que getMisRecolecciones: evitar el max_rows
   // de PostgREST truncando la ventana de 30 días en itinerarios grandes.
   const PAGE = 1000;
-  const allRows: any[] = [];
+  const allRows: PagoRow[] = [];
   let from = 0;
   while (true) {
     const { data, error } = await supabase
@@ -236,7 +229,7 @@ export async function updateEstadoPago(
   await requireRole(["cooperativa_admin"]);
   const supabase = await createClient();
 
-  const update: Record<string, unknown> = { estado, updated_at: new Date().toISOString() };
+  const update: TablesUpdate<"pagos_finca"> = { estado, updated_at: new Date().toISOString() };
   if (responsable) update.responsable = responsable;
 
   const { error } = await supabase.from("pagos_finca").update(update).eq("id", id);

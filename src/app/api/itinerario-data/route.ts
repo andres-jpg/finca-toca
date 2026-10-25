@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserRole, getCurrentUser } from "@/lib/auth/get-user-role";
+import { aLista, aUno } from "@/lib/supabase/relaciones";
 
 const ITINERARIO_SELECT =
   "id, nombre, itinerarios_fincas(finca_id, orden, fincas_cooperativa(id, nombre, precio_litro))";
@@ -37,12 +38,10 @@ export async function GET() {
     return new NextResponse("Error cargando itinerario", { status: 500 });
   }
 
-  const fincas = ((itRow.itinerarios_fincas as any[]) ?? [])
-    .sort((a: any, b: any) => a.orden - b.orden)
-    .map((iff: any) => {
-      const f = Array.isArray(iff.fincas_cooperativa)
-        ? iff.fincas_cooperativa[0]
-        : iff.fincas_cooperativa;
+  const fincas = [...aLista(itRow.itinerarios_fincas)]
+    .sort((a, b) => a.orden - b.orden)
+    .map((iff) => {
+      const f = aUno(iff.fincas_cooperativa);
       return {
         id: f?.id as number,
         nombre: (f?.nombre ?? "—") as string,
@@ -63,7 +62,7 @@ export async function GET() {
         .eq("fecha", today)
     : { data: [] };
 
-  const syncedToday = (syncedRows ?? []).map((r: any) => ({
+  const syncedToday = (syncedRows ?? []).map((r) => ({
     finca_id: r.finca_id as number,
     serverId: r.id as number,
     litros: Number(r.litros ?? 0),
@@ -81,7 +80,7 @@ export async function GET() {
         .eq("responsable", "conductor")
     : { data: [] };
 
-  const pagosActivos = (pagosRows ?? []).map((p: any) => ({
+  const pagosActivos = (pagosRows ?? []).map((p) => ({
     id: p.id as number,
     finca_id: p.finca_id as number,
     fecha_inicio: p.fecha_inicio as string,

@@ -4,19 +4,18 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/check-permissions";
 import type { FincaCooperativa } from "@/types";
+import type { Tables } from "@/lib/supabase/database.types";
+import { aUno, type Rel } from "@/lib/supabase/relaciones";
 
 const FINCA_SELECT =
   "id, nombre, precio_litro, activa, created_at, metodo_pago, rutas_fincas(rutas_cooperativa(nombre))";
 
-function mapFinca(row: any): FincaCooperativa {
-  const rf = row.rutas_fincas;
-  const rutasFincas: any[] = Array.isArray(rf) ? rf : rf ? [rf] : [];
-  const rutaObj = rutasFincas[0]?.rutas_cooperativa;
-  const rutaNombre = rutaObj
-    ? Array.isArray(rutaObj)
-      ? rutaObj[0]?.nombre ?? null
-      : rutaObj.nombre ?? null
-    : null;
+type FincaRow = Tables<"fincas_cooperativa"> & {
+  rutas_fincas: Rel<{ rutas_cooperativa: Rel<{ nombre: string }> }>;
+};
+
+function mapFinca(row: FincaRow): FincaCooperativa {
+  const rutaNombre = aUno(aUno(row.rutas_fincas)?.rutas_cooperativa)?.nombre ?? null;
   return {
     id: row.id,
     nombre: row.nombre,
@@ -24,7 +23,7 @@ function mapFinca(row: any): FincaCooperativa {
     activa: row.activa,
     created_at: row.created_at,
     ruta_nombre: rutaNombre,
-    metodo_pago: row.metodo_pago ?? 'conductor',
+    metodo_pago: (row.metodo_pago ?? "conductor") as FincaCooperativa["metodo_pago"], // CHECK en BD
   };
 }
 

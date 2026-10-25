@@ -5,28 +5,32 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/check-permissions";
 import { getUserRole, getCurrentUser } from "@/lib/auth/get-user-role";
 import type { Itinerario, ItinerarioFinca } from "@/types";
+import { aLista, aUno, type Rel } from "@/lib/supabase/relaciones";
 
-function mapItinerarioRow(row: any): Itinerario {
-  const fincas: ItinerarioFinca[] = (row.itinerarios_fincas ?? [])
-    .sort((a: any, b: any) => a.orden - b.orden)
-    .map((iff: any) => {
-      const f = Array.isArray(iff.fincas_cooperativa)
-        ? iff.fincas_cooperativa[0]
-        : iff.fincas_cooperativa;
-      const rutasFincasRaw = f?.rutas_fincas;
-      const rutasFincas: any[] = Array.isArray(rutasFincasRaw)
-        ? rutasFincasRaw
-        : rutasFincasRaw
-        ? [rutasFincasRaw]
-        : [];
-      const primeraRuta = rutasFincas[0]?.rutas_cooperativa;
-      const rutaNombre = primeraRuta
-        ? Array.isArray(primeraRuta)
-          ? primeraRuta[0]?.nombre ?? null
-          : primeraRuta.nombre ?? null
-        : null;
+type ItinerarioRow = {
+  id: number;
+  nombre: string;
+  itinerarios_fincas: Rel<{
+    orden: number;
+    fincas_cooperativa: Rel<{
+      id: number;
+      nombre: string;
+      precio_litro: number;
+      activa: boolean;
+      created_at: string;
+      rutas_fincas: Rel<{ rutas_cooperativa: Rel<{ nombre: string }> }>;
+    }>;
+  }>;
+};
+
+function mapItinerarioRow(row: ItinerarioRow): Itinerario {
+  const fincas: ItinerarioFinca[] = [...aLista(row.itinerarios_fincas)]
+    .sort((a, b) => a.orden - b.orden)
+    .map((iff) => {
+      const f = aUno(iff.fincas_cooperativa);
+      const rutaNombre = aUno(aUno(f?.rutas_fincas)?.rutas_cooperativa)?.nombre ?? null;
       return {
-        id: f?.id,
+        id: f?.id ?? 0,
         nombre: f?.nombre ?? "—",
         precio_litro: Number(f?.precio_litro ?? 0),
         activa: f?.activa ?? true,
@@ -122,14 +126,12 @@ export async function getEstadoItinerarioPorFecha(
     .single();
   if (error || !data) throw new Error("Itinerario no encontrado");
 
-  const ifList: any[] = Array.isArray(data.itinerarios_fincas) ? data.itinerarios_fincas : [];
-  const fincas = ifList
-    .sort((a: any, b: any) => (a.orden ?? 0) - (b.orden ?? 0))
-    .map((iff: any) => {
-      const f = Array.isArray(iff.fincas_cooperativa) ? iff.fincas_cooperativa[0] : iff.fincas_cooperativa;
-      return f ? { id: f.id as number, nombre: f.nombre as string, activa: Boolean(f.activa) } : null;
-    })
-    .filter(Boolean) as { id: number; nombre: string; activa: boolean }[];
+  const fincas = [...aLista(data.itinerarios_fincas)]
+    .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))
+    .flatMap((iff) => {
+      const f = aUno(iff.fincas_cooperativa);
+      return f ? [{ id: f.id, nombre: f.nombre, activa: Boolean(f.activa) }] : [];
+    });
 
   if (fincas.length === 0) {
     return { itinerarioId, itinerarioNombre: data.nombre, fecha, total: 0, visitadas: [], faltantes: [], completado: false };

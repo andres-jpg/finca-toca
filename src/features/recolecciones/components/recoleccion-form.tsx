@@ -76,7 +76,7 @@ export function RecoleccionForm({
     watch,
     formState: { errors, isSubmitting },
   } = useForm<RecoleccionFormValues>({
-    resolver: zodResolver(recoleccionSchema) as any,
+    resolver: zodResolver(recoleccionSchema),
     defaultValues: {
       finca_id: initialFincaId || undefined,
       fecha: recoleccion?.fecha ?? formatDate(new Date()),
@@ -96,7 +96,8 @@ export function RecoleccionForm({
     setSelectedRutaId(id);
     // Reset finca when ruta changes
     setSelectedFincaId(0);
-    setValue("finca_id", undefined as any);
+    // Vacía el campo (el schema pide un número): hay que volver a elegir finca
+    setValue("finca_id", undefined as unknown as number);
   };
 
   const onSubmit = async (data: RecoleccionFormValues) => {

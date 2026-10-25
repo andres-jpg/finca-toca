@@ -16,6 +16,8 @@ import type {
   VacaOrigen,
   CriaAnimal,
 } from "@/types";
+import type { Tables } from "@/lib/supabase/database.types";
+import { aUno, type Rel } from "@/lib/supabase/relaciones";
 
 /**
  * Nombre del toro del lote elegido como padre de la cría.
@@ -48,9 +50,15 @@ async function nombreToroDeLote(
 const SELECT_FIELDS =
   "id, created_at, identificador, nombre, nombre_largo, sexo, raza, sangre, origen, estado_productivo, estado_reproductivo, fecha_compra, fecha_nacimiento, numero_registro, madre_id, madre_externa_nombre, padre_id, padre_pajilla_nombre, padre_alquiler_nombre, padre_alquiler_raza, concentrado_por_ordeno, alta, madre:madre_id(nombre), padre:padre_id(nombre)";
 
-function mapRow(row: any): Animal {
-  const madreRaw = Array.isArray(row.madre) ? row.madre[0] : row.madre;
-  const padreRaw = Array.isArray(row.padre) ? row.padre[0] : row.padre;
+// El select no trae `tenant_id` (RLS ya filtra por cliente).
+type AnimalRow = Omit<Tables<"animales">, "tenant_id"> & {
+  madre: Rel<{ nombre: string }>;
+  padre: Rel<{ nombre: string }>;
+};
+
+function mapRow(row: AnimalRow): Animal {
+  const madreRaw = aUno(row.madre);
+  const padreRaw = aUno(row.padre);
   return {
     id: row.id,
     created_at: row.created_at,
@@ -118,14 +126,14 @@ export async function getAnimalById(id: string): Promise<AnimalDetalle | null> {
     .select("id, identificador, nombre, estado_productivo, estado_reproductivo, alta, sexo")
     .or(`madre_id.eq.${id},padre_id.eq.${id}`);
 
-  const madreRaw = Array.isArray(animal.madre) ? animal.madre[0] : animal.madre;
-  const padreRaw = Array.isArray(animal.padre) ? animal.padre[0] : animal.padre;
+  const madreRaw = aUno(animal.madre);
+  const padreRaw = aUno(animal.padre);
 
   const crias: CriaAnimal[] = (criasRows ?? [])
-    .sort((a: any, b: any) =>
+    .sort((a, b) =>
       String(a.identificador).localeCompare(String(b.identificador), undefined, { numeric: true })
     )
-    .map((c: any) => ({
+    .map((c) => ({
       id: c.id,
       sexo: c.sexo,
       identificador: c.identificador,

@@ -15,13 +15,13 @@ export async function getRutas(): Promise<RutaCooperativa[]> {
     .order("nombre");
   if (error) throw new Error("No se pudieron cargar las rutas");
 
-  return (data ?? []).map((row: any) => ({
+  return (data ?? []).map((row) => ({
     id: row.id,
     nombre: row.nombre,
     created_at: row.created_at,
     fincas: (row.rutas_fincas ?? [])
-      .sort((a: any, b: any) => a.orden - b.orden)
-      .map((rf: any) => {
+      .sort((a, b) => a.orden - b.orden)
+      .map((rf) => {
         const f = Array.isArray(rf.fincas_cooperativa)
           ? rf.fincas_cooperativa[0]
           : rf.fincas_cooperativa;

@@ -45,7 +45,7 @@ export function MedicionLecheForm({
     watch,
     formState: { errors, isSubmitting },
   } = useForm<MedicionLecheFormValues>({
-    resolver: zodResolver(medicionLecheSchema) as any,
+    resolver: zodResolver(medicionLecheSchema),
     defaultValues: {
       fecha: medicion ? new Date(medicion.fecha + "T00:00:00") : new Date(),
       litros: medicion?.litros ?? undefined,

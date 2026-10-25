@@ -164,7 +164,7 @@ export function EventForm({
     watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    resolver: zodResolver(eventoSchema) as any,
+    resolver: zodResolver(eventoSchema),
     defaultValues: {
       animal_id: animalId,
       animal_tipo: animalTipo,

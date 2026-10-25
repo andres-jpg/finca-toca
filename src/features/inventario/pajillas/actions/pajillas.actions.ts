@@ -18,7 +18,7 @@ export async function getPajillas(): Promise<Pajilla[]> {
 
   if (error) throw new Error("No se pudo cargar el inventario de pajillas");
 
-  return (data ?? []).map((row: any) => ({
+  return (data ?? []).map((row) => ({
     id: row.id,
     created_at: row.created_at,
     toro_nombre: row.toro_nombre,

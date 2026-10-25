@@ -40,7 +40,7 @@ export function PajillaForm({ pajilla, onSuccess }: PajillaFormProps) {
     watch,
     formState: { errors, isSubmitting },
   } = useForm<PajillaFormValues>({
-    resolver: zodResolver(pajillaSchema) as any,
+    resolver: zodResolver(pajillaSchema),
     defaultValues: {
       toro_nombre: pajilla?.toro_nombre ?? "",
       toro_ref_id: pajilla?.toro_ref_id ?? "",
@@ -66,8 +66,8 @@ export function PajillaForm({ pajilla, onSuccess }: PajillaFormProps) {
         toast.success("Pajillas registradas correctamente");
       }
       onSuccess();
-    } catch (err: any) {
-      toast.error(err.message ?? "Error al guardar el lote");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al guardar el lote");
     }
   };
 

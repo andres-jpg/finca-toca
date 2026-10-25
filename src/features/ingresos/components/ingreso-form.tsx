@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ingresoSchema } from "@/features/ingresos/schemas/ingreso.schema";
 import { createIngreso, updateIngreso } from "@/features/ingresos/actions/ingresos.actions";
@@ -65,7 +65,7 @@ export function IngresoForm({ ingreso, conceptos, vacas = [], toros = [], onSucc
     watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    resolver: zodResolver(ingresoSchema) as any,
+    resolver: zodResolver(ingresoSchema) as unknown as Resolver<FormValues>,
     defaultValues: {
       fecha: ingreso?.fecha ? new Date(ingreso.fecha + "T00:00:00") : new Date(),
       concepto_id: initialConceptoId,

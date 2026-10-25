@@ -156,43 +156,43 @@ export default async function DashboardPage({
   const sinEstadoReproductivo = hembras.filter((v) => !v.estado_reproductivo).length;
 
   // Datos para gráfico de líneas: solo fecha + valor (sin concepto), histórico completo
-  const allGastos = (gastosRaw ?? []).map((g: any) => ({
+  const allGastos = (gastosRaw ?? []).map((g) => ({
     fecha: g.fecha as string,
     valor: g.valor as number,
   }));
-  const allIngresos = (ingresosRaw ?? []).map((i: any) => ({
+  const allIngresos = (ingresosRaw ?? []).map((i) => ({
     fecha: i.fecha as string,
     valor: i.valor as number,
   }));
 
   // Datos para donuts: concepto + valor — rango filtrado en JS cuando hay filtro activo
   const gastosDonutRows = hasFilter
-    ? (gastosRaw ?? []).filter((g: any) => inRange(g.fecha, selected.start, selected.end))
+    ? (gastosRaw ?? []).filter((g) => inRange(g.fecha, selected.start, selected.end))
     : (gastosRaw ?? []);
   const ingresosDonutRows = hasFilter
-    ? (ingresosRaw ?? []).filter((i: any) => inRange(i.fecha, selected.start, selected.end))
+    ? (ingresosRaw ?? []).filter((i) => inRange(i.fecha, selected.start, selected.end))
     : (ingresosRaw ?? []);
-  const donutGastos = gastosDonutRows.map((g: any) => ({
+  const donutGastos = gastosDonutRows.map((g) => ({
     concepto: g.subconceptos_gasto?.conceptos_gasto?.nombre ?? "Otros",
     valor: g.valor as number,
   }));
-  const donutIngresos = ingresosDonutRows.map((i: any) => ({
+  const donutIngresos = ingresosDonutRows.map((i) => ({
     concepto: i.subconceptos_ingreso?.conceptos_ingreso?.nombre ?? "Otros",
     valor: i.valor as number,
   }));
 
   const totalGastos = (gastosRaw ?? [])
-    .filter((g: any) => inRange(g.fecha, selected.start, selected.end))
-    .reduce((s: number, r: any) => s + r.valor, 0);
+    .filter((g) => inRange(g.fecha, selected.start, selected.end))
+    .reduce((s: number, r) => s + r.valor, 0);
   const lastGastos = (gastosRaw ?? [])
-    .filter((g: any) => inRange(g.fecha, prev.start, prev.end))
-    .reduce((s: number, r: any) => s + r.valor, 0);
+    .filter((g) => inRange(g.fecha, prev.start, prev.end))
+    .reduce((s: number, r) => s + r.valor, 0);
   const totalIngresos = (ingresosRaw ?? [])
-    .filter((i: any) => inRange(i.fecha, selected.start, selected.end))
-    .reduce((s: number, r: any) => s + r.valor, 0);
+    .filter((i) => inRange(i.fecha, selected.start, selected.end))
+    .reduce((s: number, r) => s + r.valor, 0);
   const lastIngresos = (ingresosRaw ?? [])
-    .filter((i: any) => inRange(i.fecha, prev.start, prev.end))
-    .reduce((s: number, r: any) => s + r.valor, 0);
+    .filter((i) => inRange(i.fecha, prev.start, prev.end))
+    .reduce((s: number, r) => s + r.valor, 0);
 
   const gastosTrend = calcTrend(totalGastos, lastGastos);
   const ingresosTrend = calcTrend(totalIngresos, lastIngresos);
@@ -200,31 +200,35 @@ export default async function DashboardPage({
   // "Leche extraída" = cantina + cría: se ordeñó igual, se venda o se quede para los terneros.
   // Los cortes que van acompañados de dinero (quincenas) sí usan solo cantina, que es la
   // única que generó ingreso.
-  const totalExtraido = (r: any) => r.litros_cantina + r.litros_cria;
+  const totalExtraido = (r: { litros_cantina: number; litros_cria: number }) =>
+    r.litros_cantina + r.litros_cria;
 
-  const extMes = (extraccionesRaw ?? []).filter((r: any) => inRange(r.fecha, selected.start, selected.end));
-  const litrosMes = extMes.reduce((s: number, r: any) => s + totalExtraido(r), 0);
-  const cantinaMes = extMes.reduce((s: number, r: any) => s + r.litros_cantina, 0);
-  const criaMes = extMes.reduce((s: number, r: any) => s + r.litros_cria, 0);
+  const extMes = (extraccionesRaw ?? []).filter((r) => inRange(r.fecha, selected.start, selected.end));
+  const litrosMes = extMes.reduce((s: number, r) => s + totalExtraido(r), 0);
+  const cantinaMes = extMes.reduce((s: number, r) => s + r.litros_cantina, 0);
+  const criaMes = extMes.reduce((s: number, r) => s + r.litros_cria, 0);
   const litrosPorVacaHoy = vacasProduccion > 0 ? lecheHoy.total / vacasProduccion : 0;
-  const extMesConVacas = extMes.filter((r: any) => r.vacas_en_produccion != null && r.vacas_en_produccion > 0);
+  const extMesConVacas = extMes.filter(
+    (r): r is typeof r & { vacas_en_produccion: number } =>
+      r.vacas_en_produccion != null && r.vacas_en_produccion > 0
+  );
   const litrosPorVacaMes = extMesConVacas.length > 0
-    ? extMesConVacas.reduce((s: number, r: any) => s + totalExtraido(r) / r.vacas_en_produccion, 0) / extMesConVacas.length
+    ? extMesConVacas.reduce((s: number, r) => s + totalExtraido(r) / r.vacas_en_produccion, 0) / extMesConVacas.length
     : vacasProduccion > 0 ? litrosMes / vacasProduccion : 0;
   const APORTACION_PCT = 0.0075;
   const quincenas = {
     q1Litros: (extraccionesRaw ?? [])
-      .filter((r: any) => inRange(r.fecha, q1Start, q1End))
-      .reduce((s: number, r: any) => s + r.litros_cantina, 0),
+      .filter((r) => inRange(r.fecha, q1Start, q1End))
+      .reduce((s: number, r) => s + r.litros_cantina, 0),
     q1Valor: (ingresosRaw ?? [])
-      .filter((r: any) => r.source === "leche_extraccion" && inRange(r.fecha, q1Start, q1End))
-      .reduce((s: number, r: any) => s + r.valor, 0),
+      .filter((r) => r.source === "leche_extraccion" && inRange(r.fecha, q1Start, q1End))
+      .reduce((s: number, r) => s + r.valor, 0),
     q2Litros: (extraccionesRaw ?? [])
-      .filter((r: any) => inRange(r.fecha, q2Start, q2End))
-      .reduce((s: number, r: any) => s + r.litros_cantina, 0),
+      .filter((r) => inRange(r.fecha, q2Start, q2End))
+      .reduce((s: number, r) => s + r.litros_cantina, 0),
     q2Valor: (ingresosRaw ?? [])
-      .filter((r: any) => r.source === "leche_extraccion" && inRange(r.fecha, q2Start, q2End))
-      .reduce((s: number, r: any) => s + r.valor, 0),
+      .filter((r) => r.source === "leche_extraccion" && inRange(r.fecha, q2Start, q2End))
+      .reduce((s: number, r) => s + r.valor, 0),
   };
   const q1Aportacion = quincenas.q1Valor * APORTACION_PCT;
   const q2Aportacion = quincenas.q2Valor * APORTACION_PCT;
@@ -232,7 +236,7 @@ export default async function DashboardPage({
   const totalIngresosNeto = totalIngresos - totalAportacion;
 
   // La gráfica es de extracciones, así que muestra el total ordeñado (cantina + cría).
-  const allExtracciones = (extraccionesRaw ?? []).map((e: any) => ({
+  const allExtracciones = (extraccionesRaw ?? []).map((e) => ({
     fecha: e.fecha as string,
     litros: totalExtraido(e) as number,
     vacasEnProduccion: (e.vacas_en_produccion as number | null) ?? null,

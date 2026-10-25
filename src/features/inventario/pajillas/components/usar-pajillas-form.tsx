@@ -21,7 +21,7 @@ export function UsarPajillasForm({ pajilla, onSuccess }: UsarPajillasFormProps) 
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<UsarPajillasFormValues>({
-    resolver: zodResolver(usarPajillasSchema) as any,
+    resolver: zodResolver(usarPajillasSchema),
     defaultValues: { cantidad: 1 },
   });
 
@@ -32,8 +32,8 @@ export function UsarPajillasForm({ pajilla, onSuccess }: UsarPajillasFormProps) 
         `${values.cantidad} pajilla(s) de ${pajilla.toro_nombre} registradas como usadas`
       );
       onSuccess();
-    } catch (err: any) {
-      toast.error(err.message ?? "Error al registrar el uso");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al registrar el uso");
     }
   };
 

@@ -166,6 +166,8 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
     // el caché de fincas/precios con datos obsoletos. `ignore` descarta la respuesta si
     // el efecto ya se volvió a ejecutar.
     let ignore = false;
+    // Marca "cargando caché" al empezar cada carga (y al volver la conexión).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoadingCache(true);
 
     fetch("/api/itinerario-data")
@@ -275,6 +277,8 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
         precio_litro: finca.precio_litro,
         serverId: null,
         syncStatus: "pending",
+        // Manejador de evento (no render): la hora actual es lo que se quiere guardar.
+        // eslint-disable-next-line react-hooks/purity
         createdAt: Date.now(),
         syncedAt: null,
       });
@@ -305,6 +309,8 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
       await db.pagosLocal.update(pagoLocalId, {
         estado: nuevoEstado,
         responsable,
+        // Manejador de evento (no render).
+        // eslint-disable-next-line react-hooks/purity
         fechaMarcadoLocal: Date.now(),
         syncStatus: "pending",
       });

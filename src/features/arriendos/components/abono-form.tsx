@@ -45,7 +45,7 @@ export function AbonoForm({
     watch,
     formState: { errors, isSubmitting },
   } = useForm<AbonoFormValues>({
-    resolver: zodResolver(abonoSchema) as any,
+    resolver: zodResolver(abonoSchema),
     defaultValues: {
       fecha: abono ? new Date(abono.fecha + "T00:00:00") : new Date(),
       valor: abono?.valor ?? undefined,
