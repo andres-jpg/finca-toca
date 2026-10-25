@@ -6,7 +6,9 @@
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:diff": "supabase db diff -f",
+    "db:push:staging": "supabase db push --linked"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

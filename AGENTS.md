@@ -260,16 +260,25 @@ The dashboard page (`app/dashboard/page.tsx`) accepts `searchParams` with option
 ```
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY
-NEXT_PUBLIC_SUPABASE_SCHEMA          # optional — defaults to "public", set to "preview" for preview env
 SUPABASE_SERVICE_ROLE_KEY            # server-only — createAdminClient() (cron de estados)
 CRON_SECRET                          # server-only — Bearer que valida /api/cron/animales-estados
 ```
 
 Both required vars are set in `.env.local`. The app uses the modern publishable key format (`sb_publishable_...`), not the legacy anon JWT.
 
-`public` and `preview` are two schemas in the **same** Supabase project (no project-level branching) — switching `NEXT_PUBLIC_SUPABASE_SCHEMA` just points PostgREST at the other schema. `supabase/preview-schema.sql` is a from-scratch bootstrap script for the `preview` schema; it's a useful reference for RLS policy shape but is **not** kept in lockstep with `public` (it's missing `itinerarios`/`itinerarios_fincas`/`user_itinerarios`/`pagos_finca` and the older `get_cooperativa_users()` body it defines still joins `user_rutas` instead of `user_itinerarios`) — don't treat running it as reproducing a real clone of `public`. `supabase/copy-public-to-preview.sql` copies data `public` → `preview` (truncates `preview` first) and is structurally accurate since both schemas share the same table/column layout.
+Hay **dos proyectos Supabase separados**, ambos con el schema `public`: producción y staging. Los clientes (`lib/supabase/{server,client,admin}.ts`) ya no eligen schema — usan el `public` por defecto —, así que cambiar de entorno es solo cambiar `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY` / `SUPABASE_SERVICE_ROLE_KEY`. En Vercel: **Production → proyecto de producción; Preview (`develop`) → proyecto de staging**. `NEXT_PUBLIC_SUPABASE_SCHEMA` ya no existe (no lo reintroduzcas) y el schema `preview` del proyecto de producción es un resto que se borrará en CO-19 tras validar staging. En local, `.env.local` apunta a staging, nunca a producción.
 
-`preview` se migró a la entidad unificada `animales` el 2026-08-04 (`supabase/2026-08-04-preview-unificar-animales.sql`), preservando sus propios datos y los UUID originales; `vacas`/`toros` quedaron como `vacas_legacy`/`toros_legacy` igual que en `public`. Hoy ambos schemas tienen **las mismas 23 tablas y columnas idénticas** en `animales` y `eventos_animal`. Dos diferencias deliberadas que quedan: los enums (`animal_sexo`, `animal_raza`, `vaca_origen`, `estado_productivo`, `estado_reproductivo`, `rol`) existen **solo en `public`** y `preview` los referencia cualificados, y las políticas RLS de `preview` son `TO authenticated` mientras las de `public.animales` son `TO public` (irrelevante en la práctica: ambas exigen una fila en `roles` vía `auth.uid()`).
+### Migraciones
+
+La fuente de verdad del esquema es `supabase/migrations/` (CLI de Supabase). `20261019000000_baseline.sql` es el esquema `public` completo de producción a 2026-10-19, sin datos; recrea un proyecto vacío: se aplicó a staging (FIN-81) y el esquema resultante coincide con producción. Los `.sql` fechados anteriores y los scripts del antiguo schema `preview` viven en `supabase/legacy/` **solo como historia** — no se ejecutan ni se editan. `supabase/README.md` documenta el enlace a staging y los usuarios de prueba.
+
+Flujo de un cambio de esquema: **local → `db diff` → PR → staging → prod**.
+1. Edita el esquema (en local o contra staging) y genera el fichero con `pnpm db:diff <nombre>` → `supabase/migrations/<timestamp>_<nombre>.sql`. Revísalo a mano: el diff no captura bien `GRANT`/`REVOKE`, ni cambios de datos.
+2. Abre la PR con la migración junto al código que la usa.
+3. Aplícala a staging (`supabase link --project-ref <staging>` + `pnpm db:push:staging`) y valida en el preview de `develop`.
+4. Solo tras validar, aplícala a producción (`supabase link --project-ref <prod>` + `supabase db push`), con el proyecto enlazado comprobado a mano antes de empujar.
+
+Reglas: nunca edites una migración ya aplicada (crea otra), no mezcles datos de clientes en las migraciones, y toda tabla nueva lleva `tenant_id NOT NULL DEFAULT tenant_actual()`, RLS activada y políticas con la misma matriz de roles que sus `requireRole(...)` (ver *Multi-tenancy*).
 
 ### Path Alias
 
@@ -277,4 +286,4 @@ Both required vars are set in `.env.local`. The app uses the modern publishable 
 
 ### Deployment
 
-Deployed on Vercel. The `.npmrc` file at the root is intentionally committed to configure pnpm for Vercel's build environment. The `develop` branch deploys as a preview environment.
+Deployed on Vercel. The `.npmrc` file at the root is intentionally committed to configure pnpm for Vercel's build environment. The `develop` branch deploys as a preview environment against the **staging** Supabase project (see *Environment Variables* and *Migraciones*); `main` deploys to production.
