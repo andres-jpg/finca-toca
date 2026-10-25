@@ -7,6 +7,11 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:status": "supabase status",
+    "db:reset": "supabase db reset",
+    "db:types": "supabase gen types typescript --local --schema public > src/lib/supabase/database.types.ts",
     "db:diff": "supabase db diff -f",
     "db:push:staging": "supabase db push --linked"
   },
