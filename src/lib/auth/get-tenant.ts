@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth/get-user-role";
+import { AuthorizationError } from "@/lib/auth/errors";
 import { slugTieneModulo, type ModuloOpcional } from "@/lib/tenants/modulos";
 
 export interface Tenant {
@@ -43,5 +44,5 @@ export async function tenantTieneModulo(modulo: ModuloOpcional): Promise<boolean
  * la opción en la barra lateral no basta, cada acción es un endpoint POST público.
  */
 export async function requireModuloTenant(modulo: ModuloOpcional): Promise<void> {
-  if (!(await tenantTieneModulo(modulo))) throw new Error("No autorizado");
+  if (!(await tenantTieneModulo(modulo))) throw new AuthorizationError();
 }

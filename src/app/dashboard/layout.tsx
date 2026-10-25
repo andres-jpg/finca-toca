@@ -6,6 +6,7 @@ import { canWrite } from "@/lib/auth/check-permissions";
 import { DashboardLayoutClient } from "@/components/layout/dashboard-layout-client";
 import { getAlertas } from "@/features/alertas/actions/alertas.queries";
 import { AlertasBell } from "@/features/alertas/components/alertas-bell";
+import { registrarContextoSentry } from "@/lib/sentry/contexto";
 import type { UserRole } from "@/types";
 
 /** El hato solo existe para la finca: los roles de cooperativa no pagan la consulta. */
@@ -28,6 +29,9 @@ export default async function DashboardLayout({
   if (!session) {
     redirect("/login");
   }
+
+  // Tags tenant/rol y user.id (sin email) para que los errores de Sentry digan qué cliente los sufre.
+  await registrarContextoSentry();
 
   // getAlertas() está envuelto en React.cache(): el dashboard reutiliza esta misma lectura.
   const alertasSlot =

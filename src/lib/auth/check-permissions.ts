@@ -1,6 +1,8 @@
 import { getUserRole } from "./get-user-role";
 import { redirect } from "next/navigation";
 import type { UserRole } from "@/types";
+import { AuthorizationError } from "./errors";
+import { registrarContextoSentry } from "@/lib/sentry/contexto";
 
 /**
  * Verifica si el usuario tiene permiso para acceder a una ruta.
@@ -28,6 +30,7 @@ export async function checkRoutePermission(
 
   if (!allowedRoles.includes(role)) redirect(ROLE_HOME[role]);
 
+  await registrarContextoSentry();
   return role;
 }
 
@@ -52,7 +55,8 @@ export function canView(role: UserRole | null, allowedRoles: UserRole[]): boolea
 
 export async function requireRole(allowedRoles: UserRole[]): Promise<UserRole> {
   const role = await getUserRole();
-  if (!role) throw new Error("No autorizado");
-  if (!allowedRoles.includes(role)) throw new Error("No autorizado");
+  if (!role) throw new AuthorizationError();
+  if (!allowedRoles.includes(role)) throw new AuthorizationError();
+  await registrarContextoSentry();
   return role;
 }

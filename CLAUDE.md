@@ -298,6 +298,11 @@ NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY
 SUPABASE_SERVICE_ROLE_KEY            # server-only — createAdminClient() (cron de estados)
 CRON_SECRET                          # server-only — Bearer que valida /api/cron/animales-estados
+SENTRY_DSN                           # server-only — vacío = Sentry desactivado
+NEXT_PUBLIC_SENTRY_DSN               # cliente — mismo DSN; vacío = Sentry desactivado en el navegador
+SENTRY_ENVIRONMENT                   # production | staging | development (ver *Observabilidad*)
+SENTRY_AUTH_TOKEN                    # solo BUILD — sube sourcemaps; sin él el build no sube nada ni falla
+SENTRY_ORG / SENTRY_PROJECT          # solo BUILD — los lee el plugin de Sentry para la subida de sourcemaps
 ```
 
 Both required vars are set in `.env.local`. The app uses the modern publishable key format (`sb_publishable_...`), not the legacy anon JWT.
@@ -379,3 +384,15 @@ Cada submódulo sigue el patrón actual: `<feature>/{actions,components,schemas,
 ### Deployment
 
 Deployed on Vercel. The `.npmrc` file at the root is intentionally committed to configure pnpm for Vercel's build environment. The `develop` branch deploys as a preview environment against the **staging** Supabase project (see *Environment Variables* and *Migraciones*); `main` deploys to production.
+
+### Observabilidad (Sentry)
+
+`@sentry/nextjs` (v11) reporta errores de servidor y de cliente con el **cliente** (`tenant`), el `rol` y el `id` de usuario como contexto —nunca email—. Sin DSN todo queda apagado (`enabled: false`) y la app y el build funcionan igual, así que CI y local no necesitan ninguna variable de Sentry.
+- **Ficheros**: `src/instrumentation.ts` (registra la config y exporta `onRequestError`), `src/instrumentation-client.ts`, `sentry.server.config.ts`, `sentry.edge.config.ts`; las opciones comunes viven en `src/lib/sentry/opciones.ts` y los filtros (puros, sin servidor) en `src/lib/sentry/filtros.ts`. `next.config.ts` envuelve el resultado de `withPWA(...)` con `withSentryConfig` (import desde `@sentry/nextjs/config`), sin túnel (`tunnelRoute`) ni subida de sourcemaps si falta `SENTRY_AUTH_TOKEN`.
+- **Entornos**: `SENTRY_ENVIRONMENT` = `production` | `staging` | `development`. `tracesSampleRate` es 0.1 en producción y 1.0 en el resto. `next.config.ts` copia `SENTRY_ENVIRONMENT` a `NEXT_PUBLIC_SENTRY_ENVIRONMENT` para que lo vea el bundle de cliente. En Vercel: **Production → `production`; Preview (`develop`) → `staging`**; las cuatro variables de Sentry se definen allí a mano, nunca en el repo.
+- **Sin datos personales**: en v11 ya **no existe `sendDefaultPii`**; lo sustituye `dataCollection`, cuyos valores por defecto SÍ recogen cookies, cabeceras, cuerpos HTTP, query strings y datos de consultas. `opciones.ts` los apaga todos (`SIN_DATOS_PERSONALES`) y `filtros.ts` lo repite en `beforeSend`/`beforeSendSpan`: deja solo `user.id`, quita cuerpo/cookies/cabeceras/query string de `request`, sustituye cualquier email por `[email]` y descarta los breadcrumbs de consola. Si subes de versión o añades una integración, comprueba que no abre un hueco.
+- **Contexto**: `registrarContextoSentry()` (`lib/sentry/contexto.ts`, cacheada con `React.cache()`) pone los tags `tenant` y `rol` y `setUser({ id })`. La llaman el layout del dashboard, `checkRoutePermission()` y `requireRole()` —layout y página se renderizan en paralelo y un Server Action no pasa por el layout hasta después de ejecutarse—. El tag `vertical` está preparado pero **no se envía** hasta que `tenants` tenga ese dato (CO-09/FIN-86): sácalo en esa función. Los route handlers que no pasan por `requireRole()` no etiquetan.
+- **Errores esperados que NO se reportan**: `redirect()`/`notFound()` y demás errores de control de Next (por `digest`) y `AuthorizationError` (`lib/auth/errors.ts`, mismo mensaje "No autorizado"). `requireRole()`, `requireModuloTenant()` y las comprobaciones de `itinerarios.actions.ts` lanzan esa clase: **lanza `AuthorizationError`, no `new Error("No autorizado")`**, para toda denegación nueva. En el cliente, en producción Next sustituye el mensaje de los errores de servidor por un `digest`, así que ahí el filtro por clase no puede actuar. `instrumentation-client.ts` también ignora los `Failed to fetch` de red: el conductor trabaja sin señal (PWA offline).
+- **Error boundaries**: `app/global-error.tsx` y `app/dashboard/error.tsx` llaman a `Sentry.captureException`.
+
+**Checklist manual antes de cada release a producción**: revisar en Supabase → *Advisors* (**Security** y **Performance**) —en staging con las migraciones ya aplicadas, y de nuevo en producción tras el release— y resolver los avisos nuevos. Los avisos conocidos e inevitables (p. ej. `tenant_actual()`/`rol_actual()` como `SECURITY DEFINER` ejecutables por `authenticated`, ver *Multi-tenancy*) se ignoran.
