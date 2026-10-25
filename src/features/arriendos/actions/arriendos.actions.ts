@@ -65,9 +65,9 @@ export async function getArriendos(): Promise<Arriendo[]> {
 
   if (error) throw new Error("No se pudieron cargar los arriendos");
 
-  return (data ?? []).map((row: any) => {
+  return (data ?? []).map((row) => {
     const abonos: AbonoArriendo[] = (row.arriendos_abonos ?? [])
-      .map((a: any) => ({
+      .map((a) => ({
         id: a.id,
         arriendo_id: a.arriendo_id,
         fecha: a.fecha,

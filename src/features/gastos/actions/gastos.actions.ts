@@ -17,7 +17,7 @@ export async function getGastos(): Promise<Gasto[]> {
 
   if (error) throw new Error("No se pudieron cargar los gastos");
 
-  return (data ?? []).map((row: any) => ({
+  return (data ?? []).map((row) => ({
     id: row.id,
     fecha: row.fecha,
     subconcepto_id: row.subconcepto_id,
@@ -42,10 +42,10 @@ export async function getConceptosGasto(): Promise<ConceptoGasto[]> {
 
   if (error) throw new Error("No se pudieron cargar las categorías de gastos");
 
-  return (data ?? []).map((c: any) => ({
+  return (data ?? []).map((c) => ({
     id: c.id,
     nombre: c.nombre,
-    subconceptos: (c.subconceptos_gasto ?? []).map((s: any) => ({
+    subconceptos: (c.subconceptos_gasto ?? []).map((s) => ({
       id: s.id,
       concepto_id: s.concepto_id,
       nombre: s.nombre,

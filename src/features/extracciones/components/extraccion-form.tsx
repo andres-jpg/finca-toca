@@ -42,7 +42,7 @@ export function ExtraccionForm({
     watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    resolver: zodResolver(extraccionSchema) as any,
+    resolver: zodResolver(extraccionSchema),
     defaultValues: {
       fecha: extraccion?.fecha ?? formatDate(new Date()),
       litros_cantina: extraccion?.litros_cantina ?? 0,

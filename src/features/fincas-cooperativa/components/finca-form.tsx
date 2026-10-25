@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import type { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { fincaSchema } from "@/features/fincas-cooperativa/schemas/finca.schema";
 import { createFinca, updateFinca } from "@/features/fincas-cooperativa/actions/fincas.actions";
@@ -41,8 +42,8 @@ export function FincaForm({ finca, rutas, onSuccess }: FincaFormProps) {
     handleSubmit,
     setValue,
     formState: { errors, isSubmitting },
-  } = useForm<FincaFormValues>({
-    resolver: zodResolver(fincaSchema) as any,
+  } = useForm<z.input<typeof fincaSchema>, unknown, FincaFormValues>({
+    resolver: zodResolver(fincaSchema),
     defaultValues: {
       nombre: finca?.nombre ?? "",
       precio_litro: finca?.precio_litro ?? 0,

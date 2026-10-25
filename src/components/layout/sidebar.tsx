@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
@@ -169,6 +169,21 @@ const roleConfig: Record<UserRole, { label: string; classes: string }> = {
   cooperativa_user: { label: "Coop. Usuario", classes: "bg-cyan-500/20 text-cyan-300" },
 };
 
+// ¿La app corre instalada (modo standalone)? Se lee del navegador, así que va con
+// useSyncExternalStore: en el servidor es `false` y en el cliente se corrige tras hidratar.
+function suscribirPWA(onChange: () => void) {
+  const mq = window.matchMedia("(display-mode: standalone)");
+  mq.addEventListener("change", onChange);
+  return () => mq.removeEventListener("change", onChange);
+}
+
+function esPWA() {
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    ("standalone" in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true)
+  );
+}
+
 export function Sidebar({
   role,
   tenantNombre = null,
@@ -177,14 +192,7 @@ export function Sidebar({
   onCloseMobileMenu,
 }: SidebarProps = {}) {
   const pathname = usePathname();
-  const [isPWA, setIsPWA] = useState(false);
-
-  useEffect(() => {
-    const standalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      ("standalone" in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true);
-    setIsPWA(standalone);
-  }, []);
+  const isPWA = useSyncExternalStore(suscribirPWA, esPWA, () => false);
 
   const allowedItems = navItems.filter((item) => {
     if (!role || !item.allowedRoles.includes(role)) return false;

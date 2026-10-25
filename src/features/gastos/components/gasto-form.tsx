@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { gastoSchema } from "@/features/gastos/schemas/gasto.schema";
 import { createGasto, updateGasto } from "@/features/gastos/actions/gastos.actions";
@@ -58,7 +58,7 @@ export function GastoForm({ gasto, conceptos, onSuccess }: GastoFormProps) {
     watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    resolver: zodResolver(gastoSchema) as any,
+    resolver: zodResolver(gastoSchema) as unknown as Resolver<FormValues>,
     defaultValues: {
       fecha: gasto?.fecha ? new Date(gasto.fecha + "T00:00:00") : new Date(),
       concepto_id: initialConceptoId,

@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/database.types";
+import { aLista, aUno } from "@/lib/supabase/relaciones";
 import { z } from "zod";
 import { fetchAllRecolecciones, MESES } from "@/lib/cooperativa/recolecciones";
 import { ordenarFincasPorItinerario } from "@/lib/cooperativa/orden-rutas";
@@ -247,21 +249,14 @@ function acumularTotales(
   totales.precioNeto += fuente.precioNeto;
 }
 
-async function resolveFincasFinca(supabase: SupabaseClient, id: number): Promise<FincaInfo[]> {
+async function resolveFincasFinca(supabase: SupabaseClient<Database>, id: number): Promise<FincaInfo[]> {
   const { data, error } = await supabase
     .from("fincas_cooperativa")
     .select("id, nombre, precio_litro, activa, rutas_fincas(rutas_cooperativa(nombre))")
     .eq("id", id)
     .single();
   if (error || !data) throw new InformeDataError("Finca no encontrada", 404);
-  const rfRaw = data.rutas_fincas;
-  const rfArr: any[] = Array.isArray(rfRaw) ? rfRaw : rfRaw ? [rfRaw] : [];
-  const rutaRaw = rfArr[0]?.rutas_cooperativa;
-  const rutaNombreFinca: string | null = rutaRaw
-    ? Array.isArray(rutaRaw)
-      ? (rutaRaw[0]?.nombre ?? null)
-      : (rutaRaw.nombre ?? null)
-    : null;
+  const rutaNombreFinca: string | null = aUno(aUno(data.rutas_fincas)?.rutas_cooperativa)?.nombre ?? null;
   return [
     {
       id: data.id,
@@ -273,7 +268,7 @@ async function resolveFincasFinca(supabase: SupabaseClient, id: number): Promise
   ];
 }
 
-async function resolveFincasRuta(supabase: SupabaseClient, id: number): Promise<FincaInfo[]> {
+async function resolveFincasRuta(supabase: SupabaseClient<Database>, id: number): Promise<FincaInfo[]> {
   const { data, error } = await supabase
     .from("rutas_cooperativa")
     .select(
@@ -282,33 +277,28 @@ async function resolveFincasRuta(supabase: SupabaseClient, id: number): Promise<
     .eq("id", id)
     .single();
   if (error || !data) throw new InformeDataError("Ruta no encontrada", 404);
-  const rfList: any[] = Array.isArray(data.rutas_fincas) ? data.rutas_fincas : [];
-  const fincasConItinerario = rfList
-    .map((rf: any) => {
-      const f = Array.isArray(rf.fincas_cooperativa) ? rf.fincas_cooperativa[0] : rf.fincas_cooperativa;
-      if (!f) return null;
-      const itList: any[] = Array.isArray(f.itinerarios_fincas)
-        ? f.itinerarios_fincas
-        : f.itinerarios_fincas
-          ? [f.itinerarios_fincas]
-          : [];
-      return {
+  const fincasConItinerario = aLista(data.rutas_fincas).flatMap((rf) => {
+    const f = aUno(rf.fincas_cooperativa);
+    if (!f) return [];
+    const it = aLista(f.itinerarios_fincas)[0];
+    return [
+      {
         id: f.id,
         nombre: f.nombre,
         precio_litro: Number(f.precio_litro),
         ruta_nombre: data.nombre,
         activa: f.activa,
         rutaOrden: rf.orden ?? 0,
-        itinerarioId: itList[0]?.itinerario_id ?? null,
-        itinerarioOrden: itList[0]?.orden ?? 0,
-      };
-    })
-    .filter(Boolean) as ((FincaInfo & { rutaOrden: number; itinerarioId: number | null; itinerarioOrden: number })[]);
+        itinerarioId: it?.itinerario_id ?? null,
+        itinerarioOrden: it?.orden ?? 0,
+      },
+    ];
+  });
   return ordenarFincasPorItinerario(fincasConItinerario, data.nombre);
 }
 
 async function resolveFincasItinerario(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   id: number,
 ): Promise<{ fincas: FincaInfo[]; itinerarioNombre: string | null; conductorName: string | null }> {
   const [itResult, usersResult] = await Promise.all([
@@ -324,37 +314,29 @@ async function resolveFincasItinerario(
   if (itResult.error || !itResult.data) throw new InformeDataError("Itinerario no encontrado", 404);
   const data = itResult.data;
   const itinerarioNombre = data.nombre;
-  const ifList: any[] = Array.isArray(data.itinerarios_fincas) ? data.itinerarios_fincas : [];
-  const fincas = ifList
-    .sort((a: any, b: any) => (a.orden ?? 0) - (b.orden ?? 0))
-    .map((itF: any) => {
-      const f = Array.isArray(itF.fincas_cooperativa) ? itF.fincas_cooperativa[0] : itF.fincas_cooperativa;
-      if (!f) return null;
-      const rutasFincasRaw = f.rutas_fincas;
-      const rutasFincas: any[] = Array.isArray(rutasFincasRaw) ? rutasFincasRaw : rutasFincasRaw ? [rutasFincasRaw] : [];
-      const primeraRuta = rutasFincas[0]?.rutas_cooperativa;
-      const rutaNombre: string | null = primeraRuta
-        ? Array.isArray(primeraRuta)
-          ? (primeraRuta[0]?.nombre ?? null)
-          : (primeraRuta.nombre ?? null)
-        : null;
-      return {
-        id: f.id,
-        nombre: f.nombre,
-        precio_litro: Number(f.precio_litro),
-        ruta_nombre: rutaNombre,
-        activa: f.activa,
-      };
-    })
-    .filter(Boolean) as FincaInfo[];
+  const fincas: FincaInfo[] = [...aLista(data.itinerarios_fincas)]
+    .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))
+    .flatMap((itF) => {
+      const f = aUno(itF.fincas_cooperativa);
+      if (!f) return [];
+      return [
+        {
+          id: f.id,
+          nombre: f.nombre,
+          precio_litro: Number(f.precio_litro),
+          ruta_nombre: aUno(aUno(f.rutas_fincas)?.rutas_cooperativa)?.nombre ?? null,
+          activa: f.activa,
+        },
+      ];
+    });
   const conductores = (usersResult.data ?? [])
-    .filter((u: any) => u.itinerario_id === id)
-    .map((u: any) => u.email as string);
+    .filter((u) => u.itinerario_id === id)
+    .map((u) => u.email as string);
   return { fincas, itinerarioNombre, conductorName: conductores[0] ?? null };
 }
 
 async function buildInformeGeneral(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   periodo: InformePeriodo,
 ): Promise<InformeGeneralData> {
   const { data: rutasRaw, error: rutasErr } = await supabase
@@ -367,28 +349,23 @@ async function buildInformeGeneral(
   type RutaSection = { id: number; nombre: string; fincas: FincaInfo[] };
 
   const rutas: RutaSection[] = (rutasRaw ?? [])
-    .map((r: any) => {
-      const rfList: any[] = Array.isArray(r.rutas_fincas) ? r.rutas_fincas : [];
-      const fincasConItinerario = rfList
-        .map((rf: any) => {
-          const f = Array.isArray(rf.fincas_cooperativa) ? rf.fincas_cooperativa[0] : rf.fincas_cooperativa;
-          if (!f) return null;
-          const itList: any[] = Array.isArray(f.itinerarios_fincas)
-            ? f.itinerarios_fincas
-            : f.itinerarios_fincas
-              ? [f.itinerarios_fincas]
-              : [];
-          return {
+    .map((r) => {
+      const fincasConItinerario = aLista(r.rutas_fincas).flatMap((rf) => {
+        const f = aUno(rf.fincas_cooperativa);
+        if (!f) return [];
+        const it = aLista(f.itinerarios_fincas)[0];
+        return [
+          {
             id: f.id,
             nombre: f.nombre,
             precio_litro: Number(f.precio_litro),
             activa: f.activa,
             rutaOrden: rf.orden ?? 0,
-            itinerarioId: itList[0]?.itinerario_id ?? null,
-            itinerarioOrden: itList[0]?.orden ?? 0,
-          };
-        })
-        .filter(Boolean) as ((FincaInfo & { rutaOrden: number; itinerarioId: number | null; itinerarioOrden: number })[]);
+            itinerarioId: it?.itinerario_id ?? null,
+            itinerarioOrden: it?.orden ?? 0,
+          },
+        ];
+      });
       const fincasOrdenadas = ordenarFincasPorItinerario(fincasConItinerario, r.nombre);
       return { id: r.id, nombre: r.nombre, fincas: fincasOrdenadas };
     })
@@ -425,7 +402,7 @@ async function buildInformeGeneral(
 }
 
 async function buildInformeItinerario(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   id: number,
   periodo: InformePeriodo,
 ): Promise<InformeItinerarioData> {
@@ -462,7 +439,7 @@ async function buildInformeItinerario(
 }
 
 async function buildInformeSimple(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   tipo: "finca" | "ruta",
   id: number,
   periodo: InformePeriodo,
@@ -494,7 +471,7 @@ async function buildInformeSimple(
 }
 
 export async function buildInformeData(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   tipo: InformeTipo,
   id: number | undefined,
   periodo: InformePeriodo,

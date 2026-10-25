@@ -4,6 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/check-permissions";
 import type { Precio } from "@/types";
+import type { Tables } from "@/lib/supabase/database.types";
+
+// `created_at` es nullable en la tabla (tiene DEFAULT now(), así que en la práctica siempre viene).
+function mapPrecio(row: Tables<"precios">): Precio {
+  return { id: row.id, created_at: row.created_at ?? "", valor: row.valor, tipo: row.tipo };
+}
 
 export async function getPrecioActual(): Promise<Precio | null> {
   const supabase = await createClient();
@@ -16,7 +22,7 @@ export async function getPrecioActual(): Promise<Precio | null> {
     .maybeSingle();
 
   if (error) throw new Error("No se pudo cargar el precio actual");
-  return data;
+  return data ? mapPrecio(data) : null;
 }
 
 export async function getHistorialPrecios(): Promise<Precio[]> {
@@ -28,7 +34,7 @@ export async function getHistorialPrecios(): Promise<Precio[]> {
     .order("created_at", { ascending: false });
 
   if (error) throw new Error("No se pudo cargar el historial de precios");
-  return data ?? [];
+  return (data ?? []).map(mapPrecio);
 }
 
 export async function setPrecio(valor: number): Promise<void> {

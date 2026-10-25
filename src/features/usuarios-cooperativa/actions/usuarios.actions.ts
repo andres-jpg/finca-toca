@@ -13,7 +13,7 @@ export async function getCooperativaUsers(): Promise<UserCooperativa[]> {
   const { data, error } = await supabase.rpc("get_cooperativa_users");
   if (error) throw new Error("No se pudieron cargar los usuarios");
 
-  return (data ?? []).map((row: any) => ({
+  return (data ?? []).map((row) => ({
     id: row.user_id as string,
     email: row.email as string,
     rol: row.rol as UserCooperativa["rol"],

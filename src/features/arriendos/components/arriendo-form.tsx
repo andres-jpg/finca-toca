@@ -36,7 +36,7 @@ export function ArriendoForm({ arriendo, onSuccess }: ArriendoFormProps) {
     watch,
     formState: { errors, isSubmitting },
   } = useForm<ArriendoFormValues>({
-    resolver: zodResolver(arriendoSchema) as any,
+    resolver: zodResolver(arriendoSchema),
     defaultValues: {
       arrendatario: arriendo?.arrendatario ?? "",
       finca_nombre: arriendo?.finca_nombre ?? "",

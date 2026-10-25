@@ -70,6 +70,7 @@ src/
 ├── lib/
 │   ├── supabase/server.ts            # Server-side Supabase client (cookie-based)
 │   ├── supabase/client.ts            # Client-side Supabase client
+│   ├── supabase/relaciones.ts        # aUno()/aLista()/Rel<T>: relaciones embebidas (objeto o array) con tipos
 │   ├── supabase/admin.ts             # Service-role client (server-only), currently unused — no caller does its own authz, so anyone who imports it must add a requireRole()/getUserRole() check themselves
 │   ├── auth/                         # getUserRole, getCurrentUser, checkRoutePermission, canWrite, canDelete, requireRole, getTenantActual, tenantTieneModulo, requireModuloTenant
 │   ├── tenants/modulos.ts            # Módulos opcionales por cliente (puro, sin server) — slugTieneModulo()
@@ -125,6 +126,8 @@ Roles: `"admin" | "user" | "viewer" | "cooperativa_admin" | "cooperativa_user"` 
 **Read-only detail modals**: Tables that need a view-only mode use an inline detail component (not the form) rendered inside `EntityModal`. The eye icon (`Eye` from lucide-react) triggers it and is visible for all roles including `viewer`.
 
 **Supabase one-to-one joins**: When a table has a `UNIQUE` FK (e.g. `pagos.gasto_id`), PostgREST may return the embedded resource as an object rather than an array. Always handle both cases: `Array.isArray(row.rel) ? row.rel[0] : row.rel ?? null`.
+
+**Clientes Supabase tipados** (`server.ts`, `client.ts`, `admin.ts` llevan `<Database>` de `database.types.ts`): las filas y los `select` con joins salen tipados, así que **no anotes `(row: any)`** en callbacks — se infiere solo, y `@typescript-eslint/no-explicit-any` es un error de lint. Para las relaciones embebidas que pueden venir como objeto o como array usa `aUno()` / `aLista()` de `lib/supabase/relaciones.ts` (y `Rel<T>` para tipar una fila a mano en un mapper), en vez de repetir `Array.isArray(...)`. Los campos que en BD son `text` con un CHECK (`estado`, `metodo_pago`, `responsable`…) llegan como `string`: se estrechan con un cast al tipo de `@/types`, comentando que es el CHECK. Si cambias el esquema, regenera los tipos (`pnpm db:types`) o los `select` dejarán de compilar — es el aviso que se busca.
 
 **PostgREST row cap**: PostgREST has a `max_rows` cap (default 1000). For queries that may exceed this, paginate using `.range(from, from + PAGE - 1)` in a `while` loop until `data.length < PAGE`. The `informes-cooperativa` API route uses this pattern (`fetchAllRecolecciones`). Several dashboard pages do an un-paginated `.select()` over a table's full history (e.g. `dashboard/page.tsx`'s `gastos`/`ingresos`/`extracciones_leche` fetches) — these are subject to the same 1000-row cap and will silently truncate once a table grows past it; only `informes-cooperativa` and its `/preview` JSON counterpart (both go through `buildInformeData`) currently paginate.
 

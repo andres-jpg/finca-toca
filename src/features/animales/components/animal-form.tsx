@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { animalSchema } from "@/features/animales/schemas/animal.schema";
 import { createAnimal, updateAnimal } from "@/features/animales/actions/animales.actions";
@@ -109,7 +109,7 @@ export function AnimalForm({ animal, animales, lotesPajillas, esVelero, onSucces
     watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    resolver: zodResolver(animalSchema) as any,
+    resolver: zodResolver(animalSchema) as unknown as Resolver<FormValues>,
     defaultValues: {
       identificador: animal?.identificador ?? "",
       nombre: animal?.nombre ?? "",
