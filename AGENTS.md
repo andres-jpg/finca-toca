@@ -16,9 +16,15 @@ This file provides guidance to coding agents when working with code in this repo
 pnpm dev      # Start dev server at localhost:3000
 pnpm build    # Production build
 pnpm lint     # Run ESLint
+pnpm test           # Vitest: tests unitarios de funciones puras (src/**/*.test.ts)
+pnpm test:watch     # Vitest en modo watch
+pnpm test:coverage  # Vitest con cobertura (v8)
+pnpm test:db        # pgTAP (supabase/tests/): RLS y funciones SQL; necesita `pnpm db:start` y `pnpm db:reset` previos
 ```
 
-Package manager is **pnpm**. There are no test commands configured.
+Package manager is **pnpm**.
+
+**Tests.** Dos suites: Vitest para funciones puras de TypeScript (co-localizados, `foo.test.ts` junto a `foo.ts`; fechas siempre fijas, nunca `new Date()` sin argumento) y pgTAP para la base. Los tests de pgTAP corren contra la Supabase local con los usuarios del seed: `tests.autenticar_como('admin@vb.test')` (en `supabase/tests/00_helpers.sql`) simula a un usuario y, desde ahí, RLS aplica de verdad; `reset role` vuelve a postgres. Cada fichero va en `begin … rollback`, así que no deja datos. Lánzalos siempre juntos con `pnpm test:db`: `00_helpers.sql` crea el esquema `tests` y `99_limpieza.test.sql` lo retira, para que `pnpm db:diff` no lo recoja. **Toda tabla nueva lleva su test pgTAP de aislamiento por tenant** (un cliente no ve ni escribe filas de otro), junto a la migración que la crea.
 
 ## Architecture
 
