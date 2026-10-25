@@ -333,7 +333,7 @@ pnpm dev
 - En el seed, `tenant_id` va **siempre explícito**: su `DEFAULT tenant_actual()` depende de `auth.uid()` y el seed corre sin sesión (devolvería NULL). Las tablas con id serial (`fincas_cooperativa`, `rutas_cooperativa`) no llevan id fijo, o la secuencia se quedaría en 1 y el siguiente alta desde la app chocaría.
 - **No ejecutes `seed.sql` contra staging ni producción**: crea usuarios con contraseña conocida.
 
-**Tras cada migración: `pnpm db:types`.** Regenera `src/lib/supabase/database.types.ts` desde la base local (de ahí sale `UserRole` y los enums). Si cambias el esquema, commitea migración y tipos juntos. El script usa `--schema public` para que no entre `graphql_public`. Usa un CLI reciente (`brew upgrade supabase`): las versiones antiguas generan el mismo esquema pero omiten `__InternalSupabase` y cambian unos paréntesis de los tipos auxiliares, y eso ensucia el diff. Sin Docker, los mismos tipos se pueden sacar de staging (mismo esquema).
+**Tras cada migración: `pnpm db:types`.** Regenera `src/lib/supabase/database.types.ts` desde la base local (de ahí sale `UserRole` y los enums). Si cambias el esquema, commitea migración y tipos juntos. El script usa `--schema public,cafe` para que no entre `graphql_public`. Usa un CLI reciente (`brew upgrade supabase`): las versiones antiguas generan el mismo esquema pero omiten `__InternalSupabase` y cambian unos paréntesis de los tipos auxiliares, y eso ensucia el diff. Sin Docker, los mismos tipos se pueden sacar de staging (mismo esquema).
 
 ### Migraciones
 
@@ -346,6 +346,31 @@ Flujo de un cambio de esquema: **local → `db diff` → PR → staging → prod
 4. Solo tras validar, aplícala a producción (`supabase link --project-ref <prod>` + `supabase db push`), con el proyecto enlazado comprobado a mano antes de empujar.
 
 Reglas: nunca edites una migración ya aplicada (crea otra), no mezcles datos de clientes en las migraciones, y toda tabla nueva lleva `tenant_id NOT NULL DEFAULT tenant_actual()`, RLS activada y políticas con la misma matriz de roles que sus `requireRole(...)` (ver *Multi-tenancy*).
+
+### Arquitectura modular
+
+La app evoluciona a un **monolito modular** multi-vertical. El esqueleto vive en `src/modules/` (FIN-86); las features existentes **siguen en `src/features/`** y se migran en la Fase 2.
+
+```
+src/modules/
+├── core/          # núcleo de plataforma: nada que conozca vacas ni café
+├── cafe/          # vertical de café (manifest.ts = placeholder hasta CO-12)
+├── ganaderia/     # pendiente de migrar desde src/features (Fase 2)
+└── cooperativa/   # pendiente de migrar desde src/features (Fase 2)
+```
+
+Cada submódulo sigue el patrón actual: `<feature>/{actions,components,schemas,lib}`. Cada carpeta tiene un `README.md` que explica qué va dentro.
+
+**Reglas de dependencia** (`eslint-plugin-boundaries`, configuradas en `eslint.config.mjs` y aplicadas **solo a `src/modules/**`**; el resto del código no se ve afectado). Elementos: `core`, `vertical` (`cafe|ganaderia|cooperativa`, captura el nombre), `legacy-feature` (`src/features/**`), `ui` (`src/components/**`), `lib` (`src/lib/**`), `app` (`src/app/**`).
+- Permitido: `vertical` → `core`, `ui`, `lib` y **el mismo** vertical; `core` → `ui`, `lib`; `app` → todo.
+- Prohibido: `vertical` → otro `vertical`; `core` → cualquier `vertical`; `src/modules/*` → `src/features/**`. Lo que dos verticales necesiten en común sube a `core`.
+- `pnpm lint` falla (error, no aviso) ante una violación. Un import `@/modules/...` desde `src/app` o `src/features` no está restringido.
+
+**Nada de `if (tenant === ...)`**: lo que cambia entre clientes es **configuración** (manifiesto de módulos, datos), no ramas en el código.
+
+**Schema `cafe`** (migración `20261025120000_schema_cafe.sql`): nace vacío y alberga las tablas del vertical de café. Solo `authenticated` y `service_role` tienen `USAGE` (`anon` no), y las tablas/secuencias/funciones futuras heredan sus privilegios por defecto. Se consulta con el mismo cliente: `supabase.schema("cafe").from(...)` / `.rpc(...)` (ver comentario en `lib/supabase/server.ts`), sin un segundo cliente. `db:types` usa `--schema public,cafe`, por lo que `database.types.ts` incluye `cafe`.
+- Local: expuesto vía `[api] schemas`/`extra_search_path` en `supabase/config.toml`. Un stack local ya creado antes de esta migración no arranca (PostgREST falla con `schema "cafe" does not exist`): aplica antes la migración (`pnpm db:reset`, o arranca con el `config.toml` anterior y haz `supabase migration up --local`).
+- **Paso MANUAL en staging y producción**: tras aplicar la migración, añadir `cafe` en *Settings → API → Exposed schemas* de cada proyecto; sin eso `.schema("cafe")` responde `PGRST106`.
 
 ### Path Alias
 
