@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, ArrowUpCircle, Eye, RefreshCw, FileSpreadsheet } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -22,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  ESTADOS_PRODUCTIVOS,
+  ESTADOS_PRODUCTIVOS_POR_SEXO,
   ESTADOS_REPRODUCTIVOS,
   ESTADO_PRODUCTIVO_COLORS,
   ESTADO_PRODUCTIVO_LABELS,
@@ -51,6 +52,7 @@ const SEXO_FILTROS: { value: "todos" | AnimalSexo; label: string }[] = [
 ];
 
 const TODOS = "todos";
+const ESTADOS_PRODUCTIVOS_HEMBRA = ESTADOS_PRODUCTIVOS_POR_SEXO.hembra;
 
 function RowActions({
   animal,
@@ -156,7 +158,7 @@ export function AnimalesTable({
 }: AnimalesTableProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [mostrarDeBaja, setMostrarDeBaja] = useState(false);
-  const [sexoFiltro, setSexoFiltro] = useState<"todos" | AnimalSexo>("todos");
+  const [sexoFiltro, setSexoFiltro] = useState<"todos" | AnimalSexo>("hembra");
   const [productivoFiltro, setProductivoFiltro] = useState<string>(filtroProductivoInicial);
   const [reproductivoFiltro, setReproductivoFiltro] = useState<string>(
     filtroReproductivoInicial
@@ -175,7 +177,8 @@ export function AnimalesTable({
       animalesBase.filter(
         (a) =>
           (sexoFiltro === TODOS || a.sexo === sexoFiltro) &&
-          (productivoFiltro === TODOS || a.estado_productivo === productivoFiltro) &&
+          (productivoFiltro === TODOS ||
+            (a.sexo === "hembra" && a.estado_productivo === productivoFiltro)) &&
           (reproductivoFiltro === TODOS || a.estado_reproductivo === reproductivoFiltro)
       ),
     [animalesBase, sexoFiltro, productivoFiltro, reproductivoFiltro]
@@ -183,10 +186,12 @@ export function AnimalesTable({
 
   // Los contadores de cada opción se calculan sobre el resto de filtros ya aplicados,
   // para que no aparezcan opciones con "(0)" que en realidad sí tienen animales.
+  // El estado productivo es de la producción de leche: los machos no participan.
   const contarProductivo = (estado: EstadoProductivo) =>
     animalesBase.filter(
       (a) =>
         a.estado_productivo === estado &&
+        a.sexo === "hembra" &&
         (sexoFiltro === TODOS || a.sexo === sexoFiltro) &&
         (reproductivoFiltro === TODOS || a.estado_reproductivo === reproductivoFiltro)
     ).length;
@@ -254,7 +259,18 @@ export function AnimalesTable({
           <span className="font-mono text-gray-500">#{getValue<string>()}</span>
         ),
       },
-      { accessorKey: "nombre", header: "Nombre" },
+      {
+        accessorKey: "nombre",
+        header: "Nombre",
+        cell: ({ row, getValue }) => (
+          <Link
+            href={`/dashboard/animales/${row.original.id}`}
+            className="font-medium text-gray-800 hover:text-blue-600 hover:underline underline-offset-2"
+          >
+            {getValue<string>()}
+          </Link>
+        ),
+      },
       {
         accessorKey: "sexo",
         header: "Sexo",
@@ -403,7 +419,7 @@ export function AnimalesTable({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={TODOS}>Todo estado productivo</SelectItem>
-            {ESTADOS_PRODUCTIVOS.map((estado) => (
+            {ESTADOS_PRODUCTIVOS_HEMBRA.map((estado) => (
               <SelectItem key={estado} value={estado}>
                 {ESTADO_PRODUCTIVO_LABELS[estado]} ({contarProductivo(estado)})
               </SelectItem>

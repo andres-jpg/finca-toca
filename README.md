@@ -60,8 +60,10 @@ El proyecto está organizado en una arquitectura basada en características (`fe
    Crea un archivo `.env.local` en la raíz con las siguientes claves de Supabase:
    ```env
    NEXT_PUBLIC_SUPABASE_URL=tu_url_de_supabase
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_anon_key
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=tu_publishable_key
+   SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key
    ```
+   En local apunta al proyecto de **staging**, no al de producción (ver [`supabase/README.md`](supabase/README.md)).
 
 4. Ejecutar el servidor de desarrollo:
    ```bash

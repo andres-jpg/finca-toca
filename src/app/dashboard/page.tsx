@@ -146,6 +146,7 @@ export default async function DashboardPage({
       "cargada",
       "por_confirmar",
       "rechequeo",
+      "servida",
       "servicio",
       "pre_servicio",
       "puber",

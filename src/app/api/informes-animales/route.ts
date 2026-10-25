@@ -3,7 +3,17 @@ import ExcelJS from "exceljs";
 import { getUserRole } from "@/lib/auth/get-user-role";
 import { getAnimales } from "@/features/animales/actions/animales.actions";
 import { RAZA_LABELS } from "@/lib/animales/razas";
-import { ESTADO_PRODUCTIVO_LABELS, ESTADO_REPRODUCTIVO_LABELS, formatEdad } from "@/lib/animales/estados";
+import { addMonths, format } from "date-fns";
+import { createClient } from "@/lib/supabase/server";
+import {
+  ESTADO_PRODUCTIVO_LABELS,
+  ESTADO_REPRODUCTIVO_LABELS,
+  MESES_PARTO,
+  MESES_SECADO,
+  calcularDiasEnLeche,
+  formatEdad,
+  parseFechaDB,
+} from "@/lib/animales/estados";
 import type { Animal, AnimalSexo, EstadoProductivo, EstadoReproductivo } from "@/types";
 
 const COLOR_HEADER_BG = "FF0D9488"; // teal-600, mismo tono que informes-cooperativa
@@ -17,6 +27,7 @@ const COLUMNS: { header: string; width: number }[] = [
   { header: "ID", width: 12 },
   { header: "Número de registro", width: 18 },
   { header: "Nombre", width: 22 },
+  { header: "Fecha de nacimiento", width: 18 },
   { header: "Edad", width: 14 },
   { header: "Estado productivo", width: 16 },
   { header: "Estado reproductivo", width: 18 },
@@ -24,7 +35,69 @@ const COLUMNS: { header: string; width: number }[] = [
   { header: "Sangre", width: 24 },
   { header: "Nombre de la madre", width: 20 },
   { header: "Nombre del padre", width: 20 },
+  { header: "Fecha último parto", width: 18 },
+  { header: "Fecha secado", width: 16 },
+  { header: "FPP", width: 14 },
+  { header: "Días en leche", width: 14 },
 ];
+
+const NA = "NA";
+const fmtFecha = (d: Date) => format(d, "dd/MM/yyyy");
+const fmtISO = (iso: string) => fmtFecha(parseFechaDB(iso));
+
+interface EventoFila {
+  animal_id: string;
+  tipo_evento: string;
+  fecha: string;
+}
+
+/** Último evento (fecha ISO más alta) de los tipos indicados. */
+function ultimo(eventos: EventoFila[], tipos: string[]): EventoFila | null {
+  let mejor: EventoFila | null = null;
+  for (const e of eventos) {
+    if (tipos.includes(e.tipo_evento) && (!mejor || e.fecha > mejor.fecha)) mejor = e;
+  }
+  return mejor;
+}
+
+/**
+ * Columnas de ciclo productivo/reproductivo de una hembra: último parto, secado, FPP y DEL.
+ * Secado y FPP son la fecha registrada o, en vacas cargadas, la proyectada desde el último
+ * servicio (mismo criterio que las alertas). Reglas del cliente: en secado los días en leche
+ * son NA; en levante 2 el último parto y el secado son NA.
+ */
+function cicloLechero(a: Animal, eventos: EventoFila[]): [string, string, string, string] {
+  if (a.sexo !== "hembra") return ["", "", "", ""];
+
+  const levante2 = a.estado_productivo === "levante_2";
+  const parto = ultimo(eventos, ["parto"]);
+  const servicio = ultimo(eventos, ["inseminacion", "monta"]);
+  const secado = ultimo(eventos, ["secado"]);
+
+  let fechaSecado = "";
+  let fpp = "";
+  if (a.estado_reproductivo === "cargada" && servicio) {
+    const base = parseFechaDB(servicio.fecha);
+    const secadoDelServicio = secado && secado.fecha >= servicio.fecha ? secado : null;
+    if (secadoDelServicio) fechaSecado = fmtISO(secadoDelServicio.fecha);
+    else if (a.estado_productivo === "produccion") fechaSecado = fmtFecha(addMonths(base, MESES_SECADO));
+    if (!(parto && parto.fecha >= servicio.fecha)) fpp = fmtFecha(addMonths(base, MESES_PARTO));
+  } else if (secado) {
+    fechaSecado = fmtISO(secado.fecha);
+  }
+
+  const del = calcularDiasEnLeche(
+    a.estado_productivo,
+    eventos.map((e) => ({ tipo_evento: e.tipo_evento as never, fecha: e.fecha }))
+  );
+
+  return [
+    levante2 ? NA : parto ? fmtISO(parto.fecha) : "",
+    levante2 ? NA : fechaSecado,
+    fpp,
+    a.estado_productivo === "secado" ? NA : del === null ? "" : String(del),
+  ];
+}
 
 /**
  * Cuenta las crías de cada animal sobre el universo completo de animales (no el filtrado
@@ -71,6 +144,20 @@ export async function GET(req: NextRequest) {
       (reproductivoFiltro === TODOS || a.estado_reproductivo === (reproductivoFiltro as EstadoReproductivo))
   );
 
+  const supabase = await createClient();
+  const { data: eventosRows, error: eventosError } = await supabase
+    .from("eventos_animal")
+    .select("animal_id, tipo_evento, fecha")
+    .in("tipo_evento", ["parto", "aborto", "secado", "inseminacion", "monta"]);
+  if (eventosError) return new Response("No se pudieron leer los eventos", { status: 500 });
+
+  const eventosPorAnimal = new Map<string, EventoFila[]>();
+  for (const e of (eventosRows ?? []) as EventoFila[]) {
+    const lista = eventosPorAnimal.get(e.animal_id);
+    if (lista) lista.push(e);
+    else eventosPorAnimal.set(e.animal_id, [e]);
+  }
+
   const wb = new ExcelJS.Workbook();
   wb.creator = "Toca Lácteos";
   const ws = wb.addWorksheet("Animales");
@@ -98,6 +185,7 @@ export async function GET(req: NextRequest) {
       a.identificador,
       a.numero_registro ?? "",
       a.nombre,
+      a.fecha_nacimiento ? fmtISO(a.fecha_nacimiento) : "",
       formatEdad(a.fecha_nacimiento) ?? "",
       a.estado_productivo ? ESTADO_PRODUCTIVO_LABELS[a.estado_productivo] : "",
       a.estado_reproductivo ? ESTADO_REPRODUCTIVO_LABELS[a.estado_reproductivo] : "",
@@ -105,6 +193,7 @@ export async function GET(req: NextRequest) {
       a.sangre ?? "",
       nombreMadre(a),
       nombrePadre(a),
+      ...cicloLechero(a, eventosPorAnimal.get(a.id) ?? []),
     ];
   });
 
