@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/check-permissions";
 import { getUserRole, getCurrentUser } from "@/lib/auth/get-user-role";
+import { AuthorizationError } from "@/lib/auth/errors";
 import type { Itinerario, ItinerarioFinca } from "@/types";
 import { aLista, aUno, type Rel } from "@/lib/supabase/relaciones";
 
@@ -211,7 +212,7 @@ export async function updateItinerarioFincasOrden(itinerarioId: number, fincaIds
 
   if (role === "cooperativa_user") {
     const user = await getCurrentUser();
-    if (!user) throw new Error("No autorizado");
+    if (!user) throw new AuthorizationError();
 
     const { data: userIt } = await supabase
       .from("user_itinerarios")
@@ -220,10 +221,10 @@ export async function updateItinerarioFincasOrden(itinerarioId: number, fincaIds
       .single();
 
     if (!userIt || userIt.itinerario_id !== itinerarioId) {
-      throw new Error("No autorizado para modificar este itinerario");
+      throw new AuthorizationError("No autorizado para modificar este itinerario");
     }
   } else if (role !== "cooperativa_admin") {
-    throw new Error("No autorizado");
+    throw new AuthorizationError();
   }
 
   await Promise.all(
