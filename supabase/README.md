@@ -46,6 +46,8 @@ En Vercel: **Production** → claves del proyecto de producción; **Preview** �
 
 ## Migraciones (CLI)
 
+El CLI de Supabase va **fijado en el repo** (`supabase` en `devDependencies`): usa `pnpm exec supabase …` (o los scripts `db:*`) en lugar del `supabase` global de `brew`, para trabajar con la misma versión que el CI.
+
 ```bash
 supabase login
 supabase link --project-ref wiquvwviaawvpjkthdam   # staging
