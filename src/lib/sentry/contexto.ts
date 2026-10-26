@@ -1,27 +1,11 @@
 import { cache } from "react";
-import * as Sentry from "@sentry/nextjs";
 import { getCurrentUser, getUserRole } from "@/lib/auth/get-user-role";
 import { getTenantActual } from "@/lib/auth/get-tenant";
+import { aplicarContextoSentry } from "./etiquetas";
 
-export interface ContextoSentry {
-  userId: string | null;
-  rol: string | null;
-  tenantSlug: string | null;
-  /** Vertical del cliente (finca, café…). Todavía no existe en `tenants`: ver abajo. */
-  vertical?: string | null;
-}
-
-/**
- * Etiqueta el ámbito de Sentry del request actual para saber **qué cliente** sufre un error.
- * Solo el `id` del usuario: nunca email, nombre ni IP. Pura sobre Sentry (sin Supabase)
- * para poderse probar suelta.
- */
-export function aplicarContextoSentry({ userId, rol, tenantSlug, vertical }: ContextoSentry): void {
-  if (userId) Sentry.setUser({ id: userId });
-  if (rol) Sentry.setTag("rol", rol);
-  if (tenantSlug) Sentry.setTag("tenant", tenantSlug);
-  if (vertical) Sentry.setTag("vertical", vertical);
-}
+// La parte pura (sin código de servidor) vive en `etiquetas.ts` para poder usarla también desde
+// el navegador (`components/sentry/contexto-sentry-cliente.tsx`). Se reexporta por compatibilidad.
+export { aplicarContextoSentry, type ContextoSentry } from "./etiquetas";
 
 /**
  * Resuelve sesión, rol y cliente y los pone como contexto de Sentry. Las tres lecturas están

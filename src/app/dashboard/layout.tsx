@@ -7,6 +7,7 @@ import { DashboardLayoutClient } from "@/components/layout/dashboard-layout-clie
 import { getAlertas } from "@/features/alertas/actions/alertas.queries";
 import { AlertasBell } from "@/features/alertas/components/alertas-bell";
 import { registrarContextoSentry } from "@/lib/sentry/contexto";
+import { ContextoSentryCliente } from "@/components/sentry/contexto-sentry-cliente";
 import type { UserRole } from "@/types";
 
 /** El hato solo existe para la finca: los roles de cooperativa no pagan la consulta. */
@@ -40,14 +41,22 @@ export default async function DashboardLayout({
     ) : undefined;
 
   return (
-    <DashboardLayoutClient
-      email={session.user.email ?? ""}
-      userRole={userRole}
-      tenantNombre={tenant?.nombre ?? null}
-      tenantSlug={tenant?.slug ?? null}
-      alertasSlot={alertasSlot}
-    >
-      {children}
-    </DashboardLayoutClient>
+    <>
+      {/* Mismo contexto de Sentry, pero para los errores que ocurren en el navegador. */}
+      <ContextoSentryCliente
+        userId={session.user.id}
+        rol={userRole}
+        tenantSlug={tenant?.slug ?? null}
+      />
+      <DashboardLayoutClient
+        email={session.user.email ?? ""}
+        userRole={userRole}
+        tenantNombre={tenant?.nombre ?? null}
+        tenantSlug={tenant?.slug ?? null}
+        alertasSlot={alertasSlot}
+      >
+        {children}
+      </DashboardLayoutClient>
+    </>
   );
 }
