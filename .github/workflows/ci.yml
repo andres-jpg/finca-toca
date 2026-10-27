@@ -1,0 +1,81 @@
+# CI de cada PR hacia develop o main. Un solo job, llamado exactamente `ci`:
+# ese es el check que la protección de ramas exige (Settings → Branches).
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+
+# Un push nuevo a la misma PR cancela la ejecución anterior.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Valores ficticios solo para que `next build` no tropiece con variables ausentes:
+  # las páginas no consultan Supabase al compilar y el CI no usa ninguna clave real.
+  NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY: sb_publishable_ci_dummy
+  SUPABASE_SERVICE_ROLE_KEY: ci_dummy
+  CRON_SECRET: ci_dummy
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      # El repo no declara `packageManager`: la versión de pnpm se fija aquí (11.x, la del lockfile).
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11
+          cache: true
+
+      # Node 22 es el mínimo real: vitest 5 exige ^22.12 y pnpm 11 >=22.13 (el ticket decía 20).
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Tipos
+        run: pnpm exec tsc --noEmit
+
+      - name: Tests unitarios (Vitest)
+        run: pnpm test
+
+      - name: Tests de los scripts de CI
+        run: node --test .github/scripts/verificar-baseline.test.mjs
+
+      # El CLI es la devDependency fijada (`supabase@2.122.0`), no `supabase/setup-cli`: misma versión
+      # que en local. Se excluyen los servicios que ni los tests ni la generación de tipos usan
+      # (nombres válidos de `supabase start --help`); quedan db, auth, rest, kong y postgres-meta.
+      # `start` aplica las migraciones y el seed al crear la base, así que no hace falta `db reset`.
+      - name: Arrancar Supabase local
+        run: pnpm exec supabase start -x studio,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor,realtime,storage-api
+
+      - name: Tests pgTAP (RLS y funciones SQL)
+        run: pnpm test:db
+
+      # Falla si alguien cambió una migración sin regenerar `database.types.ts`.
+      - name: Drift de tipos de Supabase
+        run: |
+          pnpm db:types
+          if ! git diff --exit-code -- src/lib/supabase/database.types.ts; then
+            echo "::error file=src/lib/supabase/database.types.ts::Los tipos no coinciden con las migraciones. Ejecuta 'pnpm db:start && pnpm db:reset && pnpm db:types' y commitea el resultado."
+            exit 1
+          fi
+
+      # Vercel ya compila cada PR, pero ni tsc ni lint cazan errores de build como un
+      # `next/dynamic` con `ssr: false` en un Server Component (ver CLAUDE.md).
+      - name: Build
+        run: pnpm build
