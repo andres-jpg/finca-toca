@@ -3,8 +3,8 @@
 -- Todo se crea AQUÍ dentro de la transacción (rollback al final): dos clientes de café (A y B) y uno de
 -- ganadería (G), sin depender de los usuarios del seed.
 --   e1 owner A   e2 admin A   e3 operativo A   e4 viewer A   e5 owner B   e6 owner G (ganadería)
--- `cafe.procesos` (CO-27) aún no existe: en la sección 6 se crea una tabla mínima, solo dentro de este
--- test, para comprobar que los bloqueos ya la esperan.
+-- En la sección 6 se insertan procesos mínimos (como postgres, sin pasar por la RPC de CO-27) para comprobar
+-- los bloqueos que los lotes aplican tras el primer proceso.
 begin;
 
 select plan(112);
@@ -414,23 +414,15 @@ select throws_ok(
   $$update cafe.lotes set motivo_anulacion = 'sin fecha' where codigo = 'B-2'$$, '23514', null, 'motivo sin anular tampoco'
 );
 
--- 6. Bloqueos tras el primer proceso (con una cafe.procesos mínima, solo de este test) --------------------------------------
+-- 6. Bloqueos tras el primer proceso (procesos mínimos insertados como postgres) --------------------------------------
 reset role;
-create table cafe.procesos (
-  id uuid primary key default gen_random_uuid(),
-  lote_id uuid not null,
-  tipo cafe.tipo_proceso not null,
-  anulado_at timestamptz
-);
-grant select on cafe.procesos to authenticated;
-
-insert into cafe.procesos (lote_id, tipo)
-select id, 'trilla' from cafe.lotes where codigo in ('MQ-2026-0002', 'MQ-2026-0003');
-insert into cafe.procesos (lote_id, tipo)
-select id, 'tostion' from cafe.lotes where codigo = 'MQ-2026-0001';
+insert into cafe.procesos (tenant_id, lote_id, tipo, fecha, peso_entrada_kg, peso_salida_kg)
+select tenant_id, id, 'trilla', current_date, 100, 81 from cafe.lotes where codigo in ('MQ-2026-0002', 'MQ-2026-0003');
+insert into cafe.procesos (tenant_id, lote_id, tipo, fecha, peso_entrada_kg, peso_salida_kg, nivel_tueste)
+select tenant_id, id, 'tostion', current_date, 100, 82, 'medio' from cafe.lotes where codigo = 'MQ-2026-0001';
 -- Un proceso anulado no cuenta.
-insert into cafe.procesos (lote_id, tipo, anulado_at)
-select id, 'trilla', now() from cafe.lotes where codigo = 'B-2';
+insert into cafe.procesos (tenant_id, lote_id, tipo, fecha, peso_entrada_kg, peso_salida_kg, anulado_at, motivo_anulacion)
+select tenant_id, id, 'trilla', current_date, 100, 81, now(), 'Error de pesaje' from cafe.lotes where codigo = 'B-2';
 
 select tests.autenticar_como('owner-a@lotes.test');
 
@@ -494,7 +486,8 @@ select lives_ok(
 
 -- servicios_requeridos de marca propia cuenta la molienda solo si se hizo.
 reset role;
-insert into cafe.procesos (lote_id, tipo) select id, 'molienda' from cafe.lotes where codigo = 'MP-2026-0001';
+insert into cafe.procesos (tenant_id, lote_id, tipo, fecha, peso_entrada_kg, peso_salida_kg)
+select tenant_id, id, 'molienda', current_date, 100, 100 from cafe.lotes where codigo = 'MP-2026-0001';
 select tests.autenticar_como('owner-a@lotes.test');
 select is(
   (select cafe.servicios_requeridos(l) from cafe.lotes l where l.codigo = 'MP-2026-0001'),

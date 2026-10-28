@@ -97,8 +97,8 @@ describe("getNavParaSesion: módulos y verticales", () => {
     expect(hrefs(sesion("ganaderia", [], "admin"))).toEqual([]);
   });
 
-  it("café solo muestra las entradas de los módulos que tiene (procesos aún no tiene pantalla)", () => {
-    expect(hrefs(sesion("cafe", ["cafe.procesos"], null, "owner"))).toEqual([]);
+  it("café solo muestra las entradas de los módulos que tiene", () => {
+    expect(hrefs(sesion("cafe", ["cafe.procesos"], null, "owner"))).toEqual(["/dashboard/cafe/planta"]);
     expect(hrefs(sesion("cafe", ["cafe.inventario"], null, "owner"))).toEqual(["/dashboard/cafe/insumos"]);
     expect(hrefs(sesion("cafe", ["cafe.recepcion"], null, "owner"))).toEqual([
       "/dashboard/cafe/lotes",
@@ -147,9 +147,10 @@ describe("getNavParaSesion: tenant de café (CO-21)", () => {
     "core.auditoria",
   ];
 
-  it("admin: menú agrupado Operación, Inventario, Gerencia y Maestros (tipos, terceros, tarifas)", () => {
+  it("admin: menú agrupado Operación (lotes, planta), Inventario, Gerencia y Maestros (tipos, terceros, tarifas)", () => {
     expect(resumen(sesion("cafe", MODULOS_CAFE, null, "admin"))).toEqual([
       { href: "/dashboard/cafe/lotes", label: "Lotes", icon: "Boxes" },
+      { href: "/dashboard/cafe/planta", label: "Planta", icon: "Factory" },
       { href: "/dashboard/cafe/insumos", label: "Insumos", icon: "Package" },
       { href: "/dashboard/cafe", label: "Panel", icon: "LayoutDashboard" },
       { href: "/dashboard/cafe/maestros/tipos", label: "Tipos de café", icon: "Coffee" },
@@ -162,16 +163,17 @@ describe("getNavParaSesion: tenant de café (CO-21)", () => {
     expect(hrefs(sesion("cafe", MODULOS_CAFE, null, "owner"))).toEqual(hrefs(sesion("cafe", MODULOS_CAFE, null, "admin")));
   });
 
-  it("operativo: lotes, insumos, panel y terceros (sin tipos de café ni tarifas)", () => {
+  it("operativo: lotes, planta, insumos, panel y terceros (sin tipos de café ni tarifas)", () => {
     expect(resumen(sesion("cafe", MODULOS_CAFE, null, "operativo"))).toEqual([
       { href: "/dashboard/cafe/lotes", label: "Lotes", icon: "Boxes" },
+      { href: "/dashboard/cafe/planta", label: "Planta", icon: "Factory" },
       { href: "/dashboard/cafe/insumos", label: "Insumos", icon: "Package" },
       { href: "/dashboard/cafe", label: "Panel", icon: "LayoutDashboard" },
       { href: "/dashboard/terceros", label: "Terceros", icon: "Handshake" },
     ]);
   });
 
-  it("viewer (gerencia): consulta lotes, insumos, panel y terceros", () => {
+  it("viewer (gerencia): consulta lotes, insumos, panel y terceros, pero no ve Planta", () => {
     expect(resumen(sesion("cafe", MODULOS_CAFE, null, "viewer"))).toEqual([
       { href: "/dashboard/cafe/lotes", label: "Lotes", icon: "Boxes" },
       { href: "/dashboard/cafe/insumos", label: "Insumos", icon: "Package" },
