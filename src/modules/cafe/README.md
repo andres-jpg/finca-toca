@@ -18,6 +18,8 @@ Estructura de cada feature: `<feature>/{actions,components,schemas,lib}`.
 
 `procesos/` es el modelo de la planta (FIN-108): `cafe.procesos`, `cafe.proceso_bultos` y `cafe.baches` en `cafe_procesos.sql` (merma, valor y desvío generados; tarifa y mermas de referencia como snapshot; proceso parcial por bultos; tostión por baches; anulación que libera los bultos), las funciones `registrar_proceso` / `anular_proceso` / `peso_disponible` / `sugerir_baches` y las vistas `v_lotes` y `v_lote_etapas`, de donde sale el estado y el avance de cada lote (nunca se guardan). Aquí solo viven los tipos y los helpers puros (`lib/merma.ts`, `lib/baches.ts`) con las mismas fórmulas que SQL; la pantalla de planta (FIN-109: cola, formulario de proceso con merma en vivo, baches e historial con anulación) vive también aquí, con `actions/`, `components/`, `queries/`, `schemas/` y más helpers puros (`lib/pasos.ts`, `lib/numero.ts`, `lib/resumen.ts`, `lib/cola.ts`, `lib/baches-form.ts`); ver *Procesos y mermas* y *Pantalla de planta* en CLAUDE.md.
 
+`empaque/` es el empaque de marca propia y el inventario de producto terminado (FIN-111): `cafe.empaque_lineas`, `registrar_empaque` y `registrar_salida_pt` en `cafe_empaque.sql`, el formulario de empaque que monta la planta y la pantalla `/dashboard/cafe/inventario` (matriz tipo × presentación con su kardex). El producto terminado solo aumenta al empacar; ver *Empaque e inventario de producto terminado* en CLAUDE.md.
+
 `tipos/` es el catálogo de tipos de café (FIN-102): al crear o activar un tipo, o dar de alta una bolsa, los triggers de `cafe_tipos.sql` generan sus productos terminados (ver *Vertical café* en CLAUDE.md).
 
 ## Matriz de permisos por rol (HU-F1-11)

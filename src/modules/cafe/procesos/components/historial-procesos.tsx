@@ -46,9 +46,11 @@ export function HistorialProcesos({ procesos, puedeAnular, mostrarValor }: Histo
   const [enviando, setEnviando] = useState(false);
 
   const vigentes = procesos.filter((p) => !p.anulado);
+  // Un empaque con líneas movió inventario (bolsas, etiquetas, producto terminado): no se anula, se corrige con un ajuste.
   const sePuedeAnular = (p: ProcesoHistorial) =>
     puedeAnular &&
     !p.anulado &&
+    p.lineasEmpaque.length === 0 &&
     !vigentes.some((o) => ORDEN_PROCESO[o.tipo] > ORDEN_PROCESO[p.tipo] && o.bultoIds.some((id) => p.bultoIds.includes(id)));
 
   async function confirmar() {
@@ -107,6 +109,12 @@ export function HistorialProcesos({ procesos, puedeAnular, mostrarValor }: Histo
                   </span>
                 )}
               </div>
+              {p.lineasEmpaque.length > 0 && (
+                <p className="text-sm text-gray-700">
+                  {p.lineasEmpaque.map((l) => `${l.unidades} × ${l.producto}`).join(" · ")}
+                  <span className="block text-xs text-gray-500">Mueve inventario: no se anula, se corrige con un ajuste.</span>
+                </p>
+              )}
               {p.observaciones && <p className="text-xs text-gray-500">{p.observaciones}</p>}
               {p.anulado && p.motivoAnulacion && <p className="text-xs text-gray-600">Motivo de la anulación: {p.motivoAnulacion}</p>}
             </div>

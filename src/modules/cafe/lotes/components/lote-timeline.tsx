@@ -101,6 +101,11 @@ function Proceso({ datos, numBultosLote }: { datos: ProcesoLinea; numBultosLote:
             </>
           )}
         </p>
+        {datos.lineasEmpaque && datos.lineasEmpaque.length > 0 && (
+          <p className="text-sm font-medium text-gray-800">
+            Empacado: {datos.lineasEmpaque.map((l) => `${l.unidades} × ${l.producto}`).join(" · ")}
+          </p>
+        )}
         {datos.observaciones && <p className="text-xs italic text-gray-600">{datos.observaciones}</p>}
       </div>
 

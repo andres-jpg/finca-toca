@@ -6,6 +6,7 @@ import { requireSesion } from "@/modules/core/auth/guards";
 import { requireModuloPagina } from "@/modules/core/tenants/tenant.guards";
 import { fechaHoyEnZona } from "@/modules/cafe/insumos/lib/insumos";
 import { ETIQUETA_ALERTA_CALIDAD } from "@/modules/cafe/recepciones/lib/calidad";
+import { getConfigEmpaque } from "@/modules/cafe/empaque/queries/empaque.queries";
 import { HistorialProcesos } from "@/modules/cafe/procesos/components/historial-procesos";
 import { NivelTuesteChip } from "@/modules/cafe/procesos/components/nivel-tueste-chip";
 import { ProcesoPlantaForm } from "@/modules/cafe/procesos/components/proceso-form";
@@ -37,6 +38,9 @@ export default async function ProcesoLotePage({ params }: { params: Promise<{ lo
   const bultoIdsIniciales = tipoInicial ? evaluarPaso(lotePasos, tipoInicial, bultos).elegibles : [];
   // El peso de entrada llega precargado: lo que salió del paso previo (HU-03 c5) o la suma de los bultos.
   const pesoInicial = tipoInicial ? await getPesoDisponible(lote.id, tipoInicial, bultoIdsIniciales) : null;
+
+  // El empaque de marca propia pide las presentaciones (bolsas activas) con el stock de bolsas y etiquetas.
+  const empaque = lote.linea === "marca_propia" && !lote.anulado ? await getConfigEmpaque(lote.id) : undefined;
 
   const esAdmin = rolTenant === "owner" || rolTenant === "admin";
   // Al registrar o anular, la página se vuelve a pedir: cambiar la clave reinicia el formulario con los datos nuevos.
@@ -98,6 +102,7 @@ export default async function ProcesoLotePage({ params }: { params: Promise<{ lo
           tipoInicial={tipoInicial}
           bultoIdsIniciales={bultoIdsIniciales}
           pesoDisponibleInicial={pesoInicial?.ok ? pesoInicial.data : null}
+          empaque={empaque}
         />
       )}
 

@@ -4,6 +4,7 @@ import { getParametro } from "@/modules/core/parametros/queries/parametros.queri
 import { callRpc, type Result } from "@/modules/core/rpc/call-rpc";
 import { getTarifasVigentes } from "@/modules/core/tarifas/queries/tarifas.queries";
 import { PARAMETROS_CAFE } from "../../parametros";
+import { getLineasEmpaque } from "../../empaque/queries/empaque.queries";
 import type { TipoProceso } from "../../lotes/types";
 import { siguientePaso } from "../lib/pasos";
 import type { AlertaCalidad } from "../../recepciones/lib/calidad";
@@ -137,6 +138,9 @@ export async function getLoteParaProceso(loteId: string): Promise<LoteParaProces
     for (const b of data ?? []) numBaches.set(b.proceso_id, (numBaches.get(b.proceso_id) ?? 0) + 1);
   }
 
+  // Presentaciones empacadas (el empaque de marca propia mueve inventario; el de maquila no tiene líneas).
+  const lineasEmpaque = await getLineasEmpaque((procesos.data ?? []).filter((p) => p.tipo === "empaque").map((p) => p.id));
+
   const procesosPorId = new Map((procesos.data ?? []).map((p) => [p.id, p]));
   const numeroDeBulto = new Map((bultos.data ?? []).map((b) => [b.bulto_id, b.numero]));
 
@@ -178,6 +182,7 @@ export async function getLoteParaProceso(loteId: string): Promise<LoteParaProces
       nivelTueste: p.nivel_tueste,
       observaciones: p.observaciones,
       numBaches: numBaches.get(p.id) ?? 0,
+      lineasEmpaque: lineasEmpaque.get(p.id) ?? [],
       bultos: ids.map((id) => numeroDeBulto.get(id) ?? 0).sort((a, b) => a - b),
       bultoIds: ids,
       anulado: p.anulado_at !== null,

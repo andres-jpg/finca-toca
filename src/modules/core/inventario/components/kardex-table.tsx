@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/shared/data-table";
@@ -16,6 +17,8 @@ interface KardexTableProps {
   usuarios?: Record<string, string>;
   /** `ref_id` → nombre a mostrar (p. ej. el proveedor de una compra). Si se pasa, añade «Referencia». */
   referencias?: Record<string, string>;
+  /** `ref_id` → ruta a la que enlaza su referencia (p. ej. el lote que se empacó). Sin entrada, solo texto. */
+  enlaces?: Record<string, string>;
 }
 
 /** Kardex de un artículo: entradas, salidas y saldo tras cada movimiento (más reciente arriba). */
@@ -25,6 +28,7 @@ export function KardexTable({
   zonaHoraria = "America/Bogota",
   usuarios,
   referencias,
+  enlaces,
 }: KardexTableProps) {
   // Zona fija en el formateador: el servidor (UTC en Vercel) y el navegador mostrarían horas distintas.
   const formatoFecha = useMemo(
@@ -77,11 +81,17 @@ export function KardexTable({
               id: "referencia",
               header: "Referencia",
               accessorFn: (m: MovimientoKardex) => (m.ref_id ? (referencias[m.ref_id] ?? "") : ""),
-              cell: ({ row }: { row: { original: MovimientoKardex } }) => (
-                <span className="block max-w-[10rem] truncate">
-                  {(row.original.ref_id && referencias[row.original.ref_id]) || "—"}
-                </span>
-              ),
+              cell: ({ row }: { row: { original: MovimientoKardex } }) => {
+                const texto = (row.original.ref_id && referencias[row.original.ref_id]) || "—";
+                const href = row.original.ref_id ? enlaces?.[row.original.ref_id] : undefined;
+                return href ? (
+                  <Link href={href} className="block max-w-[10rem] truncate font-medium text-blue-700 underline-offset-2 hover:underline">
+                    {texto}
+                  </Link>
+                ) : (
+                  <span className="block max-w-[10rem] truncate">{texto}</span>
+                );
+              },
             } satisfies ColumnDef<MovimientoKardex>,
           ]
         : []),
@@ -109,7 +119,7 @@ export function KardexTable({
         ),
       },
     ],
-    [formatoFecha, unidad, usuarios, referencias],
+    [formatoFecha, unidad, usuarios, referencias, enlaces],
   );
 
   // El kardex llega del más antiguo al más reciente (así se acumula el saldo); en pantalla, al revés.

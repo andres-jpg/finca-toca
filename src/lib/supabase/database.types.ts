@@ -25,6 +25,26 @@ isOneToOne: false
       referencedColumns: ["tenant_id","id"]
     }
                   ]
+                },"empaque_lineas": {
+                  Row: {
+                    "articulo_pt_id": string,"created_at": string,"created_by": string | null,"id": string,"presentacion_g": number,"proceso_id": string,"tenant_id": string,"unidades": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "articulo_pt_id": string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"presentacion_g": number,"proceso_id": string,"tenant_id"?: string,"unidades": number
+                  }
+                  Update: {
+                    "articulo_pt_id"?: string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"presentacion_g"?: number,"proceso_id"?: string,"tenant_id"?: string,"unidades"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "empaque_lineas_proceso_fk"
+      columns: ["tenant_id","proceso_id"]
+isOneToOne: false
+      referencedRelation: "procesos"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
                 },"lote_bultos": {
                   Row: {
                     "created_at": string,"created_by": string | null,"id": string,"lote_id": string,"numero": number,"peso_kg": number,"tenant_id": string,"updated_at": string | null,"updated_by": string | null
@@ -268,10 +288,16 @@ isOneToOne: false
 "registrar_compra":
 { Args: { "p": Json }; Returns: Json
                            },
+"registrar_empaque":
+{ Args: { "p": Json }; Returns: Json
+                           },
 "registrar_proceso":
 { Args: { "p": Json }; Returns: Json
                            },
 "registrar_recepcion":
+{ Args: { "p": Json }; Returns: Json
+                           },
+"registrar_salida_pt":
 { Args: { "p": Json }; Returns: Json
                            },
 "repartir_peso":

@@ -25,6 +25,8 @@ import {
   type ProcesoValues,
 } from "../schemas/proceso.schema";
 import type { BultoPlanta, ConfigPlanta, LoteParaProceso } from "../types-planta";
+import { EmpaqueForm } from "../../empaque/components/empaque-form";
+import type { ConfigEmpaque } from "../../empaque/types";
 import { CLASES_TUESTE } from "./nivel-tueste-chip";
 import { ResumenMerma } from "./resumen-merma";
 import { SelectorBultos } from "./selector-bultos";
@@ -48,6 +50,8 @@ interface ProcesoPlantaFormProps {
   tipoInicial: TipoProceso | null;
   bultoIdsIniciales: string[];
   pesoDisponibleInicial: number | null;
+  /** Presentaciones, bolsas y etiquetas: solo lo pide el empaque de marca propia (CO-30). */
+  empaque?: ConfigEmpaque;
 }
 
 interface PasoElegido {
@@ -66,6 +70,7 @@ export function ProcesoPlantaForm({
   tipoInicial,
   bultoIdsIniciales,
   pesoDisponibleInicial,
+  empaque,
 }: ProcesoPlantaFormProps) {
   const lotePasos: LotePasos = useMemo(() => ({ linea: lote.linea, servicios: lote.servicios }), [lote.linea, lote.servicios]);
   const evaluaciones = useMemo(() => evaluarPasos(lotePasos, bultos), [lotePasos, bultos]);
@@ -130,7 +135,20 @@ export function ProcesoPlantaForm({
         )}
       </section>
 
-      {paso && (
+      {/* El empaque de marca propia mueve inventario (bolsas, etiquetas, producto terminado): otro formulario. */}
+      {paso && paso.tipo === "empaque" && lote.linea === "marca_propia" && empaque && (
+        <EmpaqueForm
+          key={paso.tipo}
+          lote={lote}
+          bultos={bultos}
+          config={empaque}
+          fechaHoy={fechaHoy}
+          bultoIdsIniciales={paso.bultoIds}
+          pesoDisponibleInicial={paso.pesoDisponible}
+        />
+      )}
+
+      {paso && !(paso.tipo === "empaque" && lote.linea === "marca_propia") && (
         <FormularioPaso
           key={paso.tipo}
           lote={lote}
