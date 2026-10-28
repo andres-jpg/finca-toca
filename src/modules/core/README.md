@@ -134,3 +134,20 @@ Tarifas versionadas con vigencia (append-only: cambiar = insertar otra con `vige
 | `tarifas/queries/tarifas.queries.ts` | `getTarifaVigente()` (RPC; `tarifa_no_definida` si no hay), `getTarifasVigentes()`, `getHistorialTarifas()`. |
 | `tarifas/actions/tarifas.service.ts` | `crearTarifa()` y `eliminarTarifaProgramada()` (misma regla de "sin `"use server"`"). |
 | `components/` | `TarifasPanel` y `ParametrosForm`: reciben las acciones por props desde la página (`core` no puede importar `src/app`). |
+
+## `export/` y `print/` — Excel e impresión térmica (FIN-97)
+
+Utilidades transversales; guía completa y decisiones en *Exportación a Excel e impresión térmica*, CLAUDE.md.
+
+| Fichero | Qué es |
+|---|---|
+| `export/generar-excel.ts` | `generarExcel(hojas, opciones)` → `Buffer` (ExcelJS): cabecera común, formatos por columna, totales con `SUM`. |
+| `export/respuesta.ts` | `respuestaExcel(buffer, nombre)`: `Response` de descarga (`Content-Disposition`, sin caché). |
+| `export/registry.ts` | `ExportadorDef`, `defineExportadores()`, `autorizarExport()` (pura: 401/403 de la ruta). |
+| `export/lib/` | **Puro**: `celdas.ts` (formatos, fechas en la zona del cliente, nombre de hoja), `nombre-archivo.ts`, `paginar.ts` (`fetchAllPaginado`). |
+| `terceros/exportador.ts` | Exportador de referencia (`/api/export/terceros`). |
+| `print/components/` | `TicketHeader`/`TicketLinea`/`TicketTabla`/`TicketSeparador`/`TicketPie`/`CopiaCliente`/`TicketCopias` (servidor), `ImprimirButton` (cliente), `EstiloTermico`. |
+| `print/lib/` | **Puro**: `ancho.ts` (58/80 mm), `css.ts` (`@page` y `@media print`), `opciones.ts` (`?copias`, fecha del pie). |
+| `print/parametros.ts` | Parámetro `core.impresora_ancho_mm`. |
+
+La ruta es `src/app/api/export/[recurso]/route.ts`; las páginas, `src/app/(print)/` (layout + `/print/prueba`).

@@ -59,3 +59,23 @@ export { defineConceptosTarifa, type ConceptoTarifaDef, type UnidadTarifa } from
 export { getTarifaVigente, getTarifasVigentes, getHistorialTarifas } from "./tarifas/queries/tarifas.queries";
 export { calcularValor } from "./tarifas/lib/calcular-valor";
 export type { TarifaVigente, TarifaHistorial } from "./tarifas/types";
+export {
+  generarExcel,
+  type Columna,
+  type Hoja,
+  type HojaExcel,
+  type FormatoColumna,
+  type OpcionesExcel,
+} from "./export/generar-excel";
+export { respuestaExcel } from "./export/respuesta";
+export { nombreArchivoExport } from "./export/lib/nombre-archivo";
+export { fetchAllPaginado, ExportError } from "./export/lib/paginar";
+export {
+  defineExportadores,
+  parametro as parametroExport,
+  type ExportadorDef,
+  type ContextoExport,
+  type ResultadoExport,
+} from "./export/registry";
+export { PARAMETRO_IMPRESORA_ANCHO } from "./print/parametros";
+export { ANCHOS_IMPRESORA, type AnchoImpresora } from "./print/lib/ancho";

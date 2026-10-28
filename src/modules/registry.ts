@@ -1,10 +1,13 @@
 import { cafeManifest } from "./cafe/manifest";
 import { CONCEPTOS_TARIFA_CAFE, DEFINICIONES_PARAMETROS_CAFE } from "./cafe/parametros";
+import { defineExportadores } from "./core/export/registry";
 import { coreManifest } from "./core/manifest";
 import { construirNav, type SesionNav } from "./core/registry/nav";
 import { defineParametros } from "./core/parametros/registry";
+import { PARAMETRO_IMPRESORA_ANCHO } from "./core/print/parametros";
 import type { ModuleManifest, NavItemDef } from "./core/registry/types";
 import { defineConceptosTarifa } from "./core/tarifas/registry";
+import { exportadorTerceros } from "./core/terceros/exportador";
 import { cooperativaManifest } from "./cooperativa/manifest";
 import { ganaderiaManifest } from "./ganaderia/manifest";
 
@@ -32,5 +35,11 @@ export function getNavParaSesion(sesion: SesionNav, opciones: { pwa?: boolean } 
  * módulo: el registro es estado de módulo y cada bundle del servidor tiene el suyo. Los verticales leen sus
  * propios parámetros pasando la definición a `getParametro(def)`, sin depender de este registro.
  */
-defineParametros([...DEFINICIONES_PARAMETROS_CAFE]);
+defineParametros([PARAMETRO_IMPRESORA_ANCHO, ...DEFINICIONES_PARAMETROS_CAFE]);
 defineConceptosTarifa(CONCEPTOS_TARIFA_CAFE);
+
+/**
+ * Recursos exportables a Excel (`GET /api/export/<recurso>`): los del núcleo y, cuando existan, los de cada
+ * vertical (café añadirá `lotes` en la Fase 1). Mismo contrato que arriba: la ruta hace `import "@/modules/registry"`.
+ */
+defineExportadores([exportadorTerceros]);

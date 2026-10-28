@@ -445,7 +445,7 @@ La app evoluciona a un **monolito modular** multi-vertical. El esqueleto vive en
 
 ```
 src/modules/
-├── core/          # núcleo de plataforma (rpc, auditoria, tenants, registry, consecutivos, inventario, terceros, tarifas, parametros): nada que conozca vacas ni café
+├── core/          # núcleo de plataforma (rpc, auditoria, tenants, registry, consecutivos, inventario, terceros, tarifas, parametros, export, print): nada que conozca vacas ni café
 ├── registry.ts    # agregador de manifiestos: getNavParaSesion() (el ÚNICO fichero que ve todos los verticales)
 ├── cafe/          # vertical de café (manifest.ts con nav vacío hasta la Fase 1)
 ├── ganaderia/     # manifest.ts; el código sigue en src/features hasta la Fase 2
@@ -571,6 +571,23 @@ Dos piezas genéricas del núcleo (`src/modules/core/{tarifas,parametros}/`, mig
 - **`getParametro(def | clave)`** (`parametros.queries.ts`, una consulta por request con `React.cache()`): valida con el `schema` de la definición y devuelve el `defecto` si no hay valor o es inválido (en ese caso, además, lo reporta a Sentry sin el valor). **Un vertical debería pasar su propia definición** (`getParametro(PARAMETROS_CAFE.capacidadTostadoraKg)`: tipado y sin depender del registro) en vez de la clave. Un fallo de lectura **lanza**: no se disfraza de defecto.
 - **Visibilidad**: la entrada "Tarifas y parámetros" (`core/manifest.ts`) y la página usan el módulo `core.terceros` (no hay `core.tarifas` en el catálogo; no se inventó uno) y rol `owner`/`admin`; la pantalla solo ofrece las definiciones cuyo `modulo` tiene activo el cliente (hoy ninguno de ganadería). `crearTarifa` rechaza vigencias en el pasado (una tarifa nueva solo afecta a lo que se registre después) y conceptos que ningún módulo declara.
 - Para **añadir** un parámetro o un concepto: su definición en el fichero del módulo (más su test) y nada más; sin migración ni deploy de base. Sembrar valores por defecto a un cliente nuevo es del alta de tenants (FIN-98).
+
+### Exportación a Excel e impresión térmica (FIN-97)
+
+Dos utilidades del núcleo (`src/modules/core/{export,print}/`) para cualquier vertical. **No** sustituyen a los informes que ya existen (`informes-cooperativa`, `informes-animales`), que siguen con su ExcelJS a mano.
+
+**Excel** (`core/export/`):
+- `generarExcel(hojas, { tenant, filtrosAplicados })` arma el libro (cliente en la fila 1, título + filtros en la 2, cabecera congelada en la 3, `ySplit: 3`); la fila de `totales` lleva fórmulas `SUM` reales (con `result` en caché solo para visores que no recalculan). El formato lo fija la columna: `moneda` COP `"$"#,##0`, `peso` `#,##0.000` (el issue lo mencionaba pero no estaba en la lista de formatos), `porcentaje` `0.0%`. **El porcentaje espera la fracción** (0,19 → 19,0 %). Los totales solo admiten columnas numéricas, nunca la primera (lleva "TOTAL"), y se refieren a la columna por su `key`.
+- **Fechas**: un `YYYY-MM-DD` (columna `date`) se escribe tal cual, sin pasarlo por `new Date()` (se correría un día en UTC-5); un instante (`timestamptz`) se lleva a la hora de pared de `tenant.zonaHoraria` y se escribe como `Date` UTC con esos mismos componentes, porque Excel no tiene zonas horarias.
+- `fetchAllPaginado(pagina, pageSize = 1000, limite = 50_000)` recibe una **función `(desde, hasta) => consulta`** (no un builder: el de supabase-js muta con `.range()`), que debe ordenar de forma estable. A diferencia de `fetchAllRecolecciones` **lanza** si una página falla (un Excel truncado que parece completo es peor que un error) y al pasar del límite (`ExportError`).
+- **Registro de recursos exportables**: cada módulo declara un `ExportadorDef` (`recurso`, `modulo`, `roles` de membresía y opcional `rolesLegacy`, `generar({ sesion, filtros })`) y `src/modules/registry.ts` lo agrega con `defineExportadores()` (mismo patrón que `defineParametros`; `core` no importa verticales). El del núcleo es `core/terceros/exportador.ts` y es la referencia: usa la misma consulta que la pantalla. Café añadirá `lotes` en la Fase 1 (una entrada más en `registry.ts`, sin tocar la ruta).
+- `GET /api/export/<recurso>?…filtros` (`src/app/api/export/[recurso]/route.ts`): `getSesion()` → 401; recurso desconocido → 404; módulo no activo o rol no permitido → 403 (`autorizarExport()`, pura); error de la consulta → 500 con Sentry; demasiado grande → 413. Los `searchParams` son los de la pantalla. La ruta hace `import "@/modules/registry"` (el registro es estado de módulo). **Una pantalla que exporta pasa sus filtros por query string** para que el Excel los respete; el nombre sale de `nombreArchivoExport()`: `${slug}_${recurso}_${desde}_${hasta}.xlsx`.
+
+**Impresión térmica** (`core/print/`, grupo de rutas `src/app/(print)/`):
+- El layout `(print)` exige sesión él mismo (el proxy solo protege `/dashboard`), sin barra lateral ni header, y lee el ancho del rollo del parámetro **`core.impresora_ancho_mm`** (58 u 80, defecto 80; definido en `core/print/parametros.ts` y registrado en `registry.ts`). Va bajo el módulo `core.terceros` —no hay uno de impresión en el catálogo y crearlo exige migración— así que solo se edita en Tarifas y parámetros de clientes que ya lo tienen; sin valor rige 80.
+- **`@page { size: 80mm auto }` NO funciona** (el issue lo proponía): Chrome descarta la declaración entera y imprime en Carta (comprobado con `--print-to-pdf`). Se usa `size: <ancho>mm 297mm` (`ALTO_PAGINA_MM`) y cada `.ticket` termina en salto de página. Si con la impresora real queda demasiado papel en blanco tras el corte, el alto es lo único que hay que tocar (o quitar `size` y dejar que el driver ponga el rollo).
+- `?copias=N` = tiquetes **en total** (original + N−1 `CopiaCliente`, máximo 5); `?ancho=58|80` fuerza otro ancho en una página concreta volviendo a montar `EstiloTermico` (así calibra `/print/prueba`). Las páginas de impresión formatean fechas y pesos **en el servidor** (zona del cliente); no uses `window`/`Intl` del navegador para el contenido del tiquete.
+- Componentes (`core/print/components/ticket.tsx`, de servidor): `TicketHeader`, `TicketLinea`, `TicketTabla`, `TicketSeparador`, `TicketPie`, `CopiaCliente`/`TicketCopias`; `ImprimirButton` es el único de cliente. Un tiquete nuevo = página bajo `src/app/(print)/print/<nombre>/` con esas piezas dentro de `<TicketCopias copias={…}>`. Calibración: `/print/prueba`.
 
 ### Path Alias
 
