@@ -118,3 +118,19 @@ const { tenant, rolTenant } = await requireRolTenant(["owner", "admin"]); // Ser
 `getSesionBase()` es la misma lectura sin exigir cliente activo (para el platform admin que aún no eligió uno). `requireRole()` / `checkRoutePermission()` siguen existiendo para las pantallas legacy y están `@deprecated`.
 
 `tenants/` incluye el selector de cliente (`TenantSwitcher` + `cambiarTenantActivo`): la autorización la hace la RPC `cambiar_tenant_activo()`, no la UI.
+
+## `tarifas/` y `parametros/` — valores configurables por cliente (FIN-94)
+
+Tarifas versionadas con vigencia (append-only: cambiar = insertar otra con `vigente_desde`) y parámetros clave → valor tipado por cliente. Las **definiciones** (etiqueta, schema Zod, defecto) las declara cada módulo en su código (`cafe/parametros.ts`) y las inyecta `src/modules/registry.ts` con `defineParametros()` / `defineConceptosTarifa()`; `core` no conoce ninguna. Guía completa en *Tarifas y parámetros por cliente*, CLAUDE.md.
+
+| Fichero | Qué es |
+|---|---|
+| `parametros/registry.ts` | `ParametroDef`, `defineParametros()`, búsqueda por clave y por módulos activos. Puro (sin servidor). |
+| `parametros/lib/valor.ts` | **Puro**: `resolverParametro(def, guardado)` → valor efectivo (defecto si falta o no cumple el schema). |
+| `parametros/queries/parametros.queries.ts` | `getParametro(def \| clave)` (una consulta por request) y `getParametrosConValor()` para la pantalla. |
+| `parametros/actions/parametros.service.ts` | `guardarParametro()`: `owner`/`admin` + módulo dueño + validación Zod + RPC `guardar_parametro`. **Sin `"use server"`**: el Server Action real está en `src/app/dashboard/tarifas/actions.ts`. |
+| `tarifas/registry.ts` | `ConceptoTarifaDef`, `defineConceptosTarifa()`. |
+| `tarifas/lib/calcular-valor.ts` | **Puro**: `calcularValor(pesoKg, tarifa)`, redondeo a pesos. |
+| `tarifas/queries/tarifas.queries.ts` | `getTarifaVigente()` (RPC; `tarifa_no_definida` si no hay), `getTarifasVigentes()`, `getHistorialTarifas()`. |
+| `tarifas/actions/tarifas.service.ts` | `crearTarifa()` y `eliminarTarifaProgramada()` (misma regla de "sin `"use server"`"). |
+| `components/` | `TarifasPanel` y `ParametrosForm`: reciben las acciones por props desde la página (`core` no puede importar `src/app`). |

@@ -53,3 +53,9 @@ export { construirNav, ocultoEnPWA, ORDEN_GRUPOS, type SesionNav } from "./regis
 export { paginaInicial, PAGINA_INICIAL_POR_ROL, PAGINA_INICIAL_POR_VERTICAL } from "./registry/pagina-inicial";
 export type { NavItemDef, ModuleManifest } from "./registry/types";
 export { ICONOS_NAV, type IconoNav } from "./registry/iconos";
+export { defineParametros, type ParametroDef, type ParametroTipo } from "./parametros/registry";
+export { getParametro } from "./parametros/queries/parametros.queries";
+export { defineConceptosTarifa, type ConceptoTarifaDef, type UnidadTarifa } from "./tarifas/registry";
+export { getTarifaVigente, getTarifasVigentes, getHistorialTarifas } from "./tarifas/queries/tarifas.queries";
+export { calcularValor } from "./tarifas/lib/calcular-valor";
+export type { TarifaVigente, TarifaHistorial } from "./tarifas/types";
