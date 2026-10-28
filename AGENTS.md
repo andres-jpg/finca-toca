@@ -20,6 +20,7 @@ pnpm test           # Vitest: tests unitarios de funciones puras (src/**/*.test.
 pnpm test:watch     # Vitest en modo watch
 pnpm test:coverage  # Vitest con cobertura (v8)
 pnpm test:db        # pgTAP (supabase/tests/): RLS y funciones SQL; necesita `pnpm db:start` y `pnpm db:reset` previos
+pnpm test:concurrencia  # 20 llamadas paralelas a siguiente_consecutivo() contra la Supabase local (FIN-95)
 ```
 
 Package manager is **pnpm**.
@@ -288,6 +289,8 @@ The cooperativa module manages a milk cooperative: farms (fincas), collection ro
 | `tenants` | `id`, `nombre`, `slug` (unique), `vertical` (enum `vertical`, sin DEFAULT), `estado` (enum `tenant_estado`), `plan` (text), `nit`, `logo_url`, `color_primario` (CHECK `#RRGGBB`), `zona_horaria`, `moneda`, `created_at`, `updated_at`/`updated_by` (trigger `set_updated`). Hoy: `villa-blanca`, `el-velero` (ganaderia) y `toca-lacteos` (cooperativa, solo fila) |
 | `modulos` | `id` (text, `<vertical>.<nombre>`), `vertical` (NULL = núcleo), `nombre`, `descripcion`, `base`. Catálogo global sin `tenant_id`, lectura para `authenticated`, escritura solo plataforma |
 | `tenant_modulos` | PK `(tenant_id, modulo_id)` + `id` (uuid único, solo para `audit.activar`), `activo`, `config` (jsonb), `activado_at`, `activado_por`. Lectura: el propio cliente; escritura: solo plataforma. Auditada |
+| `series_consecutivo` | PK `(tenant_id, serie)` + `id` (uuid único, solo para `audit.activar`), `descripcion`, `formato` (`{serie}-{anio}-{n:4}`), `reinicia_anual`, `activo`. Lectura: miembros del tenant; escritura: `owner`/`admin`. Auditada |
+| `consecutivos` | PK `(tenant_id, serie, anio)` (`anio = 0` si no reinicia), `ultimo`. FK a `series_consecutivo` (restrict). Solo la escribe `siguiente_consecutivo()`; nadie tiene INSERT/UPDATE/DELETE |
 | `roles` | `user_id`, `rol` (Postgres enum `rol`: `admin`\|`user`\|`viewer`\|`cooperativa_admin`\|`cooperativa_user`) |
 | `fincas_cooperativa` | `id`, `nombre`, `precio_litro`, `activa`, `metodo_pago` (conductor\|punto_venta\|gerente), `created_at` |
 | `rutas_cooperativa` | `id`, `nombre`, `created_at` |
@@ -386,7 +389,7 @@ Reglas: nunca edites una migración ya aplicada (crea otra), no mezcles datos de
 ### Auditoría
 
 Todo cambio en las tablas de negocio queda en `audit.log` (migración `20261026120000_auditoria.sql`, FIN-88): tabla, `registro_id`, acción (`INSERT`/`UPDATE`/`DELETE`), `antes`/`despues` completos, `cambios` (solo las claves modificadas de un UPDATE, con su valor nuevo), `user_id` (`auth.uid()`) y `at`. Lo escribe un trigger genérico, `audit.registrar_cambio()` (`SECURITY DEFINER`, `search_path = ''`); el código de la app **no** registra nada ni pasa el usuario. Un UPDATE sin cambios reales —o que solo toca `updated_at`/`updated_by`— no genera fila.
-- **Qué está auditado**: `precios`, `gastos`, `ingresos`, `eventos_animal`, `animales`, `pajillas`, `arriendos`, `arriendos_abonos`, `fincas_cooperativa`, `pagos_finca`, `roles`, `tenants`, `tenant_modulos`, `tenant_members`. **No** `recolecciones` ni `extracciones_leche` (alto volumen diario, no aporta), ni el resto de tablas de catálogo (`conceptos_*`, `subconceptos_*`, `itinerarios*`, `rutas*`, `pagos`…). Para sumar una: `select audit.activar('public.<tabla>');` en una migración nueva (la tabla necesita columna `id`).
+- **Qué está auditado**: `precios`, `gastos`, `ingresos`, `eventos_animal`, `animales`, `pajillas`, `arriendos`, `arriendos_abonos`, `fincas_cooperativa`, `pagos_finca`, `roles`, `tenants`, `tenant_modulos`, `tenant_members`, `series_consecutivo`. **No** `recolecciones` ni `extracciones_leche` (alto volumen diario, no aporta), ni `consecutivos` (cambia en cada documento), ni el resto de tablas de catálogo (`conceptos_*`, `subconceptos_*`, `itinerarios*`, `rutas*`, `pagos`…). Para sumar una: `select audit.activar('public.<tabla>');` en una migración nueva (la tabla necesita columna `id`).
 - **Tenant del log**: sale de `tenant_id` de la fila (`to_jsonb`); `audit.activar('public.tenants', 'id')` pasa otra columna cuando la fila es el propio cliente. `fincas_cooperativa` y `pagos_finca` no tienen `tenant_id` (son de la cooperativa) y `roles.tenant_id` es NULL en los roles de cooperativa: esas filas se registran con `tenant_id` NULL y **ningún usuario las ve por RLS** (solo postgres/service role, hasta que se decida quién audita la cooperativa).
 - **Lectura**: RLS de `audit.log` → SELECT solo con `rol_en_tenant() in ('owner','admin')` y `tenant_id = tenant_actual()` (FIN-90; antes `rol_actual() = 'admin'`); nadie tiene INSERT/UPDATE/DELETE. El esquema `audit` **no** está en `[api] schemas` ni en `db:types`: la app lee con la RPC `public.historial_cambios(p_tabla, p_registro_id, p_limite)` (`SECURITY DEFINER`, solo `authenticated`; revalida owner/admin+tenant porque salta RLS y devuelve el email solo de miembros del mismo cliente, vía `tenant_members`). Los emails nunca salen de otro cliente. En `src/modules/core/auditoria/` están `getHistorialCambios()` (solo `admin`) y el componente `HistorialCambios`; **aún no están integrados en ninguna pantalla** (Fase 1).
 - **`user_id` NULL**: el cron (service role), el seed y cualquier escritura sin sesión (SQL editor) dejan `user_id` NULL; el componente los muestra como «Sistema». `audit.log.user_id` no tiene FK a propósito: el log sobrevive al borrado del usuario.
@@ -461,7 +464,7 @@ grant execute on function <schema>.<fn>(jsonb) to authenticated;
 ```
 
 - **Errores de negocio**: `errcode = 'P0001'` y `message` = código estable en snake_case (`stock_insuficiente`, `orden_proceso_invalido`, `consecutivo_bloqueado`); el texto legible va en `detail`. Un `raise exception 'texto libre'` también es P0001 pero `callRpc()` no lo toma por código (lo trata como error inesperado).
-- **Nunca `SECURITY DEFINER` para lógica de negocio**: saltaría RLS y el aislamiento por `tenant_id`. `security invoker` + RLS + `DEFAULT tenant_actual()` hacen que la función herede el aislamiento sin código extra (y no pases `tenant_id` en el payload).
+- **Nunca `SECURITY DEFINER` para lógica de negocio**: saltaría RLS y el aislamiento por `tenant_id`. Única excepción hoy: `siguiente_consecutivo()` (ver *Consecutivos por serie y año*), que comprueba tenant y rol por sí misma. `security invoker` + RLS + `DEFAULT tenant_actual()` hacen que la función herede el aislamiento sin código extra (y no pases `tenant_id` en el payload).
 - El `revoke`/`grant` es obligatorio: Postgres da `EXECUTE` a `PUBLIC` al crear la función.
 - Cada función lleva su test pgTAP (`supabase/tests/`); el ejemplo de referencia es `30_rpc_transaccional.test.sql` (`ping_transaccional`, que **solo existe dentro del test**, no en migraciones) y demuestra el rollback completo ante un fallo a mitad.
 
@@ -475,6 +478,32 @@ if (!r.ok) return { error: r.message };   // r.code para ramificar; r.message va
 `Result<T> = { ok: true; data: T } | { ok: false; code: string; message: string }`. Mapea `42501` → `no_autorizado`, `23505` → `duplicado`, `23503` → `referencia_invalida`, `P0001` → `message` como código y `detail` como mensaje, y cualquier otro → `error_inesperado` (se reporta a Sentry solo con el nombre de la función y el SQLSTATE: **nunca** los argumentos). `mensajes.ts` guarda el diccionario código → mensaje en español para los toasts: al estrenar un código en SQL, añádelo ahí. `args` y el retorno se tipan con `Database[schema]["Functions"][fn]` (tras `pnpm db:types`); mientras la función no esté en los tipos generados `args` es un objeto libre y el retorno `unknown`, que se puede afinar con el genérico `T`. El wrapper no valida en ejecución lo que devuelve Postgres.
 
 > **DEUDA TÉCNICA (Fase 2)**: hoy hay escrituras multi-tabla con **compensación manual** que deberían migrar a RPC y **no se han tocado**: *arriendos* (abono + gasto espejo: se crea el gasto y se borra si el abono falla; al borrar un arriendo se quitan a mano los gastos de sus abonos) y *pajillas* (se descuenta el stock al registrar la inseminación y se reintegra si el insert del evento falla; `ajustarStockPajilla()`). No copies esa técnica en código nuevo.
+
+### Consecutivos por serie y año (FIN-95)
+
+Los códigos de negocio con número correlativo (`MP-2026-0001` lote de marca propia, `MQ-…` lote de servicio, `REM-…` remisión) los genera **un único generador atómico por `(tenant, serie, año)`**: `public.siguiente_consecutivo(p_serie text, p_fecha date default null) returns text`. **Nunca `max(codigo) + 1`**: con dos usuarios a la vez los dos leen el mismo máximo y generan el mismo código, y tampoco reinicia por año.
+
+- **Tablas**: `series_consecutivo (tenant_id, serie, descripcion, formato, reinicia_anual, activo)` es la configuración (PK `(tenant_id, serie)`, más `id` para `audit.activar`; auditada); `consecutivos (tenant_id, serie, anio, ultimo)` es el contador (`anio = 0` si la serie no reinicia). SELECT para cualquier miembro del tenant; `series_consecutivo` la escriben `owner`/`admin`; `consecutivos` **no la escribe nadie** (privilegios revocados, ni `service_role`): el único camino es la función. Un contador se corrige a mano solo desde el SQL editor.
+- **Definir una serie nueva** es una fila, sin deploy (la hace el alta de tenants, FIN-98, o un `owner`/`admin`; `tenant_id` sale de `tenant_actual()` y desde SQL/service role va explícito):
+
+  ```sql
+  insert into public.series_consecutivo (tenant_id, serie, descripcion, formato, reinicia_anual)
+  values ('<tenant>', 'MP', 'Lotes de marca propia', '{serie}-{anio}-{n:4}', true);
+  ```
+
+  `serie` son 1–10 letras, cifras o `_`. `formato` admite `{serie}`, `{anio}` y `{n:4}` (número relleno con ceros hasta 4 cifras; `{n}` sin relleno) y **debe llevar `{n}`** (CHECK); si el número supera el ancho sigue creciendo sin truncar (`MP-2026-10000`). Con `reinicia_anual = false` el contador es uno solo y `{anio}` muestra el año de la fecha. Decide `reinicia_anual` **antes** de usar la serie: cambiarlo después no migra los contadores. `activo = false` apaga la serie (`serie_no_configurada`); una serie con contadores no se puede borrar (`on delete restrict`), se desactiva.
+- **Llamarla desde una RPC**, dentro de **su** transacción, en el mismo bloque que inserta el documento:
+
+  ```sql
+  -- dentro de una función plpgsql `security invoker` (ver Escrituras transaccionales)
+  v_codigo := public.siguiente_consecutivo('MP', p_fecha_recepcion);   -- null → fecha local del tenant
+  insert into cafe.lotes (codigo, ...) values (v_codigo, ...);
+  ```
+
+  Pasa la fecha del **documento** si la RPC la conoce; con `null` usa la fecha local del tenant (`tenants.zona_horaria`, no UTC: el 31/12 a las 20:00 en Bogotá no es año nuevo). Es `SECURITY DEFINER` —**excepción documentada** a la regla de `security invoker`, porque los usuarios no deben poder editar contadores— y comprueba ella misma `tenant_actual()` no nulo y `rol_en_tenant() in ('owner','admin','operativo')` (un `viewer` o un usuario sin tenant → `42501`, `callRpc` lo da como `no_autorizado`) y que la serie exista y esté activa (si no, `P0001` `serie_no_configurada`). El tenant nunca viene por parámetro.
+- **Concurrencia**: el número sale de un `insert … on conflict (tenant_id, serie, anio) do update set ultimo = ultimo + 1 returning ultimo`; el bloqueo de fila del upsert serializa a quien pide la misma serie y año (quien llega segundo espera a que el primero termine). Verificado con `pnpm test:concurrencia` (`scripts/test-consecutivos-concurrencia.ts`: 20 llamadas en paralelo vía supabase-js contra la Supabase local → 20 códigos distintos y consecutivos).
+- **Huecos**: el contador va en la transacción de quien llama, así que si la RPC falla **después** de pedir número, el rollback revierte también el contador y el número **no se consume** (lo recibe la siguiente llamada; `60_consecutivos.test.sql` lo prueba). Sí puede quedar un hueco cuando un número ya confirmado pierde su documento (se borra o se anula): **no se reutiliza ni se rellena** a mano. Por eso pide el número lo más tarde posible dentro de la RPC y nunca lo pidas desde el cliente "para mostrarlo": para previsualizar ("Próximo número: MP-2026-0013") lee `consecutivos.ultimo` y formatea con `formatearConsecutivo(formato, serie, anio, n)` (`@/modules/core`, `src/modules/core/consecutivos/formato.ts`), que da lo mismo que `public.formatear_consecutivo()` (mismos casos en `formato.test.ts` y en el test pgTAP) y **no reserva nada**.
+- Un código de error nuevo se añade a `mensajes.ts`; `serie_no_configurada` ya está.
 
 ### Path Alias
 

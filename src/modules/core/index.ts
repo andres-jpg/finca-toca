@@ -6,3 +6,4 @@ export { getSesion, getSesionBase, type Sesion, type SesionBase, type Membresia,
 export { requireSesion, requireRolTenant, requirePlatformAdmin } from "./auth/guards";
 export { requireModulo, tenantTieneModulo } from "./tenants/tenant.guards";
 export { MODULOS, tieneModulo, type ModuloId } from "./tenants/modulos";
+export { formatearConsecutivo } from "./consecutivos/formato";
