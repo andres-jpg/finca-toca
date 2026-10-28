@@ -755,6 +755,14 @@ isOneToOne: false
               "accion": string,"at": string,"cambios": Json,"email": string,"id": number,"registro_id": string,"tabla": string,"user_id": string
             }[]
                            },
+"mi_sesion":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"platform_listar_tenants":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "estado": Database["public"]['Enums']["tenant_estado"],"id": string,"nombre": string,"slug": string,"vertical": Database["public"]['Enums']["vertical"]
+            }[]
+                           },
 "rol_actual":
 { Args: Record<PropertyKey, never>; Returns: Database["public"]['Enums']["rol"]
                            },
