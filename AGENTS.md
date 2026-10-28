@@ -325,6 +325,31 @@ Flujo de un cambio de esquema: **local → `db diff` → PR → staging → prod
 
 Reglas: nunca edites una migración ya aplicada (crea otra), no mezcles datos de clientes en las migraciones, y toda tabla nueva lleva `tenant_id NOT NULL DEFAULT tenant_actual()`, RLS activada y políticas con la misma matriz de roles que sus `requireRole(...)` (ver *Multi-tenancy*).
 
+### Auditoría
+
+Todo cambio en las tablas de negocio queda en `audit.log` (migración `20261026120000_auditoria.sql`, FIN-88): tabla, `registro_id`, acción (`INSERT`/`UPDATE`/`DELETE`), `antes`/`despues` completos, `cambios` (solo las claves modificadas de un UPDATE, con su valor nuevo), `user_id` (`auth.uid()`) y `at`. Lo escribe un trigger genérico, `audit.registrar_cambio()` (`SECURITY DEFINER`, `search_path = ''`); el código de la app **no** registra nada ni pasa el usuario. Un UPDATE sin cambios reales —o que solo toca `updated_at`/`updated_by`— no genera fila.
+- **Qué está auditado**: `precios`, `gastos`, `ingresos`, `eventos_animal`, `animales`, `pajillas`, `arriendos`, `arriendos_abonos`, `fincas_cooperativa`, `pagos_finca`, `roles`, `tenants`. **No** `recolecciones` ni `extracciones_leche` (alto volumen diario, no aporta), ni el resto de tablas de catálogo (`conceptos_*`, `subconceptos_*`, `itinerarios*`, `rutas*`, `pagos`…). Para sumar una: `select audit.activar('public.<tabla>');` en una migración nueva (la tabla necesita columna `id`).
+- **Tenant del log**: sale de `tenant_id` de la fila (`to_jsonb`); `audit.activar('public.tenants', 'id')` pasa otra columna cuando la fila es el propio cliente. `fincas_cooperativa` y `pagos_finca` no tienen `tenant_id` (son de la cooperativa) y `roles.tenant_id` es NULL en los roles de cooperativa: esas filas se registran con `tenant_id` NULL y **ningún usuario las ve por RLS** (solo postgres/service role, hasta que se decida quién audita la cooperativa).
+- **Lectura**: RLS de `audit.log` → SELECT solo con `rol_actual() = 'admin'` y `tenant_id = tenant_actual()`; nadie tiene INSERT/UPDATE/DELETE. El esquema `audit` **no** está en `[api] schemas` ni en `db:types`: la app lee con la RPC `public.historial_cambios(p_tabla, p_registro_id, p_limite)` (`SECURITY DEFINER`, solo `authenticated`; revalida admin+tenant porque salta RLS y devuelve el email solo de miembros del mismo cliente, hoy filas de `roles` con su `tenant_id`; CO-10 lo adaptará a membresías). Los emails nunca salen de otro cliente. En `src/modules/core/auditoria/` están `getHistorialCambios()` (solo `admin`) y el componente `HistorialCambios`; **aún no están integrados en ninguna pantalla** (Fase 1).
+- **`user_id` NULL**: el cron (service role), el seed y cualquier escritura sin sesión (SQL editor) dejan `user_id` NULL; el componente los muestra como «Sistema». `audit.log.user_id` no tiene FK a propósito: el log sobrevive al borrado del usuario.
+- **Retención**: no se purga nada en Fase 0 (volumen bajo). Revisarlo antes de auditar tablas de alto volumen.
+- **Aviso del linter**: `historial_cambios()` es `SECURITY DEFINER` ejecutable por `authenticated`, igual que `tenant_actual()`/`rol_actual()` (ver *Multi-tenancy*): es inevitable y esperado. `registrar_cambio()`, `activar()` y `set_updated()` no son ejecutables por `anon`/`authenticated`.
+
+**Convención para TABLAS NUEVAS** (en cualquier esquema; las del núcleo y del vertical de café nacen así):
+
+```sql
+created_at timestamptz not null default now(),
+created_by uuid default auth.uid() references auth.users,
+updated_at timestamptz,
+updated_by uuid references auth.users,
+-- y tras crearla:
+create trigger set_updated before update on esquema.tabla
+  for each row execute function public.set_updated();   -- rellena updated_at = now(), updated_by = auth.uid()
+select audit.activar('esquema.tabla');
+```
+
+Las tablas **existentes** no llevan `updated_at`/`updated_by` (salvo `pagos_finca.updated_at`, que ya estaba): no se añadieron porque el log ya guarda quién y cuándo, y así la migración no toca ninguna fila. `set_updated()` asigna ambas columnas, así que no se puede enganchar a una tabla que no las tenga. El test pgTAP de una tabla nueva debería comprobar que sus INSERT/UPDATE/DELETE dejan fila en `audit.log` (ver `supabase/tests/20_auditoria.test.sql`, que filtra por registro porque el seed ya genera filas de log).
+
 ### Arquitectura modular
 
 La app evoluciona a un **monolito modular** multi-vertical. El esqueleto vive en `src/modules/` (FIN-86); las features existentes **siguen en `src/features/`** y se migran en la Fase 2.

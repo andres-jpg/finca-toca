@@ -650,6 +650,11 @@ isOneToOne: false
               "email": string,"itinerario_id": number,"itinerario_nombre": string,"rol": string,"user_id": string
             }[]
                            },
+"historial_cambios":
+{ Args: { "p_limite"?: number,"p_registro_id"?: string,"p_tabla": string }; Returns: {
+              "accion": string,"at": string,"cambios": Json,"email": string,"id": number,"registro_id": string,"tabla": string,"user_id": string
+            }[]
+                           },
 "rol_actual":
 { Args: Record<PropertyKey, never>; Returns: Database["public"]['Enums']["rol"]
                            },
