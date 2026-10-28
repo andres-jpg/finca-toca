@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
+import { getLineasEmpaque } from "../../empaque/queries/empaque.queries";
 import type { EtapaAvance } from "../lib/avance";
 import type { BultoPeso, EtapaLote } from "../lib/etapas";
 import { aplicarFiltrosLotes, LOTES_POR_PAGINA, type FiltrosLotes } from "../lib/filtros";
@@ -347,6 +348,8 @@ export async function getTimeline(
     ]);
   }
   const nombreArticulo = new Map((articulosRes.data ?? []).map((a) => [a.id, a.nombre]));
+  // Presentaciones empacadas por el empaque de marca propia (CO-30): salen en el propio evento del proceso.
+  const lineasEmpaque = await getLineasEmpaque(procesos.filter((p) => p.tipo === "empaque").map((p) => p.id));
   const quien = (id: string | null) => (id ? (usuarios.get(id) ?? null) : null);
 
   const procesosLinea = procesos.map(
@@ -368,6 +371,7 @@ export async function getTimeline(
       nivelTueste: p.nivel_tueste,
       observaciones: p.observaciones,
       baches: bachesDe.get(p.id) ?? [],
+      lineasEmpaque: lineasEmpaque.get(p.id) ?? [],
       anulacion: p.anulado_at ? { en: p.anulado_at, por: quien(p.anulado_por), motivo: p.motivo_anulacion ?? "" } : null,
     }),
   );

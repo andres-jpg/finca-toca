@@ -124,8 +124,11 @@ export interface EvaluacionPaso {
   total: number;
 }
 
-export const MOTIVO_EMPAQUE_MARCA_PROPIA =
-  "El empaque de marca propia se registra con su propio formulario (presentaciones e insumos).";
+/**
+ * Nota de la tarjeta de la cola cuando el siguiente paso es el empaque de marca propia: no usa el formulario
+ * genérico de proceso sino el de presentaciones (`EmpaqueForm`, CO-30), que además mueve el inventario.
+ */
+export const NOTA_EMPAQUE_MARCA_PROPIA = "Se empaca por presentaciones: descuenta bolsas y etiquetas y suma producto terminado.";
 
 function numeros(bultos: readonly BultoPasos[]): string {
   return bultos
@@ -141,10 +144,6 @@ export function evaluarPaso(lote: LotePasos, tipo: TipoProceso, bultos: readonly
   const hechos = evaluados.filter((x) => x.e.estado === "hecho").length;
   const base = { tipo, elegibles, hechos, total: bultos.length };
 
-  // El empaque de marca propia mueve inventario (bolsas, etiquetas, producto terminado): otro formulario.
-  if (lote.linea === "marca_propia" && tipo === "empaque") {
-    return { ...base, disponible: false, motivo: MOTIVO_EMPAQUE_MARCA_PROPIA, elegibles: [] };
-  }
   if (elegibles.length > 0) return { ...base, disponible: true, motivo: null };
 
   const pendientes = evaluados.filter((x) => x.e.estado === "bloqueado");

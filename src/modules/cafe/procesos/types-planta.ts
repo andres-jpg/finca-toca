@@ -1,4 +1,5 @@
 import type { AlertaCalidad } from "../recepciones/lib/calidad";
+import type { LineaEmpaqueVista } from "../empaque/types";
 import type { LineaLote, NivelTueste, TipoProceso } from "../lotes/types";
 import type { ConfigMerma } from "./lib/resumen";
 import type { SiguientePaso } from "./lib/pasos";
@@ -58,6 +59,8 @@ export interface ProcesoHistorial {
   nivelTueste: NivelTueste | null;
   observaciones: string | null;
   numBaches: number;
+  /** Presentaciones empacadas (solo el empaque de marca propia, que mueve inventario); vacío en los demás. */
+  lineasEmpaque: LineaEmpaqueVista[];
   /** Números de los bultos que pasaron (vacío en un proceso anulado: sus bultos se liberan). */
   bultos: number[];
   bultoIds: string[];

@@ -34,6 +34,8 @@ export interface ProcesoLinea {
   nivelTueste: NivelTueste | null;
   observaciones: string | null;
   baches: BacheLinea[];
+  /** Presentaciones empacadas (solo el empaque de marca propia, CO-30): «120 × Excelso 500 g». */
+  lineasEmpaque?: { presentacionG: number; unidades: number; producto: string }[];
   anulacion: { en: string; por: string | null; motivo: string } | null;
 }
 

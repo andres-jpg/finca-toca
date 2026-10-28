@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AlertTriangle, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fechaCorta, formatearPeso } from "../lib/numero";
-import { MOTIVO_EMPAQUE_MARCA_PROPIA, textoSiguientePaso } from "../lib/pasos";
+import { NOTA_EMPAQUE_MARCA_PROPIA, textoSiguientePaso } from "../lib/pasos";
 import { ETIQUETA_ALERTA_CALIDAD } from "../../recepciones/lib/calidad";
 import type { TarjetaLotePlanta } from "../types-planta";
 import { NivelTuesteChip } from "./nivel-tueste-chip";
@@ -52,7 +52,7 @@ export function TarjetaLote({ lote }: { lote: TarjetaLotePlanta }) {
       {siguiente ? (
         <div>
           <p className="text-lg font-semibold text-gray-900">Siguiente: {textoSiguientePaso(siguiente)}</p>
-          {empaqueMarcaPropia && <p className="text-sm text-gray-500">{MOTIVO_EMPAQUE_MARCA_PROPIA}</p>}
+          {empaqueMarcaPropia && <p className="text-sm text-gray-500">{NOTA_EMPAQUE_MARCA_PROPIA}</p>}
         </div>
       ) : (
         <p className="text-lg font-semibold text-gray-500">Sin pasos pendientes</p>
