@@ -29,6 +29,9 @@ export const MENSAJES_RPC: Readonly<Record<string, string>> = {
   tenant_no_permitido: "No tienes acceso a ese cliente.",
   tenant_no_encontrado: "El cliente indicado no existe.",
   no_autenticado: "Debes iniciar sesión para continuar.",
+  tercero_no_encontrado: "El tercero no existe o no pertenece a tu cliente.",
+  consumidor_final_protegido: "El tercero «Consumidor final» es un registro del sistema: no se edita ni se desactiva.",
+  consumidor_final_no_disponible: "No se puede crear el «Consumidor final»: su identificación (222222222222) ya la usa otro tercero.",
 };
 
 const MENSAJE_GENERICO = MENSAJES_RPC.error_inesperado;

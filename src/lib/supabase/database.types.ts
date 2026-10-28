@@ -779,6 +779,26 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"terceros": {
+                  Row: {
+                    "activo": boolean,"created_at": string,"created_by": string | null,"digito_verificacion": number | null,"direccion": string,"email": string | null,"es_consumidor_final": boolean,"id": string,"identificacion": string,"nombre": string,"observaciones": string | null,"roles": (string)[],"telefono": string,"tenant_id": string,"tipo_identificacion": Database["public"]['Enums']["tipo_identificacion"],"updated_at": string | null,"updated_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "activo"?: boolean,"created_at"?: string,"created_by"?: string | null,"digito_verificacion"?: number | null,"direccion": string,"email"?: string | null,"es_consumidor_final"?: boolean,"id"?: string,"identificacion": string,"nombre": string,"observaciones"?: string | null,"roles"?: (string)[],"telefono": string,"tenant_id"?: string,"tipo_identificacion"?: Database["public"]['Enums']["tipo_identificacion"],"updated_at"?: string | null,"updated_by"?: string | null
+                  }
+                  Update: {
+                    "activo"?: boolean,"created_at"?: string,"created_by"?: string | null,"digito_verificacion"?: number | null,"direccion"?: string,"email"?: string | null,"es_consumidor_final"?: boolean,"id"?: string,"identificacion"?: string,"nombre"?: string,"observaciones"?: string | null,"roles"?: (string)[],"telefono"?: string,"tenant_id"?: string,"tipo_identificacion"?: Database["public"]['Enums']["tipo_identificacion"],"updated_at"?: string | null,"updated_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "terceros_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"toros_legacy": {
                   Row: {
                     "alta": boolean,"created_at": string | null,"estado": string | null,"fecha_compra": string | null,"fecha_nacimiento": string | null,"id": string,"madre_id": string | null,"nombre": string,"numero_registro": string | null,"origen": Database["public"]['Enums']["vaca_origen"] | null,"padre_id": string | null,"toro_id": number
@@ -931,7 +951,36 @@ isOneToOne: false
                 }
           }
           Functions: {
-            "cambiar_tenant_activo":
+            "asegurar_consumidor_final":
+{ Args: { "p_tenant"?: string }; Returns: string
+                           },
+"buscar_terceros_similares":
+{ Args: { "p_identificacion"?: string,"p_nombre": string }; Returns: {
+              "activo": boolean,
+"created_at": string,
+"created_by": string | null,
+"digito_verificacion": number | null,
+"direccion": string,
+"email": string | null,
+"es_consumidor_final": boolean,
+"id": string,
+"identificacion": string,
+"nombre": string,
+"observaciones": string | null,
+"roles": (string)[],
+"telefono": string,
+"tenant_id": string,
+"tipo_identificacion": Database["public"]['Enums']["tipo_identificacion"],
+"updated_at": string | null,
+"updated_by": string | null
+            }[]
+                          SetofOptions: {
+        from: "*"
+        to: "terceros"
+        isOneToOne: false
+        isSetofReturn: true
+      } },
+"cambiar_tenant_activo":
 { Args: { "p_tenant": string }; Returns: string
                            },
 "es_platform_admin":
@@ -958,6 +1007,12 @@ isOneToOne: false
                            },
 "movimiento_signo_valido":
 { Args: { "p_cantidad": number,"p_motivo": Database["public"]['Enums']["motivo_movimiento"] }; Returns: boolean
+                           },
+"normalizar_identificacion":
+{ Args: { "p_texto": string }; Returns: string
+                           },
+"normalizar_nombre":
+{ Args: { "p_texto": string }; Returns: string
                            },
 "parametro":
 { Args: { "p_clave": string,"p_default"?: Json }; Returns: Json
@@ -1003,7 +1058,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "animal_raza": "holstein"|"jersey"|"jerhol"|"normando"|"ayrshire"|"cruce","animal_sexo": "hembra"|"macho","estado_productivo": "leche"|"levante_1"|"levante_2"|"produccion"|"secado"|"reproductor","estado_reproductivo": "pre_puber"|"puber"|"pre_servicio"|"servicio"|"servida"|"por_confirmar"|"rechequeo"|"cargada","motivo_movimiento": "saldo_inicial"|"compra"|"produccion"|"consumo"|"venta"|"cortesia"|"muestra"|"perdida"|"ajuste"|"devolucion"|"reapertura","rol": "admin"|"user"|"cooperativa_admin"|"cooperativa_user"|"viewer","rol_tenant": "owner"|"admin"|"operativo"|"viewer","tenant_estado": "activo"|"prueba"|"suspendido"|"baja","tipo_articulo": "insumo"|"producto_terminado"|"materia_prima"|"otro","vaca_estado": "produccion"|"secado"|"pre_jardin"|"jardin"|"transicion","vaca_origen": "finca"|"externa","vertical": "ganaderia"|"cooperativa"|"cafe"
+            "animal_raza": "holstein"|"jersey"|"jerhol"|"normando"|"ayrshire"|"cruce","animal_sexo": "hembra"|"macho","estado_productivo": "leche"|"levante_1"|"levante_2"|"produccion"|"secado"|"reproductor","estado_reproductivo": "pre_puber"|"puber"|"pre_servicio"|"servicio"|"servida"|"por_confirmar"|"rechequeo"|"cargada","motivo_movimiento": "saldo_inicial"|"compra"|"produccion"|"consumo"|"venta"|"cortesia"|"muestra"|"perdida"|"ajuste"|"devolucion"|"reapertura","rol": "admin"|"user"|"cooperativa_admin"|"cooperativa_user"|"viewer","rol_tenant": "owner"|"admin"|"operativo"|"viewer","tenant_estado": "activo"|"prueba"|"suspendido"|"baja","tipo_articulo": "insumo"|"producto_terminado"|"materia_prima"|"otro","tipo_identificacion": "NIT"|"CC"|"CE"|"PAS"|"OTRO","vaca_estado": "produccion"|"secado"|"pre_jardin"|"jardin"|"transicion","vaca_origen": "finca"|"externa","vertical": "ganaderia"|"cooperativa"|"cafe"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -1123,7 +1178,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "animal_raza": ["holstein", "jersey", "jerhol", "normando", "ayrshire", "cruce"],"animal_sexo": ["hembra", "macho"],"estado_productivo": ["leche", "levante_1", "levante_2", "produccion", "secado", "reproductor"],"estado_reproductivo": ["pre_puber", "puber", "pre_servicio", "servicio", "servida", "por_confirmar", "rechequeo", "cargada"],"motivo_movimiento": ["saldo_inicial", "compra", "produccion", "consumo", "venta", "cortesia", "muestra", "perdida", "ajuste", "devolucion", "reapertura"],"rol": ["admin", "user", "cooperativa_admin", "cooperativa_user", "viewer"],"rol_tenant": ["owner", "admin", "operativo", "viewer"],"tenant_estado": ["activo", "prueba", "suspendido", "baja"],"tipo_articulo": ["insumo", "producto_terminado", "materia_prima", "otro"],"vaca_estado": ["produccion", "secado", "pre_jardin", "jardin", "transicion"],"vaca_origen": ["finca", "externa"],"vertical": ["ganaderia", "cooperativa", "cafe"]
+            "animal_raza": ["holstein", "jersey", "jerhol", "normando", "ayrshire", "cruce"],"animal_sexo": ["hembra", "macho"],"estado_productivo": ["leche", "levante_1", "levante_2", "produccion", "secado", "reproductor"],"estado_reproductivo": ["pre_puber", "puber", "pre_servicio", "servicio", "servida", "por_confirmar", "rechequeo", "cargada"],"motivo_movimiento": ["saldo_inicial", "compra", "produccion", "consumo", "venta", "cortesia", "muestra", "perdida", "ajuste", "devolucion", "reapertura"],"rol": ["admin", "user", "cooperativa_admin", "cooperativa_user", "viewer"],"rol_tenant": ["owner", "admin", "operativo", "viewer"],"tenant_estado": ["activo", "prueba", "suspendido", "baja"],"tipo_articulo": ["insumo", "producto_terminado", "materia_prima", "otro"],"tipo_identificacion": ["NIT", "CC", "CE", "PAS", "OTRO"],"vaca_estado": ["produccion", "secado", "pre_jardin", "jardin", "transicion"],"vaca_origen": ["finca", "externa"],"vertical": ["ganaderia", "cooperativa", "cafe"]
           }
         }
 } as const

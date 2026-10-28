@@ -29,6 +29,26 @@ export {
 } from "./inventario/lib/inventario";
 export type { Articulo, StockArticulo, MovimientoKardex, RespuestaMovimientos } from "./inventario/types";
 export { formatearConsecutivo } from "./consecutivos/formato";
+export {
+  crearTercero,
+  actualizarTercero,
+  desactivarTercero,
+  reactivarTercero,
+  buscarSimilares,
+  listarOpcionesTerceros,
+  asegurarConsumidorFinal,
+} from "./terceros/actions/terceros.actions";
+export { listarTerceros, type FiltrosTerceros } from "./terceros/queries/terceros.queries";
+export { normalizarIdentificacion, normalizarNombre } from "./terceros/lib/normalizar";
+export {
+  ROLES_TERCERO,
+  TIPOS_IDENTIFICACION,
+  ETIQUETA_ROL_TERCERO,
+  type RolTercero,
+  type TipoIdentificacion,
+} from "./terceros/lib/roles";
+export { terceroSchema, type TerceroFormInput, type TerceroInput } from "./terceros/schemas/tercero.schema";
+export type { Tercero, TerceroOpcion } from "./terceros/types";
 export { construirNav, ocultoEnPWA, ORDEN_GRUPOS, type SesionNav } from "./registry/nav";
 export { paginaInicial, PAGINA_INICIAL_POR_ROL, PAGINA_INICIAL_POR_VERTICAL } from "./registry/pagina-inicial";
 export type { NavItemDef, ModuleManifest } from "./registry/types";

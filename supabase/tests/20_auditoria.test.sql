@@ -21,8 +21,8 @@ select is(
     where t.tgfoid = 'audit.registrar_cambio'::regproc and not t.tgisinternal),
   array['animales', 'arriendos', 'arriendos_abonos', 'articulos', 'eventos_animal', 'fincas_cooperativa', 'gastos',
         'ingresos', 'pagos_finca', 'pajillas', 'parametros', 'precios', 'roles', 'series_consecutivo', 'tarifas', 'tenant_members',
-        'tenant_modulos', 'tenants'],
-  'auditoría activa exactamente en las 12 tablas del ticket más articulos, series_consecutivo, tarifas, parametros, tenant_modulos y tenant_members (no en recolecciones ni extracciones_leche)'
+        'tenant_modulos', 'tenants', 'terceros'],
+  'auditoría activa exactamente en las 12 tablas del ticket más articulos, series_consecutivo, tarifas, parametros, tenant_modulos, tenant_members y terceros (no en recolecciones ni extracciones_leche)'
 );
 select ok(
   not has_function_privilege('anon', 'public.historial_cambios(text,text,integer)', 'execute'),
