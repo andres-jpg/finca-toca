@@ -4,6 +4,7 @@ import { MODULOS, type ModuloId } from "@/modules/core/tenants/modulos";
 import type { Vertical } from "@/modules/core/tenants/tenant.queries";
 import { ocultoEnPWA, type SesionNav } from "@/modules/core/registry/nav";
 import { ICONOS_NAV } from "@/modules/core/registry/iconos";
+import { getExportador } from "@/modules/core/export/registry";
 import { MANIFIESTOS, getNavParaSesion } from "./registry";
 import { MENU_BASELINE } from "./registry.baseline";
 
@@ -270,5 +271,10 @@ describe("integridad de los manifiestos", () => {
 
   it("cada vertical tiene su manifiesto, más el del núcleo", () => {
     expect(MANIFIESTOS.map((m) => m.vertical).sort()).toEqual(["cafe", "cooperativa", "core", "ganaderia"]);
+  });
+
+  it("registra los exportadores a Excel del núcleo y de café", () => {
+    expect(getExportador("terceros")?.modulo).toBe("core.terceros");
+    expect(getExportador("cafe-lotes")?.modulo).toBe("cafe.recepcion");
   });
 });
