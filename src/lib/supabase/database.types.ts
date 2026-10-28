@@ -105,6 +105,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"articulos": {
+                  Row: {
+                    "activo": boolean,"atributos": NonNullable<Json>,"codigo": string | null,"created_at": string,"created_by": string | null,"id": string,"nombre": string,"stock_minimo": number | null,"tenant_id": string,"tipo": Database["public"]['Enums']["tipo_articulo"],"unidad": string,"updated_at": string | null,"updated_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "activo"?: boolean,"atributos"?: NonNullable<Json>,"codigo"?: string | null,"created_at"?: string,"created_by"?: string | null,"id"?: string,"nombre": string,"stock_minimo"?: number | null,"tenant_id"?: string,"tipo": Database["public"]['Enums']["tipo_articulo"],"unidad"?: string,"updated_at"?: string | null,"updated_by"?: string | null
+                  }
+                  Update: {
+                    "activo"?: boolean,"atributos"?: NonNullable<Json>,"codigo"?: string | null,"created_at"?: string,"created_by"?: string | null,"id"?: string,"nombre"?: string,"stock_minimo"?: number | null,"tenant_id"?: string,"tipo"?: Database["public"]['Enums']["tipo_articulo"],"unidad"?: string,"updated_at"?: string | null,"updated_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "articulos_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"conceptos_gasto": {
                   Row: {
                     "id": number,"nombre": string,"tenant_id": string
@@ -368,6 +388,38 @@ isOneToOne: false
                   }
                   Relationships: [
                     
+                  ]
+                },"movimientos_inventario": {
+                  Row: {
+                    "articulo_id": string,"cantidad": number,"costo_unitario": number | null,"created_at": string,"created_by": string | null,"fecha": string,"id": string,"motivo": Database["public"]['Enums']["motivo_movimiento"],"observaciones": string | null,"ref_id": string | null,"ref_tipo": string | null,"seq": number,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "articulo_id": string,"cantidad": number,"costo_unitario"?: number | null,"created_at"?: string,"created_by"?: string | null,"fecha"?: string,"id"?: string,"motivo": Database["public"]['Enums']["motivo_movimiento"],"observaciones"?: string | null,"ref_id"?: string | null,"ref_tipo"?: string | null,"seq"?: never,"tenant_id"?: string
+                  }
+                  Update: {
+                    "articulo_id"?: string,"cantidad"?: number,"costo_unitario"?: number | null,"created_at"?: string,"created_by"?: string | null,"fecha"?: string,"id"?: string,"motivo"?: Database["public"]['Enums']["motivo_movimiento"],"observaciones"?: string | null,"ref_id"?: string | null,"ref_tipo"?: string | null,"seq"?: never,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "movimientos_articulo_fk"
+      columns: ["tenant_id","articulo_id"]
+isOneToOne: false
+      referencedRelation: "articulos"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "movimientos_articulo_fk"
+      columns: ["tenant_id","articulo_id"]
+isOneToOne: false
+      referencedRelation: "v_stock"
+      referencedColumns: ["tenant_id","articulo_id"]
+    },{
+      foreignKeyName: "movimientos_inventario_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"pagos": {
                   Row: {
@@ -782,7 +834,47 @@ isOneToOne: false
                 }
           }
           Views: {
-            [_ in never]: never
+            "v_kardex": {
+                  Row: {
+                    "articulo_id": string,"articulo_nombre": string,"cantidad": number,"costo_unitario": number | null,"created_at": string,"created_by": string | null,"fecha": string,"id": string,"motivo": Database["public"]['Enums']["motivo_movimiento"],"observaciones": string | null,"ref_id": string | null,"ref_tipo": string | null,"saldo": number | null,"seq": number,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "movimientos_articulo_fk"
+      columns: ["tenant_id","articulo_id"]
+isOneToOne: false
+      referencedRelation: "articulos"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "movimientos_articulo_fk"
+      columns: ["tenant_id","articulo_id"]
+isOneToOne: false
+      referencedRelation: "v_stock"
+      referencedColumns: ["tenant_id","articulo_id"]
+    },{
+      foreignKeyName: "movimientos_inventario_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"v_stock": {
+                  Row: {
+                    "activo": boolean,"articulo_id": string,"atributos": NonNullable<Json>,"bajo_minimo": boolean | null,"codigo": string | null,"nombre": string,"stock": number | null,"stock_minimo": number | null,"tenant_id": string,"tipo": Database["public"]['Enums']["tipo_articulo"],"unidad": string
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "articulos_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                }
           }
           Functions: {
             "cambiar_tenant_activo":
@@ -807,10 +899,16 @@ isOneToOne: false
 "mi_sesion":
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
+"movimiento_signo_valido":
+{ Args: { "p_cantidad": number,"p_motivo": Database["public"]['Enums']["motivo_movimiento"] }; Returns: boolean
+                           },
 "platform_listar_tenants":
 { Args: Record<PropertyKey, never>; Returns: {
               "estado": Database["public"]['Enums']["tenant_estado"],"id": string,"nombre": string,"slug": string,"vertical": Database["public"]['Enums']["vertical"]
             }[]
+                           },
+"registrar_movimientos":
+{ Args: { "p_movs": Json,"p_permitir_negativo"?: boolean }; Returns: Json
                            },
 "rol_actual":
 { Args: Record<PropertyKey, never>; Returns: Database["public"]['Enums']["rol"]
@@ -837,7 +935,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "animal_raza": "holstein"|"jersey"|"jerhol"|"normando"|"ayrshire"|"cruce","animal_sexo": "hembra"|"macho","estado_productivo": "leche"|"levante_1"|"levante_2"|"produccion"|"secado"|"reproductor","estado_reproductivo": "pre_puber"|"puber"|"pre_servicio"|"servicio"|"servida"|"por_confirmar"|"rechequeo"|"cargada","rol": "admin"|"user"|"cooperativa_admin"|"cooperativa_user"|"viewer","rol_tenant": "owner"|"admin"|"operativo"|"viewer","tenant_estado": "activo"|"prueba"|"suspendido"|"baja","vaca_estado": "produccion"|"secado"|"pre_jardin"|"jardin"|"transicion","vaca_origen": "finca"|"externa","vertical": "ganaderia"|"cooperativa"|"cafe"
+            "animal_raza": "holstein"|"jersey"|"jerhol"|"normando"|"ayrshire"|"cruce","animal_sexo": "hembra"|"macho","estado_productivo": "leche"|"levante_1"|"levante_2"|"produccion"|"secado"|"reproductor","estado_reproductivo": "pre_puber"|"puber"|"pre_servicio"|"servicio"|"servida"|"por_confirmar"|"rechequeo"|"cargada","motivo_movimiento": "saldo_inicial"|"compra"|"produccion"|"consumo"|"venta"|"cortesia"|"muestra"|"perdida"|"ajuste"|"devolucion"|"reapertura","rol": "admin"|"user"|"cooperativa_admin"|"cooperativa_user"|"viewer","rol_tenant": "owner"|"admin"|"operativo"|"viewer","tenant_estado": "activo"|"prueba"|"suspendido"|"baja","tipo_articulo": "insumo"|"producto_terminado"|"materia_prima"|"otro","vaca_estado": "produccion"|"secado"|"pre_jardin"|"jardin"|"transicion","vaca_origen": "finca"|"externa","vertical": "ganaderia"|"cooperativa"|"cafe"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -957,7 +1055,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "animal_raza": ["holstein", "jersey", "jerhol", "normando", "ayrshire", "cruce"],"animal_sexo": ["hembra", "macho"],"estado_productivo": ["leche", "levante_1", "levante_2", "produccion", "secado", "reproductor"],"estado_reproductivo": ["pre_puber", "puber", "pre_servicio", "servicio", "servida", "por_confirmar", "rechequeo", "cargada"],"rol": ["admin", "user", "cooperativa_admin", "cooperativa_user", "viewer"],"rol_tenant": ["owner", "admin", "operativo", "viewer"],"tenant_estado": ["activo", "prueba", "suspendido", "baja"],"vaca_estado": ["produccion", "secado", "pre_jardin", "jardin", "transicion"],"vaca_origen": ["finca", "externa"],"vertical": ["ganaderia", "cooperativa", "cafe"]
+            "animal_raza": ["holstein", "jersey", "jerhol", "normando", "ayrshire", "cruce"],"animal_sexo": ["hembra", "macho"],"estado_productivo": ["leche", "levante_1", "levante_2", "produccion", "secado", "reproductor"],"estado_reproductivo": ["pre_puber", "puber", "pre_servicio", "servicio", "servida", "por_confirmar", "rechequeo", "cargada"],"motivo_movimiento": ["saldo_inicial", "compra", "produccion", "consumo", "venta", "cortesia", "muestra", "perdida", "ajuste", "devolucion", "reapertura"],"rol": ["admin", "user", "cooperativa_admin", "cooperativa_user", "viewer"],"rol_tenant": ["owner", "admin", "operativo", "viewer"],"tenant_estado": ["activo", "prueba", "suspendido", "baja"],"tipo_articulo": ["insumo", "producto_terminado", "materia_prima", "otro"],"vaca_estado": ["produccion", "secado", "pre_jardin", "jardin", "transicion"],"vaca_origen": ["finca", "externa"],"vertical": ["ganaderia", "cooperativa", "cafe"]
           }
         }
 } as const
