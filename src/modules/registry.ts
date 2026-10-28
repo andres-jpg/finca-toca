@@ -1,7 +1,10 @@
 import { cafeManifest } from "./cafe/manifest";
+import { CONCEPTOS_TARIFA_CAFE, DEFINICIONES_PARAMETROS_CAFE } from "./cafe/parametros";
 import { coreManifest } from "./core/manifest";
 import { construirNav, type SesionNav } from "./core/registry/nav";
+import { defineParametros } from "./core/parametros/registry";
 import type { ModuleManifest, NavItemDef } from "./core/registry/types";
+import { defineConceptosTarifa } from "./core/tarifas/registry";
 import { cooperativaManifest } from "./cooperativa/manifest";
 import { ganaderiaManifest } from "./ganaderia/manifest";
 
@@ -21,3 +24,13 @@ export const MANIFIESTOS: readonly ModuleManifest[] = [coreManifest, ganaderiaMa
 export function getNavParaSesion(sesion: SesionNav, opciones: { pwa?: boolean } = {}): NavItemDef[] {
   return construirNav(MANIFIESTOS, sesion, opciones);
 }
+
+/**
+ * Definiciones de parámetros y conceptos de tarifa de cada módulo, inyectadas al núcleo (que no puede
+ * importar los verticales). Se registran al cargar este fichero, así que quien las necesite —la pantalla
+ * de configuración y sus Server Actions— debe `import "@/modules/registry"` (o algo de él) en su propio
+ * módulo: el registro es estado de módulo y cada bundle del servidor tiene el suyo. Los verticales leen sus
+ * propios parámetros pasando la definición a `getParametro(def)`, sin depender de este registro.
+ */
+defineParametros([...DEFINICIONES_PARAMETROS_CAFE]);
+defineConceptosTarifa(CONCEPTOS_TARIFA_CAFE);

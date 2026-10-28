@@ -493,6 +493,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"parametros": {
+                  Row: {
+                    "clave": string,"created_at": string,"created_by": string | null,"id": string,"tenant_id": string,"updated_at": string | null,"updated_by": string | null,"valor": NonNullable<Json>
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "clave": string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"tenant_id"?: string,"updated_at"?: string | null,"updated_by"?: string | null,"valor": NonNullable<Json>
+                  }
+                  Update: {
+                    "clave"?: string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"tenant_id"?: string,"updated_at"?: string | null,"updated_by"?: string | null,"valor"?: NonNullable<Json>
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "parametros_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"platform_admins": {
                   Row: {
                     "user_id": string
@@ -673,6 +693,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     },{
       foreignKeyName: "subconceptos_ingreso_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"tarifas": {
+                  Row: {
+                    "concepto": string,"created_at": string,"created_by": string | null,"id": string,"observaciones": string | null,"tenant_id": string,"unidad": string,"valor": number,"vigente_desde": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "concepto": string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"observaciones"?: string | null,"tenant_id"?: string,"unidad"?: string,"valor": number,"vigente_desde"?: string
+                  }
+                  Update: {
+                    "concepto"?: string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"observaciones"?: string | null,"tenant_id"?: string,"unidad"?: string,"valor"?: number,"vigente_desde"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "tarifas_tenant_id_fkey"
       columns: ["tenant_id"]
 isOneToOne: false
       referencedRelation: "tenants"
@@ -874,6 +914,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"v_tarifas_vigentes": {
+                  Row: {
+                    "concepto": string,"tenant_id": string,"unidad": string,"valor": number,"vigente_desde": string
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "tarifas_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
                 }
           }
           Functions: {
@@ -891,6 +945,9 @@ isOneToOne: false
               "email": string,"itinerario_id": number,"itinerario_nombre": string,"rol": string,"user_id": string
             }[]
                            },
+"guardar_parametro":
+{ Args: { "p_clave": string,"p_valor": Json }; Returns: Json
+                           },
 "historial_cambios":
 { Args: { "p_limite"?: number,"p_registro_id"?: string,"p_tabla": string }; Returns: {
               "accion": string,"at": string,"cambios": Json,"email": string,"id": number,"registro_id": string,"tabla": string,"user_id": string
@@ -901,6 +958,9 @@ isOneToOne: false
                            },
 "movimiento_signo_valido":
 { Args: { "p_cantidad": number,"p_motivo": Database["public"]['Enums']["motivo_movimiento"] }; Returns: boolean
+                           },
+"parametro":
+{ Args: { "p_clave": string,"p_default"?: Json }; Returns: Json
                            },
 "platform_listar_tenants":
 { Args: Record<PropertyKey, never>; Returns: {
@@ -923,6 +983,14 @@ isOneToOne: false
                            },
 "siguiente_consecutivo":
 { Args: { "p_fecha"?: string,"p_serie": string }; Returns: string
+                           },
+"tarifa_vigente":
+{ Args: { "p_at"?: string,"p_concepto": string }; Returns: number
+                           },
+"tarifas_historial":
+{ Args: { "p_concepto"?: string }; Returns: {
+              "concepto": string,"created_at": string,"created_by": string,"email": string,"id": string,"observaciones": string,"unidad": string,"valor": number,"vigente_desde": string
+            }[]
                            },
 "tenant_actual":
 { Args: Record<PropertyKey, never>; Returns: string

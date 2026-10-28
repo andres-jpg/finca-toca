@@ -24,6 +24,7 @@ export const MENSAJES_RPC: Readonly<Record<string, string>> = {
   orden_proceso_invalido: "El orden del proceso no es válido para esta operación.",
   consecutivo_bloqueado: "El consecutivo está bloqueado por otra operación en curso. Inténtalo de nuevo.",
   tarifa_no_definida: "No hay una tarifa definida para esta operación.",
+  tarifa_no_eliminable: "Solo se pueden eliminar tarifas programadas (aún no vigentes). Para corregir una vigente, crea una nueva.",
   serie_no_configurada: "La serie de numeración no está configurada.",
   tenant_no_permitido: "No tienes acceso a ese cliente.",
   tenant_no_encontrado: "El cliente indicado no existe.",
