@@ -153,7 +153,7 @@ const navItems: NavItem[] = [
 
 interface SidebarProps {
   role?: UserRole | null;
-  /** Nombre del cliente (finca) de la sesión. `null` en roles de cooperativa. */
+  /** Nombre del cliente de la sesión (la cabecera de cooperativa usa su propia marca, no este nombre). */
   tenantNombre?: string | null;
   /** Módulos activos del cliente: filtra las opciones de módulos que no tiene todo el mundo. */
   modulos?: string[];

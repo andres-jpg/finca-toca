@@ -4,7 +4,7 @@
 -- Todo corre en una transacción que se revierte: no deja rastro.
 begin;
 
-select plan(36);
+select plan(38);
 
 -- 0. Datos de la migración (como dueño, sin RLS) -----------------------------------------------------
 select is(
@@ -146,8 +146,14 @@ reset role;
 
 -- 4. Cooperativa y anon ---------------------------------------------------------------------------------------
 select tests.autenticar_como('coop.admin@test');
-select is((select count(*)::int from public.tenant_modulos), 0, 'cooperativa (sin tenant_id) no ve tenant_modulos');
-select ok(not public.tenant_tiene_modulo('cooperativa.pagos'), 'tenant_tiene_modulo es false sin cliente');
+-- Desde FIN-90 la cooperativa tiene tenant (Toca Lácteos): ve SUS 4 módulos y ninguno de una finca.
+select is((select count(*)::int from public.tenant_modulos), 4, 'cooperativa ve los 4 módulos de Toca Lácteos');
+select is(
+  (select count(*)::int from public.tenant_modulos where modulo_id like 'ganaderia.%'), 0,
+  'cooperativa no ve módulos de ganadería'
+);
+select ok(public.tenant_tiene_modulo('cooperativa.pagos'), 'cooperativa tiene el módulo cooperativa.pagos');
+select ok(not public.tenant_tiene_modulo('ganaderia.arriendos'), 'cooperativa no tiene ganaderia.arriendos');
 reset role;
 
 select tests.como_anon();

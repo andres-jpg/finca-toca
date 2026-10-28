@@ -20,8 +20,8 @@ select is(
      join pg_class c on c.oid = t.tgrelid
     where t.tgfoid = 'audit.registrar_cambio'::regproc and not t.tgisinternal),
   array['animales', 'arriendos', 'arriendos_abonos', 'eventos_animal', 'fincas_cooperativa', 'gastos',
-        'ingresos', 'pagos_finca', 'pajillas', 'precios', 'roles', 'tenant_modulos', 'tenants'],
-  'auditoría activa exactamente en las 12 tablas del ticket más tenant_modulos (no en recolecciones ni extracciones_leche)'
+        'ingresos', 'pagos_finca', 'pajillas', 'precios', 'roles', 'tenant_members', 'tenant_modulos', 'tenants'],
+  'auditoría activa exactamente en las 12 tablas del ticket más tenant_modulos y tenant_members (no en recolecciones ni extracciones_leche)'
 );
 select ok(
   not has_function_privilege('anon', 'public.historial_cambios(text,text,integer)', 'execute'),
@@ -236,7 +236,11 @@ select is((select count(*)::int from public.historial_cambios('public.gastos', '
 
 reset role;
 select tests.autenticar_como('coop.admin@test');
-select is((select count(*)::int from audit.log), 0, 'cooperativa_admin no ve el log');
+-- Desde FIN-90 es admin de Toca Lácteos: ve el log de SU cliente (membresías y módulos), nunca el de una finca.
+select is(
+  (select count(*)::int from audit.log where tenant_id is distinct from (select id from public.tenants where slug = 'toca-lacteos')),
+  0, 'cooperativa_admin no ve el log de ningún cliente de finca'
+);
 
 -- 7. Nadie escribe en el log ----------------------------------------------------------------------------
 reset role;
