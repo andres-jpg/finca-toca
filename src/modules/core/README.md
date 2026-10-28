@@ -75,3 +75,26 @@ El cliente de la sesión (con `vertical`, plan, marca y **módulos activos**) y 
 ## `inventario/` — kardex genérico
 
 Artículos y movimientos append-only; el stock es la suma de movimientos y se escribe solo con la RPC `registrar_movimientos`. Detalle en [`inventario/README.md`](./inventario/README.md) y *Inventario tipo kardex* en CLAUDE.md.
+
+## `consecutivos/` — numeración por serie y año
+
+Códigos correlativos de negocio (`MP-2026-0001`, `MQ-…`, `REM-…`) sin carreras: los genera `public.siguiente_consecutivo(serie, fecha)` en Postgres (upsert atómico por `(tenant, serie, año)`), nunca `max(codigo) + 1`. Lo llaman otras RPC **dentro de su transacción**; si fallan después, el rollback devuelve el número (no hay huecos por fallos). Es `SECURITY DEFINER` —**excepción documentada** a la plantilla de arriba— porque nadie puede escribir en `consecutivos`; comprueba tenant y rol (`owner|admin|operativo`) por sí misma. Guía completa (definir una serie, llamarla desde una RPC, huecos) en *Consecutivos por serie y año*, CLAUDE.md.
+
+| Fichero | Qué es |
+|---|---|
+| `formato.ts` | **Puro**: `formatearConsecutivo(formato, serie, anio, n)`, solo para previsualizar ("Próximo número: MP-2026-0013"). No reserva nada y debe dar lo mismo que `public.formatear_consecutivo()`; `formato.test.ts` y `supabase/tests/60_consecutivos.test.sql` comparten los casos. |
+
+Prueba de concurrencia: `pnpm test:concurrencia` (`scripts/test-consecutivos-concurrencia.ts`, necesita la Supabase local).
+
+## `auth/` — sesión unificada (FIN-91)
+
+`getSesion()` (`auth/sesion.ts`) es el **único punto de entrada a la sesión para código nuevo**: usuario, cliente activo (con vertical y módulos), `rolTenant`, `rolLegacy`, `esPlatformAdmin` y membresías, con dos round-trips en total (Auth + RPC `public.mi_sesion()`). Es un módulo plano con `React.cache()`: no le pongas `"use server"`.
+
+```ts
+const sesion = await requireSesion();                         // página/layout: redirect a /login
+const { tenant, rolTenant } = await requireRolTenant(["owner", "admin"]); // Server Action: lanza AuthorizationError
+```
+
+`getSesionBase()` es la misma lectura sin exigir cliente activo (para el platform admin que aún no eligió uno). `requireRole()` / `checkRoutePermission()` siguen existiendo para las pantallas legacy y están `@deprecated`.
+
+`tenants/` incluye el selector de cliente (`TenantSwitcher` + `cambiarTenantActivo`): la autorización la hace la RPC `cambiar_tenant_activo()`, no la UI.
