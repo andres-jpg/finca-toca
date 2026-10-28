@@ -97,8 +97,13 @@ describe("getNavParaSesion: módulos y verticales", () => {
     expect(hrefs(sesion("ganaderia", [], "admin"))).toEqual([]);
   });
 
-  it("café arranca sin entradas propias (Fase 0)", () => {
-    expect(hrefs(sesion("cafe", ["cafe.recepcion", "cafe.procesos"], null, "owner"))).toEqual([]);
+  it("café solo muestra las entradas de los módulos que tiene (procesos aún no tiene pantalla)", () => {
+    expect(hrefs(sesion("cafe", ["cafe.procesos"], null, "owner"))).toEqual([]);
+    expect(hrefs(sesion("cafe", ["cafe.inventario"], null, "owner"))).toEqual(["/dashboard/cafe/insumos"]);
+    expect(hrefs(sesion("cafe", ["cafe.recepcion"], null, "owner"))).toEqual([
+      "/dashboard/cafe/lotes",
+      "/dashboard/cafe/maestros/tipos",
+    ]);
   });
 });
 
@@ -126,6 +131,87 @@ describe("getNavParaSesion: entradas del núcleo (core.terceros)", () => {
     const h = hrefs(sesion("ganaderia", modulos, "admin"));
     expect(h.slice(-3)).toEqual(["/dashboard/configuracion", "/dashboard/terceros", "/dashboard/tarifas"]);
     expect(h.slice(0, -2)).toEqual(MENU_BASELINE["admin@velero.test"].map((i) => i.href));
+  });
+});
+
+describe("getNavParaSesion: tenant de café (CO-21)", () => {
+  // Lo que deja `crear_tenant` para café: módulos base + core.terceros y core.auditoria (cafe.dashboard no es
+  // base: se le suma para ver el panel).
+  const MODULOS_CAFE = [
+    "cafe.recepcion",
+    "cafe.procesos",
+    "cafe.inventario",
+    "cafe.remisiones",
+    "cafe.dashboard",
+    "core.terceros",
+    "core.auditoria",
+  ];
+
+  it("admin: menú agrupado Operación, Inventario, Gerencia y Maestros (tipos, terceros, tarifas)", () => {
+    expect(resumen(sesion("cafe", MODULOS_CAFE, null, "admin"))).toEqual([
+      { href: "/dashboard/cafe/lotes", label: "Lotes", icon: "Boxes" },
+      { href: "/dashboard/cafe/insumos", label: "Insumos", icon: "Package" },
+      { href: "/dashboard/cafe", label: "Panel", icon: "LayoutDashboard" },
+      { href: "/dashboard/cafe/maestros/tipos", label: "Tipos de café", icon: "Coffee" },
+      { href: "/dashboard/terceros", label: "Terceros", icon: "Handshake" },
+      { href: "/dashboard/tarifas", label: "Tarifas y parámetros", icon: "SlidersHorizontal" },
+    ]);
+  });
+
+  it("owner ve lo mismo que admin", () => {
+    expect(hrefs(sesion("cafe", MODULOS_CAFE, null, "owner"))).toEqual(hrefs(sesion("cafe", MODULOS_CAFE, null, "admin")));
+  });
+
+  it("operativo: lotes, insumos, panel y terceros (sin tipos de café ni tarifas)", () => {
+    expect(resumen(sesion("cafe", MODULOS_CAFE, null, "operativo"))).toEqual([
+      { href: "/dashboard/cafe/lotes", label: "Lotes", icon: "Boxes" },
+      { href: "/dashboard/cafe/insumos", label: "Insumos", icon: "Package" },
+      { href: "/dashboard/cafe", label: "Panel", icon: "LayoutDashboard" },
+      { href: "/dashboard/terceros", label: "Terceros", icon: "Handshake" },
+    ]);
+  });
+
+  it("viewer (gerencia): consulta lotes, insumos, panel y terceros", () => {
+    expect(resumen(sesion("cafe", MODULOS_CAFE, null, "viewer"))).toEqual([
+      { href: "/dashboard/cafe/lotes", label: "Lotes", icon: "Boxes" },
+      { href: "/dashboard/cafe/insumos", label: "Insumos", icon: "Package" },
+      { href: "/dashboard/cafe", label: "Panel", icon: "LayoutDashboard" },
+      { href: "/dashboard/terceros", label: "Terceros", icon: "Handshake" },
+    ]);
+  });
+
+  it("sin cafe.dashboard no hay Panel (no es módulo base)", () => {
+    const sin = MODULOS_CAFE.filter((m) => m !== "cafe.dashboard");
+    expect(hrefs(sesion("cafe", sin, null, "admin"))).not.toContain("/dashboard/cafe");
+  });
+
+  it("ganadería y cooperativa no ven nada de café aunque tengan los módulos", () => {
+    for (const vertical of ["ganaderia", "cooperativa"] as const) {
+      const h = hrefs(sesion(vertical, MODULOS_CAFE, vertical === "ganaderia" ? "admin" : "cooperativa_admin"));
+      expect(h.filter((x) => x.startsWith("/dashboard/cafe"))).toEqual([]);
+    }
+  });
+});
+
+describe("getNavParaSesion: Equipo (core.equipo)", () => {
+  it("sin el módulo no hay entrada: ganadería y cooperativa no lo tienen de serie", () => {
+    expect(hrefs(sesion("ganaderia", BASE_GANADERIA, "admin"))).not.toContain("/dashboard/equipo");
+    expect(hrefs(sesion("cafe", ["core.terceros"], null, "owner"))).not.toContain("/dashboard/equipo");
+  });
+
+  it("owner y admin lo ven; un operativo y la gerencia (viewer) no", () => {
+    expect(hrefs(sesion("cafe", ["core.equipo"], null, "owner"))).toEqual(["/dashboard/equipo"]);
+    expect(hrefs(sesion("cafe", ["core.equipo"], null, "admin"))).toEqual(["/dashboard/equipo"]);
+    expect(hrefs(sesion("cafe", ["core.equipo"], null, "operativo"))).toEqual([]);
+    expect(hrefs(sesion("cafe", ["core.equipo"], null, "viewer"))).toEqual([]);
+  });
+
+  it("va en Maestros, después de Terceros y de Tarifas y parámetros", () => {
+    expect(hrefs(sesion("cafe", ["core.terceros", "core.equipo"], null, "admin"))).toEqual([
+      "/dashboard/terceros",
+      "/dashboard/tarifas",
+      "/dashboard/equipo",
+    ]);
   });
 });
 

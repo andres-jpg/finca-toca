@@ -35,6 +35,7 @@ export const MODULOS = [
   // Núcleo
   "core.terceros",
   "core.auditoria",
+  "core.equipo",
 ] as const;
 
 export type ModuloId = (typeof MODULOS)[number];

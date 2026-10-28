@@ -109,8 +109,8 @@ select is(
   (select array_agg(tm.modulo_id order by tm.modulo_id)
      from public.tenant_modulos tm join public.tenants t on t.id = tm.tenant_id
     where t.slug = 'cofradia-demo' and tm.activo),
-  array['cafe.inventario', 'cafe.procesos', 'cafe.recepcion', 'cafe.remisiones', 'core.auditoria', 'core.terceros'],
-  'módulos base de café más core.terceros y core.auditoria'
+  array['cafe.inventario', 'cafe.procesos', 'cafe.recepcion', 'cafe.remisiones', 'core.auditoria', 'core.equipo', 'core.terceros'],
+  'módulos base de café más core.terceros, core.auditoria y core.equipo'
 );
 select is(
   (select jsonb_object_agg(x.concepto, x.valor)
@@ -168,7 +168,7 @@ select is(
            (select count(*) from public.terceros where tenant_id = t.id),
            (select count(*) from public.articulos where tenant_id = t.id))::text
      from public.tenants t where t.slug = 'cofradia-demo'),
-  '(3,4,3,1,4)', 'no duplica tarifas, parámetros, series, consumidor final ni insumos'
+  '(3,4,3,1,8)', 'no duplica tarifas, parámetros, series, consumidor final ni artículos (4 insumos + 4 productos terminados)'
 );
 select is(
   (select p.valor from public.parametros p join public.tenants t on t.id = p.tenant_id
@@ -189,7 +189,7 @@ select is(
 select is(
   (select count(*)::int from audit.log l join public.tenants t on t.id = l.tenant_id
     where t.slug = 'cofradia-demo' and l.tabla = 'public.tenant_modulos' and l.accion = 'INSERT'),
-  6, 'y la activación de sus 6 módulos'
+  7, 'y la activación de sus 7 módulos'
 );
 
 -- 4. Errores y atomicidad --------------------------------------------------------------------------------------------------------
@@ -295,7 +295,7 @@ select set_config('request.jwt.claims', json_build_object('sub', '00000000-0000-
 
 select is(
   (select (miembros, modulos)::text from public.platform_tenants_resumen() where slug = 'cofradia-demo'),
-  '(0,6)', 'el listado trae miembros y módulos activos'
+  '(0,7)', 'el listado trae miembros y módulos activos'
 );
 select ok(
   (select count(*) >= 6 from public.platform_tenants_resumen()),
@@ -307,13 +307,13 @@ select is(
 );
 select is(
   jsonb_array_length(public.platform_obtener_tenant((select id from public.tenants where slug = 'cofradia-demo')) -> 'modulos'),
-  9, 'el detalle ofrece el catálogo aplicable: 7 de café + 2 de núcleo'
+  10, 'el detalle ofrece el catálogo aplicable: 7 de café + 3 de núcleo'
 );
 select is(
   (select count(*)::int
      from jsonb_array_elements(public.platform_obtener_tenant((select id from public.tenants where slug = 'cofradia-demo')) -> 'modulos') m
     where (m ->> 'activo')::boolean),
-  6, '...marcando los 6 activos'
+  7, '...marcando los 7 activos'
 );
 select throws_ok($$select public.platform_obtener_tenant('00000000-0000-0000-0000-00000000ffff')$$, 'P0001', 'tenant_no_encontrado',
   'detalle de un cliente inexistente');
@@ -342,7 +342,7 @@ select lives_ok(
 select is(
   (select count(*)::int from public.tenant_modulos tm join public.tenants t on t.id = tm.tenant_id
     where t.slug = 'cofradia-demo' and tm.activo),
-  7, 'cofradía queda con 7 módulos activos'
+  8, 'cofradía queda con 8 módulos activos'
 );
 select throws_ok(
   $$select public.platform_set_modulo((select id from public.tenants where slug = 'cofradia-demo'), 'ganaderia.animales', true)$$,
@@ -436,7 +436,7 @@ select throws_ok($$select public.platform_quitar_miembro((select id from public.
   'P0001', 'miembro_no_encontrado', 'quitar a quien ya no es miembro falla');
 select is(
   (select (miembros, modulos)::text from public.platform_tenants_resumen() where slug = 'cofradia-demo'),
-  '(1,7)', 'el listado cuenta el miembro nuevo'
+  '(1,8)', 'el listado cuenta el miembro nuevo'
 );
 
 -- 8. Aislamiento: el nuevo cliente es un tenant más ---------------------------------------------------------------------------------
@@ -446,7 +446,7 @@ select tests.autenticar_como('nuevo@test');
 select is((select slug from public.tenants), 'cofradia-demo', 'el owner nuevo ve solo su cliente');
 select is((select count(*)::int from public.tarifas), 3, 've sus 3 tarifas');
 select is((select count(*)::int from public.terceros), 1, 'y su consumidor final (core.terceros activo)');
-select is((select count(*)::int from public.tenant_modulos), 7, 'y solo los módulos de su cliente');
+select is((select count(*)::int from public.tenant_modulos), 8, 'y solo los módulos de su cliente');
 select is((select count(*)::int from public.gastos) + (select count(*)::int from public.animales), 0,
   'no ve datos de ganadería (sus políticas exigen rol legacy)');
 select throws_ok($$select public.platform_crear_tenant('Otro más', 'otro-mas', 'cafe')$$, '42501', 'no_autorizado',

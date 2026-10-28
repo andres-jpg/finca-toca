@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { MODULOS, tieneModulo } from "./modulos";
@@ -35,17 +35,23 @@ describe("MODULOS", () => {
 //  1. contra el SQL de la migración: no necesita base, así que corre también en el CI antes de
 //     levantar Supabase;
 //  2. contra la base LOCAL, si está levantada (`pnpm db:start`): lo que de verdad hay en la tabla.
-const MIGRACION = join(process.cwd(), "supabase/migrations/20261027120000_tenants_modulos.sql");
+const DIR_MIGRACIONES = join(process.cwd(), "supabase/migrations");
 
-function idsSembradosEnMigracion(): string[] {
-  const sql = readFileSync(MIGRACION, "utf8");
-  const bloque = sql.match(/insert into public\.modulos[\s\S]*?on conflict/i)?.[0] ?? "";
-  return [...bloque.matchAll(/^\s*\('([a-z_.]+)',/gm)].map((m) => m[1]);
+// Un módulo nuevo llega en una migración nueva (`insert into public.modulos … on conflict`): se leen todas.
+function idsSembradosEnMigraciones(): string[] {
+  const ids: string[] = [];
+  for (const fichero of readdirSync(DIR_MIGRACIONES).filter((f) => f.endsWith(".sql"))) {
+    const sql = readFileSync(join(DIR_MIGRACIONES, fichero), "utf8");
+    for (const bloque of sql.matchAll(/insert into public\.modulos[\s\S]*?on conflict/gi)) {
+      ids.push(...[...bloque[0].matchAll(/^\s*\('([a-z_.]+)',/gm)].map((m) => m[1]));
+    }
+  }
+  return ids;
 }
 
-describe("MODULOS ↔ seed de la migración", () => {
-  it("la migración siembra exactamente los ids de MODULOS", () => {
-    expect(idsSembradosEnMigracion().sort()).toEqual([...MODULOS].sort());
+describe("MODULOS ↔ seed de las migraciones", () => {
+  it("las migraciones siembran exactamente los ids de MODULOS", () => {
+    expect(idsSembradosEnMigraciones().sort()).toEqual([...MODULOS].sort());
   });
 });
 

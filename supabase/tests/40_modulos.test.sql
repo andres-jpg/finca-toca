@@ -45,7 +45,7 @@ select is(
 );
 select ok(public.tenant_tiene_modulo('ganaderia.arriendos'), 'Villa Blanca ve Arriendos');
 select ok(not public.tenant_tiene_modulo('cafe.ventas'), 'y no un módulo que no tiene');
-select is((select count(*)::int from public.modulos), 19, 'cualquier usuario con sesión lee el catálogo completo');
+select is((select count(*)::int from public.modulos), 20, 'cualquier usuario con sesión lee el catálogo completo');
 
 -- Un admin no puede darse módulos, quitárselos ni tocar el catálogo: ni las políticas ni los
 -- privilegios lo permiten.

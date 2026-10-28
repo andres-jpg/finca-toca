@@ -3,16 +3,16 @@ export const ROLES_TERCERO = ["proveedor", "cliente", "cliente_servicio"] as con
 export type RolTercero = (typeof ROLES_TERCERO)[number];
 
 export const ETIQUETA_ROL_TERCERO: Record<RolTercero, string> = {
-  proveedor: "Proveedor de materia prima",
-  cliente: "Cliente de marca propia",
-  cliente_servicio: "Cliente de maquila / servicio",
+  proveedor: "Proveedor de café",
+  cliente: "Cliente marca propia",
+  cliente_servicio: "Cliente de servicios",
 };
 
 /** Etiqueta corta para tablas y chips. */
 export const ETIQUETA_ROL_TERCERO_CORTA: Record<RolTercero, string> = {
   proveedor: "Proveedor",
-  cliente: "Cliente",
-  cliente_servicio: "Maquila",
+  cliente: "Marca propia",
+  cliente_servicio: "Servicios",
 };
 
 /** Coinciden con el enum `tipo_identificacion`. */
