@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { requireRole } from "@/lib/auth/check-permissions";
+import { requireRolTenant } from "../../auth/guards";
 import type { Json } from "@/lib/supabase/database.types";
 import type { AccionAuditoria } from "../lib/formato-cambios";
 
@@ -20,7 +20,8 @@ export interface CambioAuditado {
 
 /**
  * Historial de cambios de un registro (o de toda una tabla si no se da `registroId`), del más
- * reciente al más antiguo. Solo `admin`: la RPC `historial_cambios` lo vuelve a comprobar en la base
+ * reciente al más antiguo. Solo owner/admin de la membresía (no el rol legacy: un cliente de café no tiene
+ * fila en `roles`): la RPC `historial_cambios` lo vuelve a comprobar en la base
  * y limita el resultado al cliente del llamante.
  *
  * @param tabla nombre completo, como se guarda en el log: `public.gastos`
@@ -30,7 +31,7 @@ export async function getHistorialCambios(
   registroId?: string,
   limite = 50
 ): Promise<CambioAuditado[]> {
-  await requireRole(["admin"]);
+  await requireRolTenant(["owner", "admin"]);
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("historial_cambios", {

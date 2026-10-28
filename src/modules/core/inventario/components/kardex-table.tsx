@@ -12,10 +12,20 @@ interface KardexTableProps {
   unidad?: UnidadArticulo;
   /** Zona horaria con la que se muestran las fechas (la del cliente: `tenants.zona_horaria`). */
   zonaHoraria?: string;
+  /** `created_by` → nombre a mostrar. Si se pasa, la tabla añade la columna «Usuario». */
+  usuarios?: Record<string, string>;
+  /** `ref_id` → nombre a mostrar (p. ej. el proveedor de una compra). Si se pasa, añade «Referencia». */
+  referencias?: Record<string, string>;
 }
 
 /** Kardex de un artículo: entradas, salidas y saldo tras cada movimiento (más reciente arriba). */
-export function KardexTable({ movimientos, unidad = "unidad", zonaHoraria = "America/Bogota" }: KardexTableProps) {
+export function KardexTable({
+  movimientos,
+  unidad = "unidad",
+  zonaHoraria = "America/Bogota",
+  usuarios,
+  referencias,
+}: KardexTableProps) {
   // Zona fija en el formateador: el servidor (UTC en Vercel) y el navegador mostrarían horas distintas.
   const formatoFecha = useMemo(
     () => new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeStyle: "short", timeZone: zonaHoraria }),
@@ -61,6 +71,34 @@ export function KardexTable({ movimientos, unidad = "unidad", zonaHoraria = "Ame
           </span>
         ),
       },
+      ...(referencias
+        ? [
+            {
+              id: "referencia",
+              header: "Referencia",
+              accessorFn: (m: MovimientoKardex) => (m.ref_id ? (referencias[m.ref_id] ?? "") : ""),
+              cell: ({ row }: { row: { original: MovimientoKardex } }) => (
+                <span className="block max-w-[10rem] truncate">
+                  {(row.original.ref_id && referencias[row.original.ref_id]) || "—"}
+                </span>
+              ),
+            } satisfies ColumnDef<MovimientoKardex>,
+          ]
+        : []),
+      ...(usuarios
+        ? [
+            {
+              id: "usuario",
+              header: "Usuario",
+              accessorFn: (m: MovimientoKardex) => (m.created_by ? (usuarios[m.created_by] ?? "") : ""),
+              cell: ({ row }: { row: { original: MovimientoKardex } }) => (
+                <span className="block max-w-[10rem] truncate">
+                  {row.original.created_by ? (usuarios[row.original.created_by] ?? "—") : "Sistema"}
+                </span>
+              ),
+            } satisfies ColumnDef<MovimientoKardex>,
+          ]
+        : []),
       {
         accessorKey: "observaciones",
         header: "Observaciones",
@@ -71,7 +109,7 @@ export function KardexTable({ movimientos, unidad = "unidad", zonaHoraria = "Ame
         ),
       },
     ],
-    [formatoFecha, unidad],
+    [formatoFecha, unidad, usuarios, referencias],
   );
 
   // El kardex llega del más antiguo al más reciente (así se acumula el saldo); en pantalla, al revés.

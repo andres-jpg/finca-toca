@@ -14,7 +14,15 @@ export interface SesionNav {
 }
 
 /** Orden de los encabezados del menú. Las entradas sin grupo van primero; un grupo desconocido, al final. */
-export const ORDEN_GRUPOS = ["Operación", "Maestros", "Informes", "Configuración"] as const;
+export const ORDEN_GRUPOS = [
+  "Operación",
+  "Inventario",
+  "Comercial",
+  "Gerencia",
+  "Maestros",
+  "Informes",
+  "Configuración",
+] as const;
 
 /**
  * Roles que trabajan en ruta con la PWA instalada: ahí `hideInPWA` esconde la entrada. El administrador

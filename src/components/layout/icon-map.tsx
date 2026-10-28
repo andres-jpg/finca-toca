@@ -13,6 +13,7 @@ import {
   Package,
   FileSpreadsheet,
   Users,
+  UserCog,
   Route,
   Banknote,
   History,
@@ -20,6 +21,8 @@ import {
   CalendarClock,
   Handshake,
   SlidersHorizontal,
+  Boxes,
+  Coffee,
 } from "lucide-react";
 import { PiCow } from "react-icons/pi";
 import type { IconoNav } from "@/modules/core/registry/iconos";
@@ -47,6 +50,9 @@ export const ICONOS: Record<IconoNav, ElementType> = {
   FileSpreadsheet,
   Banknote,
   Users,
+  UserCog,
   Handshake,
   SlidersHorizontal,
+  Boxes,
+  Coffee,
 };

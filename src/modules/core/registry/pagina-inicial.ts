@@ -17,8 +17,9 @@ export const PAGINA_INICIAL_POR_ROL: Record<RolLegacy, string> = {
 export const PAGINA_INICIAL_POR_VERTICAL: Record<Vertical, string> = {
   ganaderia: "/dashboard/extracciones",
   cooperativa: "/dashboard/cooperativa",
-  // El café no tiene pantallas hasta la Fase 1 (CO-15 en adelante): hasta entonces, el dashboard.
-  cafe: "/dashboard",
+  // Los lotes son la puerta de entrada del café (recepción). Todos los roles la ven: el menú y la página
+  // de cada rol ya filtran lo demás.
+  cafe: "/dashboard/cafe/lotes",
 };
 
 export function paginaInicial(sesion: { rolLegacy: RolLegacy | null; tenant: { vertical: Vertical } | null }): string {

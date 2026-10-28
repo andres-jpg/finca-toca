@@ -82,6 +82,8 @@ export async function registrarMovimientos(input: RegistrarMovimientosInput): Pr
   if (!parsed.success) return datosInvalidos(parsed.error.issues[0]?.message);
 
   const { movimientos, permitirNegativo } = parsed.data;
+  // Los ajustes son correcciones: solo owner/admin (el RLS de `movimientos_inventario` lo exige también).
+  if (movimientos.some((m) => m.motivo === "ajuste")) await exigirRolTenant(ROLES_CATALOGO);
   return callRpc<"public", "registrar_movimientos", RespuestaMovimientos>("public", "registrar_movimientos", {
     p_movs: movimientos.map((m) => ({ ...m, fecha: m.fecha?.toISOString() })),
     p_permitir_negativo: permitirNegativo,

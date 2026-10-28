@@ -1,16 +1,29 @@
 import type { ModuleManifest } from "@/modules/core/registry/types";
 
 /**
- * Navegación del vertical de café. Vacía en la Fase 0: las pantallas llegan en la Fase 1, cada una con su
- * entrada aquí (más `requireModuloPagina()` en la página y `requireModulo()` en sus actions). Rutas
- * previstas:
+ * Navegación del vertical de café. Cada pantalla de la Fase 1 añade aquí su entrada cuando existe su página
+ * (más `requireModuloPagina()` en ella y `requireModulo()` + `requireRolTenant()` en sus actions): una entrada
+ * cuya página aún no existe no se declara. Previstas, con su grupo, ruta, módulo y roles:
  *
- *   /dashboard/cafe/lotes        (cafe.recepcion)
- *   /dashboard/cafe/procesos     (cafe.procesos)
- *   /dashboard/cafe/inventario   (cafe.inventario)
- *   /dashboard/cafe/ventas       (cafe.ventas)
- *   /dashboard/cafe/remisiones   (cafe.remisiones)
+ *   Operación   Planta               /dashboard/cafe/planta        cafe.procesos     owner, admin, operativo
+ *   Inventario  Producto terminado   /dashboard/cafe/inventario    cafe.inventario   todos
+ *   Comercial   Ventas               /dashboard/cafe/ventas        cafe.ventas       todos
+ *   Comercial   Remisiones           /dashboard/cafe/remisiones    cafe.remisiones   todos
  *
- * Al ser un módulo nuevo, sus entradas usan `roles` (membresía), no `rolesLegacy`.
+ * Terceros y Tarifas y parámetros (grupo «Maestros») los aporta el manifiesto del núcleo, no este.
+ * Los grupos están en `ORDEN_GRUPOS` (`core/registry/nav.ts`). Al ser un módulo nuevo, las entradas usan
+ * `roles` (membresía), no `rolesLegacy`.
  */
-export const cafeManifest: ModuleManifest = { vertical: "cafe", nav: [] };
+const TODOS: ("owner" | "admin" | "operativo" | "viewer")[] = ["owner", "admin", "operativo", "viewer"];
+
+export const cafeManifest: ModuleManifest = {
+  vertical: "cafe",
+  nav: [
+    { href: "/dashboard/cafe/lotes", label: "Lotes", icon: "Boxes", modulo: "cafe.recepcion", roles: TODOS, grupo: "Operación", orden: 10 },
+    // Insumos de empaque: todos lo ven (Gerencia solo lee); la página y las actions limitan compras y maestro.
+    { href: "/dashboard/cafe/insumos", label: "Insumos", icon: "Package", modulo: "cafe.inventario", roles: TODOS, grupo: "Inventario", orden: 20 },
+    { href: "/dashboard/cafe", label: "Panel", icon: "LayoutDashboard", modulo: "cafe.dashboard", roles: TODOS, grupo: "Gerencia", orden: 10 },
+    // Maestro: lo edita solo owner/admin (Terceros y Tarifas, del núcleo, completan el grupo).
+    { href: "/dashboard/cafe/maestros/tipos", label: "Tipos de café", icon: "Coffee", modulo: "cafe.recepcion", roles: ["owner", "admin"], grupo: "Maestros", orden: 5 },
+  ],
+};

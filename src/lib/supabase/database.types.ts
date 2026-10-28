@@ -5,16 +5,102 @@ export type Database = {
   
   "cafe": {
           Tables: {
-            [_ in never]: never
+            "lote_bultos": {
+                  Row: {
+                    "created_at": string,"created_by": string | null,"id": string,"lote_id": string,"numero": number,"peso_kg": number,"tenant_id": string,"updated_at": string | null,"updated_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by"?: string | null,"id"?: string,"lote_id": string,"numero": number,"peso_kg": number,"tenant_id"?: string,"updated_at"?: string | null,"updated_by"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string | null,"id"?: string,"lote_id"?: string,"numero"?: number,"peso_kg"?: number,"tenant_id"?: string,"updated_at"?: string | null,"updated_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "lote_bultos_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
+      referencedRelation: "lotes"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
+                },"lotes": {
+                  Row: {
+                    "alertas_calidad": (string)[],"anulado_at": string | null,"anulado_por": string | null,"codigo": string,"created_at": string,"created_by": string | null,"densidad": number | null,"factura_proveedor": string | null,"fecha_recepcion": string,"humedad_pct": number | null,"id": string,"linea": Database["cafe"]['Enums']["linea_lote"],"motivo_anulacion": string | null,"nivel_tueste": Database["cafe"]['Enums']["nivel_tueste"] | null,"num_bultos": number,"observaciones": string | null,"peso_recibido_kg": number,"precio_compra_kg": number | null,"rangos_calidad": Json | null,"servicios": (Database["cafe"]['Enums']["tipo_proceso"])[],"tenant_id": string,"tercero_id": string,"tipo_cafe_id": string | null,"updated_at": string | null,"updated_by": string | null,"valor_compra": number | null,"servicios_requeridos": (Database["cafe"]['Enums']["tipo_proceso"])[] | null
+                  }
+                  ComputedFields: "servicios_requeridos"
+                  Insert: {
+                    "alertas_calidad"?: (string)[],"anulado_at"?: string | null,"anulado_por"?: string | null,"codigo": string,"created_at"?: string,"created_by"?: string | null,"densidad"?: number | null,"factura_proveedor"?: string | null,"fecha_recepcion": string,"humedad_pct"?: number | null,"id"?: string,"linea": Database["cafe"]['Enums']["linea_lote"],"motivo_anulacion"?: string | null,"nivel_tueste"?: Database["cafe"]['Enums']["nivel_tueste"] | null,"num_bultos": number,"observaciones"?: string | null,"peso_recibido_kg": number,"precio_compra_kg"?: number | null,"rangos_calidad"?: Json | null,"servicios"?: (Database["cafe"]['Enums']["tipo_proceso"])[],"tenant_id"?: string,"tercero_id": string,"tipo_cafe_id"?: string | null,"updated_at"?: string | null,"updated_by"?: string | null,"valor_compra"?: never
+                  }
+                  Update: {
+                    "alertas_calidad"?: (string)[],"anulado_at"?: string | null,"anulado_por"?: string | null,"codigo"?: string,"created_at"?: string,"created_by"?: string | null,"densidad"?: number | null,"factura_proveedor"?: string | null,"fecha_recepcion"?: string,"humedad_pct"?: number | null,"id"?: string,"linea"?: Database["cafe"]['Enums']["linea_lote"],"motivo_anulacion"?: string | null,"nivel_tueste"?: Database["cafe"]['Enums']["nivel_tueste"] | null,"num_bultos"?: number,"observaciones"?: string | null,"peso_recibido_kg"?: number,"precio_compra_kg"?: number | null,"rangos_calidad"?: Json | null,"servicios"?: (Database["cafe"]['Enums']["tipo_proceso"])[],"tenant_id"?: string,"tercero_id"?: string,"tipo_cafe_id"?: string | null,"updated_at"?: string | null,"updated_by"?: string | null,"valor_compra"?: never
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "lotes_tipo_cafe_fk"
+      columns: ["tenant_id","tipo_cafe_id"]
+isOneToOne: false
+      referencedRelation: "tipos_cafe"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
+                },"tipos_cafe": {
+                  Row: {
+                    "activo": boolean,"created_at": string,"created_by": string | null,"id": string,"nombre": string,"orden": number,"tenant_id": string,"updated_at": string | null,"updated_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "activo"?: boolean,"created_at"?: string,"created_by"?: string | null,"id"?: string,"nombre": string,"orden"?: number,"tenant_id"?: string,"updated_at"?: string | null,"updated_by"?: string | null
+                  }
+                  Update: {
+                    "activo"?: boolean,"created_at"?: string,"created_by"?: string | null,"id"?: string,"nombre"?: string,"orden"?: number,"tenant_id"?: string,"updated_at"?: string | null,"updated_by"?: string | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                }
           }
           Views: {
             [_ in never]: never
           }
           Functions: {
-            [_ in never]: never
+            "asegurar_productos_terminados":
+{ Args: { "p_tenant"?: string }; Returns: number
+                           },
+"etiqueta_presentacion":
+{ Args: { "p_gramos": number }; Returns: string
+                           },
+"orden_proceso":
+{ Args: { "t": Database["cafe"]['Enums']["tipo_proceso"] }; Returns: number
+                           },
+"orden_ultimo_proceso":
+{ Args: { "p_lote": string }; Returns: number
+                           },
+"rango_calidad":
+{ Args: { "p_clave": string }; Returns: Json
+                           },
+"registrar_compra":
+{ Args: { "p": Json }; Returns: Json
+                           },
+"registrar_recepcion":
+{ Args: { "p": Json }; Returns: Json
+                           },
+"repartir_peso":
+{ Args: { "p_n": number,"p_total": number }; Returns: (number)[]
+                           },
+"servicios_requeridos":
+{ Args: { "l": Omit<Database["cafe"]['Tables']["lotes"]['Row'], Database["cafe"]['Tables']["lotes"]['ComputedFields']> }; Returns: (Database["cafe"]['Enums']["tipo_proceso"])[]
+                           },
+"ultimo_precio_compra":
+{ Args: { "p_tercero": string,"p_tipo": string }; Returns: number
+                           },
+"verificar_bultos_lote":
+{ Args: { "p_lote": string }; Returns: undefined
+                           }
           }
           Enums: {
-            [_ in never]: never
+            "linea_lote": "marca_propia"|"servicio","nivel_tueste": "bajo"|"medio"|"alto","tipo_proceso": "trilla"|"tostion"|"molienda"|"empaque"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -980,6 +1066,12 @@ isOneToOne: false
         isOneToOne: false
         isSetofReturn: true
       } },
+"cambiar_estado_miembro_tenant":
+{ Args: { "p_activo": boolean,"p_user": string }; Returns: undefined
+                           },
+"cambiar_rol_miembro_tenant":
+{ Args: { "p_rol": Database["public"]['Enums']["rol_tenant"],"p_user": string }; Returns: undefined
+                           },
 "cambiar_tenant_activo":
 { Args: { "p_tenant": string }; Returns: string
                            },
@@ -1002,11 +1094,24 @@ isOneToOne: false
               "accion": string,"at": string,"cambios": Json,"email": string,"id": number,"registro_id": string,"tabla": string,"user_id": string
             }[]
                            },
+"invitar_miembro_tenant":
+{ Args: { "p_email": string,"p_rol": Database["public"]['Enums']["rol_tenant"] }; Returns: Json
+                           },
+"listar_miembros_tenant":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "activo": boolean,"created_at": string,"email": string,"id": string,"rol": Database["public"]['Enums']["rol_tenant"],"ultimo_acceso": string,"user_id": string
+            }[]
+                           },
 "mi_sesion":
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
 "movimiento_signo_valido":
 { Args: { "p_cantidad": number,"p_motivo": Database["public"]['Enums']["motivo_movimiento"] }; Returns: boolean
+                           },
+"nombres_usuarios_tenant":
+{ Args: { "p_ids": (string)[] }; Returns: {
+              "email": string,"user_id": string
+            }[]
                            },
 "normalizar_identificacion":
 { Args: { "p_texto": string }; Returns: string
@@ -1197,7 +1302,7 @@ export type CompositeTypes<
 export const Constants = {
   "cafe": {
           Enums: {
-            
+            "linea_lote": ["marca_propia", "servicio"],"nivel_tueste": ["bajo", "medio", "alto"],"tipo_proceso": ["trilla", "tostion", "molienda", "empaque"]
           }
         },"public": {
           Enums: {

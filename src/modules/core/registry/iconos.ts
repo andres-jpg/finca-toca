@@ -22,8 +22,11 @@ export const ICONOS_NAV = [
   "FileSpreadsheet",
   "Banknote",
   "Users",
+  "UserCog",
   "Handshake",
   "SlidersHorizontal",
+  "Boxes",
+  "Coffee",
 ] as const;
 
 export type IconoNav = (typeof ICONOS_NAV)[number];

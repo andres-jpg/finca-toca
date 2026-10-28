@@ -1,5 +1,5 @@
 "use client";
-import React, { useSyncExternalStore } from "react";
+import React, { Fragment, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Leaf, Coffee, X } from "lucide-react";
@@ -74,6 +74,13 @@ export function Sidebar({
 
   const allowedItems = items.filter((item) => !ocultoEnPWA(item, role ?? null, isPWA));
 
+  // Entrada resaltada: la de ruta más larga que contiene a la actual. Así «Panel» (`/dashboard/cafe`) no se
+  // marca junto a «Lotes» (`/dashboard/cafe/lotes`), y `/dashboard` solo se marca en su propia página.
+  const hrefActivo = allowedItems
+    .map((item) => item.href)
+    .filter((href) => (href === "/dashboard" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`)))
+    .sort((a, b) => b.length - a.length)[0];
+
   const roleMeta = role ? roleConfig[role] : null;
 
   // Marca del cliente activo. Un cliente ganadero se muestra como "Finca <nombre>" (como siempre); la
@@ -126,37 +133,42 @@ export function Sidebar({
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
-          {allowedItems.map(({ href, label, icon }) => {
+          {allowedItems.map(({ href, label, icon, grupo }, i) => {
             const Icon = ICONOS[icon];
-            const isActive =
-              href === "/dashboard"
-                ? pathname === href
-                : pathname.startsWith(href);
+            const isActive = href === hrefActivo;
+            // Encabezado del grupo cuando cambia respecto a la entrada anterior (las sin grupo no llevan).
+            const encabezado = grupo && grupo !== allowedItems[i - 1]?.grupo ? grupo : null;
             return (
-              <Link
-                key={href}
-                href={href}
-                onClick={onCloseMobileMenu}
-                className={cn(
-                  "group relative flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-150",
-                  isActive
-                    ? "bg-gray-700 text-white"
-                    : "text-gray-400 hover:bg-gray-800 hover:text-white"
+              <Fragment key={href}>
+                {encabezado && (
+                  <p className="px-4 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                    {encabezado}
+                  </p>
                 )}
-              >
-                {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 bg-green-400 rounded-r-full" />
-                )}
-                <Icon
+                <Link
+                  href={href}
+                  onClick={onCloseMobileMenu}
                   className={cn(
-                    "h-4 w-4 shrink-0 transition-colors",
+                    "group relative flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-150",
                     isActive
-                      ? "text-white"
-                      : "text-gray-400 group-hover:text-white"
+                      ? "bg-gray-700 text-white"
+                      : "text-gray-400 hover:bg-gray-800 hover:text-white"
                   )}
-                />
-                {label}
-              </Link>
+                >
+                  {isActive && (
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 bg-green-400 rounded-r-full" />
+                  )}
+                  <Icon
+                    className={cn(
+                      "h-4 w-4 shrink-0 transition-colors",
+                      isActive
+                        ? "text-white"
+                        : "text-gray-400 group-hover:text-white"
+                    )}
+                  />
+                  {label}
+                </Link>
+              </Fragment>
             );
           })}
         </nav>

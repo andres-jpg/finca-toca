@@ -32,6 +32,21 @@ export const MENSAJES_RPC: Readonly<Record<string, string>> = {
   tercero_no_encontrado: "El tercero no existe o no pertenece a tu cliente.",
   consumidor_final_protegido: "El tercero «Consumidor final» es un registro del sistema: no se edita ni se desactiva.",
   consumidor_final_no_disponible: "No se puede crear el «Consumidor final»: su identificación (222222222222) ya la usa otro tercero.",
+  tipo_cafe_no_encontrado: "El tipo de café no existe o no pertenece a tu cliente.",
+  // Lotes y bultos (café)
+  bultos_no_cuadran: "Los bultos no cuadran con el lote: revisa su número y que sus pesos sumen el peso total.",
+  lote_bloqueado: "El lote ya tiene procesos: no se pueden cambiar el peso, los bultos, el tercero ni los servicios anteriores.",
+  lote_anulado: "El lote está anulado: ya no se puede modificar.",
+  lote_con_procesos: "El lote ya tiene procesos registrados: no se puede anular.",
+  servicios_invalidos: "Los servicios del lote no son válidos (la molienda requiere tostión).",
+  // Compra de café para marca propia
+  tipo_cafe_invalido: "El tipo de café no existe o está inactivo: elige uno de la lista.",
+  tercero_no_es_proveedor: "El tercero elegido no está registrado como proveedor de café. Un administrador debe añadirle ese rol.",
+  // Recepción de clientes (café)
+  sin_servicios: "Elige al menos un servicio para la recepción.",
+  falta_nivel_tueste: "Indica el nivel de tueste (bajo, medio o alto): la planta lo necesita para la tostión.",
+  tercero_inactivo: "El tercero está desactivado: actívalo para registrar recepciones.",
+  tercero_no_es_cliente_servicio: "El tercero no está registrado como cliente de servicios. Un administrador debe añadirle ese rol.",
   // Alta de clientes (plataforma)
   slug_duplicado: "Ya existe un cliente con ese identificador.",
   slug_invalido: "El identificador debe tener de 3 a 40 caracteres: minúsculas, números y guiones.",
@@ -46,6 +61,13 @@ export const MENSAJES_RPC: Readonly<Record<string, string>> = {
   usuario_no_encontrado: "No hay ningún usuario con ese email. Debe tener cuenta antes de añadirlo.",
   usuario_con_rol_en_otro_cliente: "Ese usuario ya tiene un rol en otro cliente de ganadería.",
   miembro_no_encontrado: "Ese usuario no es miembro activo del cliente.",
+  // Equipo del cliente
+  ya_es_miembro: "Ese usuario ya es miembro del equipo.",
+  email_invalido: "El correo electrónico no es válido.",
+  no_puede_modificarse_a_si_mismo: "No puedes cambiar tu propio rol ni tu estado.",
+  solo_owner_gestiona_owner: "Solo un propietario puede crear o modificar propietarios.",
+  ultimo_owner: "Debe quedar al menos un propietario activo.",
+  invitacion_no_enviada: "No se pudo enviar la invitación. Inténtalo de nuevo; si persiste, avísanos.",
 };
 
 const MENSAJE_GENERICO = MENSAJES_RPC.error_inesperado;

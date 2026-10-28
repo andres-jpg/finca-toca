@@ -6,7 +6,7 @@ import type { Vertical } from "../../tenants/tenant.queries";
  * ofrezca como opcionales. Los clientes de ganadería y cooperativa no los reciben todavía, para no cambiar su menú.
  */
 export const NUCLEO_POR_DEFECTO: Partial<Record<Vertical, readonly string[]>> = {
-  cafe: ["core.terceros", "core.auditoria"],
+  cafe: ["core.terceros", "core.auditoria", "core.equipo"],
 };
 
 export const VERTICALES: readonly Vertical[] = ["ganaderia", "cooperativa", "cafe"];
