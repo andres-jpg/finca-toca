@@ -1,5 +1,5 @@
-// Estado del lote tal como lo deriva `cafe.v_lotes.estado` (nunca se guarda). `entregado` lo producirá la remisión
-// (CO-32): la vista aún no lo emite, pero etiqueta, color y filtro ya lo conocen para no tocar esta pantalla después.
+// Estado del lote tal como lo deriva `cafe.v_lotes.estado` (nunca se guarda). `entregado` lo emite la vista cuando el
+// lote de servicio tiene una remisión de entrega no anulada (CO-32); al anularla, el lote vuelve a su estado derivado.
 
 export const ESTADOS_LOTE = ["recibido", "en_proceso", "parcial", "listo", "entregado", "anulado"] as const;
 export type EstadoLoteVisible = (typeof ESTADOS_LOTE)[number];

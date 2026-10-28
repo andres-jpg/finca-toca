@@ -24,6 +24,7 @@ import {
   Boxes,
   Coffee,
   Factory,
+  FileText,
 } from "lucide-react";
 import { PiCow } from "react-icons/pi";
 import type { IconoNav } from "@/modules/core/registry/iconos";
@@ -57,4 +58,5 @@ export const ICONOS: Record<IconoNav, ElementType> = {
   Boxes,
   Coffee,
   Factory,
+  FileText,
 };

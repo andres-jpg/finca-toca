@@ -11,6 +11,7 @@ import {
   type EventoLinea,
   type MovimientoLinea,
   type ProcesoLinea,
+  type RemisionLinea,
 } from "../lib/linea-tiempo";
 import type { LineaLote, NivelTueste, TipoProceso } from "../types";
 
@@ -277,13 +278,15 @@ export async function getResponsables(loteId: string): Promise<Map<string, strin
 
 /**
  * La historia completa del lote, ordenada: recepción → procesos (con baches y bultos) → movimientos de inventario
- * con `ref_tipo = 'cafe.lote'` (los empaques de CO-30) → anulación. `usuarios` (id → email) viene de
- * `getResponsables()`. La remisión (CO-32) y las reaperturas (CO-33) se sumarán aquí.
+ * con `ref_tipo = 'cafe.lote'` (los empaques de CO-30) → remisiones de entrega → anulación. `usuarios` (id → email)
+ * viene de `getResponsables()`. Las remisiones (CO-32) las lee quien llama (`remisiones/`) y llegan ya como eventos:
+ * así `lotes` no depende de ese módulo. Las reaperturas (CO-33) se sumarán aquí.
  */
 export async function getTimeline(
   lote: LoteFicha,
   bultos: readonly BultoFicha[],
   usuarios: ReadonlyMap<string, string>,
+  remisiones: readonly RemisionLinea[] = [],
 ): Promise<EventoLinea[]> {
   const supabase = await createClient();
   const cafe = supabase.schema("cafe");
@@ -402,6 +405,7 @@ export async function getTimeline(
     numBultosLote: lote.numBultos,
     procesos: procesosLinea,
     movimientos: movimientosLinea,
+    remisiones,
     anulacionLote: lote.anulacion
       ? { en: lote.anulacion.en, por: quien(lote.anulacion.por), motivo: lote.anulacion.motivo }
       : null,
