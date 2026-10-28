@@ -12,6 +12,7 @@
     "test:coverage": "vitest run --coverage",
     "test:db": "supabase test db",
     "test:concurrencia": "node scripts/test-consecutivos-concurrencia.ts",
+    "tenant:create": "node scripts/crear-tenant.ts",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:status": "supabase status",

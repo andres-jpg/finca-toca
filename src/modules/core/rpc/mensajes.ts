@@ -32,6 +32,20 @@ export const MENSAJES_RPC: Readonly<Record<string, string>> = {
   tercero_no_encontrado: "El tercero no existe o no pertenece a tu cliente.",
   consumidor_final_protegido: "El tercero «Consumidor final» es un registro del sistema: no se edita ni se desactiva.",
   consumidor_final_no_disponible: "No se puede crear el «Consumidor final»: su identificación (222222222222) ya la usa otro tercero.",
+  // Alta de clientes (plataforma)
+  slug_duplicado: "Ya existe un cliente con ese identificador.",
+  slug_invalido: "El identificador debe tener de 3 a 40 caracteres: minúsculas, números y guiones.",
+  nombre_invalido: "El nombre del cliente es obligatorio.",
+  vertical_invalido: "Indica el vertical del cliente.",
+  modulo_no_valido: "El módulo no existe o no corresponde al vertical del cliente.",
+  cambios_invalidos: "Alguno de los cambios no es válido.",
+  plan_invalido: "El plan es obligatorio.",
+  color_invalido: "El color debe ser hexadecimal, p. ej. #1A7F5A.",
+  estado_invalido: "El estado no es válido.",
+  rol_invalido: "Indica el rol del miembro.",
+  usuario_no_encontrado: "No hay ningún usuario con ese email. Debe tener cuenta antes de añadirlo.",
+  usuario_con_rol_en_otro_cliente: "Ese usuario ya tiene un rol en otro cliente de ganadería.",
+  miembro_no_encontrado: "Ese usuario no es miembro activo del cliente.",
 };
 
 const MENSAJE_GENERICO = MENSAJES_RPC.error_inesperado;
