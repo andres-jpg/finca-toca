@@ -11,3 +11,51 @@ Aquí van las piezas transversales que irán llegando en CO-08 … CO-18 (multi-
 - Todo lo que cambia entre clientes es configuración que `core` recibe, nunca un `if (tenant === ...)`.
 
 Cada submódulo sigue el patrón de `src/features`: `<modulo>/{actions,components,schemas,lib}`.
+
+## `rpc/` — escrituras transaccionales
+
+Convención única: toda operación que toque **más de una tabla** o necesite atomicidad es una función Postgres (`plpgsql`) llamada por RPC. El Server Action solo autentica, valida con Zod y traduce errores; si la función falla a mitad, no queda nada escrito. (Guía completa en *Escrituras transaccionales*, CLAUDE.md.)
+
+### Plantilla SQL
+
+```sql
+create or replace function <schema>.<verbo>_<entidad>(p_input jsonb)   -- o parámetros tipados
+returns jsonb
+language plpgsql
+security invoker            -- RLS sigue aplicando con el usuario real
+set search_path = ''        -- todo calificado: public.tabla, no tabla
+as $$
+declare v_id uuid;
+begin
+  -- 1) reglas de negocio antes de escribir
+  if <condición> then
+    raise exception using errcode = 'P0001', message = 'codigo_error', detail = 'texto para el usuario';
+  end if;
+  -- 2) escrituras (misma transacción implícita)
+  -- 3) return jsonb_build_object('id', v_id);
+end $$;
+
+revoke execute on function <schema>.<fn>(jsonb) from public, anon;
+grant execute on function <schema>.<fn>(jsonb) to authenticated;
+```
+
+- `security invoker` + `set search_path = ''`: **nunca `SECURITY DEFINER` para lógica de negocio** (saltaría RLS y el aislamiento por `tenant_id`).
+- Errores de negocio: `errcode = 'P0001'`, `message` = código estable en snake_case (`stock_insuficiente`, `orden_proceso_invalido`, `consecutivo_bloqueado`), `detail` = texto para el usuario.
+- `revoke ... from public, anon` + `grant ... to authenticated`: Postgres da `EXECUTE` a `PUBLIC` por defecto.
+- Cada función lleva su test pgTAP. Referencia: `supabase/tests/30_rpc_transaccional.test.sql`.
+
+### Wrapper TypeScript
+
+`callRpc(schema, fn, args)` (`rpc/call-rpc.ts`) usa el cliente de servidor (sesión del usuario) y devuelve `Result<T>` en vez de lanzar:
+
+| Postgres | `code` |
+|---|---|
+| `42501` | `no_autorizado` |
+| `23505` | `duplicado` |
+| `23503` | `referencia_invalida` |
+| `P0001` | `error.message` (con `error.details` como mensaje) |
+| otro | `error_inesperado` (+ Sentry, sin argumentos del usuario) |
+
+`rpc/mensajes.ts` traduce cada código a un mensaje en español para los toasts (`mensajeRpc()`); al estrenar un código en SQL, se añade ahí.
+
+Tipado: `args` y el retorno se validan con `Database[schema]["Functions"][fn]` (`pnpm db:types`). Mientras la función no aparezca en los tipos generados —hoy `cafe` no tiene ninguna— `args` es un objeto libre y el retorno `unknown`; el genérico `T` lo afina (`callRpc<"cafe", "crear_lote", { id: string }>(...)`) pero es una afirmación, no una validación en ejecución.

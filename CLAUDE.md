@@ -402,6 +402,49 @@ Cada submódulo sigue el patrón actual: `<feature>/{actions,components,schemas,
 - Local: expuesto vía `[api] schemas`/`extra_search_path` en `supabase/config.toml`. Un stack local ya creado antes de esta migración no arranca (PostgREST falla con `schema "cafe" does not exist`): aplica antes la migración (`pnpm db:reset`, o arranca con el `config.toml` anterior y haz `supabase migration up --local`).
 - **Paso MANUAL en staging y producción**: tras aplicar la migración, añadir `cafe` en *Settings → API → Exposed schemas* de cada proyecto; sin eso `.schema("cafe")` responde `PGRST106`.
 
+### Escrituras transaccionales
+
+**Regla: si una operación toca más de una tabla —o necesita ser atómica— es una función Postgres (`plpgsql`) llamada por RPC.** PostgREST no ofrece transacciones a través de varias llamadas, así que encadenar `insert`s desde un Server Action obliga a compensar a mano. El Server Action solo autentica (`requireRole(...)`), valida con Zod, llama a `callRpc()` y traduce el resultado; la lógica y las escrituras viven en la función, y si algo falla a mitad **no queda nada escrito**. Código nuevo (café y lo que venga) nace así; las escrituras de una sola tabla siguen siendo `from(...).insert/update` normales.
+
+Plantilla SQL (va en una migración, ver *Migraciones*):
+
+```sql
+create or replace function <schema>.<verbo>_<entidad>(p_input jsonb)   -- o parámetros tipados
+returns jsonb
+language plpgsql
+security invoker            -- RLS sigue aplicando con el usuario real
+set search_path = ''        -- todo calificado: public.tabla, no tabla
+as $$
+declare v_id uuid;
+begin
+  -- 1) reglas de negocio ANTES de escribir
+  if <condición> then
+    raise exception using errcode = 'P0001', message = 'codigo_error', detail = 'texto para el usuario';
+  end if;
+  -- 2) escrituras: todas en la misma transacción implícita de la función
+  -- 3) return jsonb_build_object('id', v_id);
+end $$;
+
+revoke execute on function <schema>.<fn>(jsonb) from public, anon;
+grant execute on function <schema>.<fn>(jsonb) to authenticated;
+```
+
+- **Errores de negocio**: `errcode = 'P0001'` y `message` = código estable en snake_case (`stock_insuficiente`, `orden_proceso_invalido`, `consecutivo_bloqueado`); el texto legible va en `detail`. Un `raise exception 'texto libre'` también es P0001 pero `callRpc()` no lo toma por código (lo trata como error inesperado).
+- **Nunca `SECURITY DEFINER` para lógica de negocio**: saltaría RLS y el aislamiento por `tenant_id`. `security invoker` + RLS + `DEFAULT tenant_actual()` hacen que la función herede el aislamiento sin código extra (y no pases `tenant_id` en el payload).
+- El `revoke`/`grant` es obligatorio: Postgres da `EXECUTE` a `PUBLIC` al crear la función.
+- Cada función lleva su test pgTAP (`supabase/tests/`); el ejemplo de referencia es `30_rpc_transaccional.test.sql` (`ping_transaccional`, que **solo existe dentro del test**, no en migraciones) y demuestra el rollback completo ante un fallo a mitad.
+
+Wrapper TS (`src/modules/core/rpc/call-rpc.ts`, exportado por `@/modules/core`):
+
+```ts
+const r = await callRpc("cafe", "crear_lote", { p_input: datos });   // Result<T>
+if (!r.ok) return { error: r.message };   // r.code para ramificar; r.message va al toast
+```
+
+`Result<T> = { ok: true; data: T } | { ok: false; code: string; message: string }`. Mapea `42501` → `no_autorizado`, `23505` → `duplicado`, `23503` → `referencia_invalida`, `P0001` → `message` como código y `detail` como mensaje, y cualquier otro → `error_inesperado` (se reporta a Sentry solo con el nombre de la función y el SQLSTATE: **nunca** los argumentos). `mensajes.ts` guarda el diccionario código → mensaje en español para los toasts: al estrenar un código en SQL, añádelo ahí. `args` y el retorno se tipan con `Database[schema]["Functions"][fn]` (tras `pnpm db:types`); mientras la función no esté en los tipos generados `args` es un objeto libre y el retorno `unknown`, que se puede afinar con el genérico `T`. El wrapper no valida en ejecución lo que devuelve Postgres.
+
+> **DEUDA TÉCNICA (Fase 2)**: hoy hay escrituras multi-tabla con **compensación manual** que deberían migrar a RPC y **no se han tocado**: *arriendos* (abono + gasto espejo: se crea el gasto y se borra si el abono falla; al borrar un arriendo se quitan a mano los gastos de sus abonos) y *pajillas* (se descuenta el stock al registrar la inseminación y se reintegra si el insert del evento falla; `ajustarStockPajilla()`). No copies esa técnica en código nuevo.
+
 ### Path Alias
 
 `@/*` maps to `src/*` (configured in `tsconfig.json`).
