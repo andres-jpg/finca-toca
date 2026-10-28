@@ -67,7 +67,7 @@ El cliente de la sesión (con `vertical`, plan, marca y **módulos activos**) y 
 | Fichero | Qué es |
 |---|---|
 | `modulos.ts` | **Puro** (sin servidor): `MODULOS` (`as const`, debe coincidir con el seed de `public.modulos`), el tipo `ModuloId` y `tieneModulo(modulos, id)`. Es lo que importa la barra lateral (cliente), directamente y no desde el barril. |
-| `tenant.queries.ts` | `getTenantActual()` (`React.cache()`): una consulta con join a `tenant_modulos` activos → `{ id, nombre, slug, vertical, plan, estado, logoUrl, colorPrimario, zonaHoraria, moneda, modulos }`. `null` si no hay sesión o el rol no es de un cliente (cooperativa). |
+| `tenant.queries.ts` | `getTenantActual()` (`React.cache()`): `tenant_actual()` (RPC) + una consulta filtrada por ese id con join a `tenant_modulos` activos → `{ id, nombre, slug, vertical, plan, estado, logoUrl, colorPrimario, zonaHoraria, moneda, modulos }`. `null` si no hay sesión o el usuario no tiene tenant (desde FIN-90 la cooperativa también lo tiene: Toca Lácteos). |
 | `tenant.guards.ts` | `tenantTieneModulo(id)` para páginas y `requireModulo(id)` para Server Actions (lanza `AuthorizationError`). |
 
 `modulos.test.ts` compara `MODULOS` con el SQL de la migración (siempre) y con la base local (si está levantada y `.env.local` apunta a ella). Para activar un módulo a un cliente, ver *Módulos por cliente* en CLAUDE.md.

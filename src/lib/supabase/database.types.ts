@@ -415,6 +415,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"platform_admins": {
+                  Row: {
+                    "user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "user_id": string
+                  }
+                  Update: {
+                    "user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"precios": {
                   Row: {
                     "created_at": string | null,"id": number,"tenant_id": string,"tipo": string,"valor": number
@@ -567,6 +581,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"tenant_members": {
+                  Row: {
+                    "activo": boolean,"created_at": string,"created_by": string | null,"id": string,"permisos": (string)[],"rol": Database["public"]['Enums']["rol_tenant"],"tenant_id": string,"updated_at": string | null,"updated_by": string | null,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "activo"?: boolean,"created_at"?: string,"created_by"?: string | null,"id"?: string,"permisos"?: (string)[],"rol": Database["public"]['Enums']["rol_tenant"],"tenant_id": string,"updated_at"?: string | null,"updated_by"?: string | null,"user_id": string
+                  }
+                  Update: {
+                    "activo"?: boolean,"created_at"?: string,"created_by"?: string | null,"id"?: string,"permisos"?: (string)[],"rol"?: Database["public"]['Enums']["rol_tenant"],"tenant_id"?: string,"updated_at"?: string | null,"updated_by"?: string | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "tenant_members_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"tenant_modulos": {
                   Row: {
                     "activado_at": string,"activado_por": string | null,"activo": boolean,"config": NonNullable<Json>,"id": string,"modulo_id": string,"tenant_id": string
@@ -653,6 +687,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"user_tenant_activo": {
+                  Row: {
+                    "tenant_id": string,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "tenant_id": string,"updated_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "tenant_id"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "user_tenant_activo_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"vacas_legacy": {
                   Row: {
                     "alta": boolean,"created_at": string | null,"estado": Database["public"]['Enums']["vaca_estado"] | null,"fecha_compra": string | null,"fecha_nacimiento": string | null,"id": string,"madre_id": string | null,"nombre": string,"numero_registro": string | null,"origen": Database["public"]['Enums']["vaca_origen"] | null,"padre_id": string | null,"padre_pajilla_nombre": string | null,"vaca_id": string
@@ -685,7 +739,13 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "get_cooperativa_users":
+            "cambiar_tenant_activo":
+{ Args: { "p_tenant": string }; Returns: string
+                           },
+"es_platform_admin":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"get_cooperativa_users":
 { Args: Record<PropertyKey, never>; Returns: {
               "email": string,"itinerario_id": number,"itinerario_nombre": string,"rol": string,"user_id": string
             }[]
@@ -698,15 +758,26 @@ isOneToOne: false
 "rol_actual":
 { Args: Record<PropertyKey, never>; Returns: Database["public"]['Enums']["rol"]
                            },
+"rol_en_tenant":
+{ Args: Record<PropertyKey, never>; Returns: Database["public"]['Enums']["rol_tenant"]
+                           },
+"rol_legacy_a_membresia":
+{ Args: { "p_rol": Database["public"]['Enums']["rol"],"p_tenant_id": string }; Returns: {
+              "rol": Database["public"]['Enums']["rol_tenant"],"tenant_id": string
+            }[]
+                           },
 "tenant_actual":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
 "tenant_tiene_modulo":
 { Args: { "p_modulo": string }; Returns: boolean
+                           },
+"tiene_permiso":
+{ Args: { "p": string }; Returns: boolean
                            }
           }
           Enums: {
-            "animal_raza": "holstein"|"jersey"|"jerhol"|"normando"|"ayrshire"|"cruce","animal_sexo": "hembra"|"macho","estado_productivo": "leche"|"levante_1"|"levante_2"|"produccion"|"secado"|"reproductor","estado_reproductivo": "pre_puber"|"puber"|"pre_servicio"|"servicio"|"servida"|"por_confirmar"|"rechequeo"|"cargada","rol": "admin"|"user"|"cooperativa_admin"|"cooperativa_user"|"viewer","tenant_estado": "activo"|"prueba"|"suspendido"|"baja","vaca_estado": "produccion"|"secado"|"pre_jardin"|"jardin"|"transicion","vaca_origen": "finca"|"externa","vertical": "ganaderia"|"cooperativa"|"cafe"
+            "animal_raza": "holstein"|"jersey"|"jerhol"|"normando"|"ayrshire"|"cruce","animal_sexo": "hembra"|"macho","estado_productivo": "leche"|"levante_1"|"levante_2"|"produccion"|"secado"|"reproductor","estado_reproductivo": "pre_puber"|"puber"|"pre_servicio"|"servicio"|"servida"|"por_confirmar"|"rechequeo"|"cargada","rol": "admin"|"user"|"cooperativa_admin"|"cooperativa_user"|"viewer","rol_tenant": "owner"|"admin"|"operativo"|"viewer","tenant_estado": "activo"|"prueba"|"suspendido"|"baja","vaca_estado": "produccion"|"secado"|"pre_jardin"|"jardin"|"transicion","vaca_origen": "finca"|"externa","vertical": "ganaderia"|"cooperativa"|"cafe"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -826,7 +897,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "animal_raza": ["holstein", "jersey", "jerhol", "normando", "ayrshire", "cruce"],"animal_sexo": ["hembra", "macho"],"estado_productivo": ["leche", "levante_1", "levante_2", "produccion", "secado", "reproductor"],"estado_reproductivo": ["pre_puber", "puber", "pre_servicio", "servicio", "servida", "por_confirmar", "rechequeo", "cargada"],"rol": ["admin", "user", "cooperativa_admin", "cooperativa_user", "viewer"],"tenant_estado": ["activo", "prueba", "suspendido", "baja"],"vaca_estado": ["produccion", "secado", "pre_jardin", "jardin", "transicion"],"vaca_origen": ["finca", "externa"],"vertical": ["ganaderia", "cooperativa", "cafe"]
+            "animal_raza": ["holstein", "jersey", "jerhol", "normando", "ayrshire", "cruce"],"animal_sexo": ["hembra", "macho"],"estado_productivo": ["leche", "levante_1", "levante_2", "produccion", "secado", "reproductor"],"estado_reproductivo": ["pre_puber", "puber", "pre_servicio", "servicio", "servida", "por_confirmar", "rechequeo", "cargada"],"rol": ["admin", "user", "cooperativa_admin", "cooperativa_user", "viewer"],"rol_tenant": ["owner", "admin", "operativo", "viewer"],"tenant_estado": ["activo", "prueba", "suspendido", "baja"],"vaca_estado": ["produccion", "secado", "pre_jardin", "jardin", "transicion"],"vaca_origen": ["finca", "externa"],"vertical": ["ganaderia", "cooperativa", "cafe"]
           }
         }
 } as const

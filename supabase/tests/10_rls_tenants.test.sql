@@ -189,7 +189,8 @@ select is(
 reset role;
 select tests.autenticar_como('coop.user@test');
 
-select is(public.tenant_actual(), null::uuid, 'cooperativa_user: tenant_actual() es NULL');
+-- Desde FIN-90 la cooperativa tiene tenant (Toca Lácteos) vía membresías; antes era NULL.
+select is(public.tenant_actual(), (select id from public.tenants where slug = 'toca-lacteos'), 'cooperativa_user: tenant_actual() es Toca Lácteos');
 select is(public.rol_actual()::text, 'cooperativa_user', 'cooperativa_user: rol_actual() es cooperativa_user');
 select is((select count(*)::int from public.animales), 0, 'cooperativa_user no ve animales');
 select is((select count(*)::int from public.eventos_animal), 0, 'cooperativa_user no ve eventos de animales');
