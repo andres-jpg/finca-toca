@@ -145,6 +145,32 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"consecutivos": {
+                  Row: {
+                    "anio": number,"serie": string,"tenant_id": string,"ultimo": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "anio": number,"serie": string,"tenant_id": string,"ultimo"?: number
+                  }
+                  Update: {
+                    "anio"?: number,"serie"?: string,"tenant_id"?: string,"ultimo"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "consecutivos_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "consecutivos_tenant_id_serie_fkey"
+      columns: ["tenant_id","serie"]
+isOneToOne: false
+      referencedRelation: "series_consecutivo"
+      referencedColumns: ["tenant_id","serie"]
+    }
+                  ]
                 },"eventos_animal": {
                   Row: {
                     "animal_id": string,"animal_tipo": string,"created_at": string | null,"descripcion": string | null,"fecha": string,"fecha_revacunacion": string | null,"id": string,"pajilla_id": string | null,"periodo_revacunacion": string | null,"requiere_revacunacion": boolean | null,"responsable": string | null,"resultado": string | null,"tenant_id": string,"tipo_evento": string,"toro_id": string | null
@@ -529,6 +555,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"series_consecutivo": {
+                  Row: {
+                    "activo": boolean,"created_at": string,"created_by": string | null,"descripcion": string,"formato": string,"id": string,"reinicia_anual": boolean,"serie": string,"tenant_id": string,"updated_at": string | null,"updated_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "activo"?: boolean,"created_at"?: string,"created_by"?: string | null,"descripcion": string,"formato"?: string,"id"?: string,"reinicia_anual"?: boolean,"serie": string,"tenant_id"?: string,"updated_at"?: string | null,"updated_by"?: string | null
+                  }
+                  Update: {
+                    "activo"?: boolean,"created_at"?: string,"created_by"?: string | null,"descripcion"?: string,"formato"?: string,"id"?: string,"reinicia_anual"?: boolean,"serie"?: string,"tenant_id"?: string,"updated_at"?: string | null,"updated_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "series_consecutivo_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"subconceptos_gasto": {
                   Row: {
                     "concepto_id": number,"id": number,"nombre": string,"tenant_id": string
@@ -745,6 +791,9 @@ isOneToOne: false
 "es_platform_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
+"formatear_consecutivo":
+{ Args: { "p_anio": number,"p_formato": string,"p_n": number,"p_serie": string }; Returns: string
+                           },
 "get_cooperativa_users":
 { Args: Record<PropertyKey, never>; Returns: {
               "email": string,"itinerario_id": number,"itinerario_nombre": string,"rol": string,"user_id": string
@@ -753,6 +802,14 @@ isOneToOne: false
 "historial_cambios":
 { Args: { "p_limite"?: number,"p_registro_id"?: string,"p_tabla": string }; Returns: {
               "accion": string,"at": string,"cambios": Json,"email": string,"id": number,"registro_id": string,"tabla": string,"user_id": string
+            }[]
+                           },
+"mi_sesion":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"platform_listar_tenants":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "estado": Database["public"]['Enums']["tenant_estado"],"id": string,"nombre": string,"slug": string,"vertical": Database["public"]['Enums']["vertical"]
             }[]
                            },
 "rol_actual":
@@ -765,6 +822,9 @@ isOneToOne: false
 { Args: { "p_rol": Database["public"]['Enums']["rol"],"p_tenant_id": string }; Returns: {
               "rol": Database["public"]['Enums']["rol_tenant"],"tenant_id": string
             }[]
+                           },
+"siguiente_consecutivo":
+{ Args: { "p_fecha"?: string,"p_serie": string }; Returns: string
                            },
 "tenant_actual":
 { Args: Record<PropertyKey, never>; Returns: string

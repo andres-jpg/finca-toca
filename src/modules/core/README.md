@@ -81,3 +81,16 @@ Códigos correlativos de negocio (`MP-2026-0001`, `MQ-…`, `REM-…`) sin carre
 | `formato.ts` | **Puro**: `formatearConsecutivo(formato, serie, anio, n)`, solo para previsualizar ("Próximo número: MP-2026-0013"). No reserva nada y debe dar lo mismo que `public.formatear_consecutivo()`; `formato.test.ts` y `supabase/tests/60_consecutivos.test.sql` comparten los casos. |
 
 Prueba de concurrencia: `pnpm test:concurrencia` (`scripts/test-consecutivos-concurrencia.ts`, necesita la Supabase local).
+
+## `auth/` — sesión unificada (FIN-91)
+
+`getSesion()` (`auth/sesion.ts`) es el **único punto de entrada a la sesión para código nuevo**: usuario, cliente activo (con vertical y módulos), `rolTenant`, `rolLegacy`, `esPlatformAdmin` y membresías, con dos round-trips en total (Auth + RPC `public.mi_sesion()`). Es un módulo plano con `React.cache()`: no le pongas `"use server"`.
+
+```ts
+const sesion = await requireSesion();                         // página/layout: redirect a /login
+const { tenant, rolTenant } = await requireRolTenant(["owner", "admin"]); // Server Action: lanza AuthorizationError
+```
+
+`getSesionBase()` es la misma lectura sin exigir cliente activo (para el platform admin que aún no eligió uno). `requireRole()` / `checkRoutePermission()` siguen existiendo para las pantallas legacy y están `@deprecated`.
+
+`tenants/` incluye el selector de cliente (`TenantSwitcher` + `cambiarTenantActivo`): la autorización la hace la RPC `cambiar_tenant_activo()`, no la UI.
