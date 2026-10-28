@@ -84,13 +84,17 @@ Cada módulo declara su navegación en un `manifest.ts` y la barra lateral sale 
 | `registry/nav.ts` | **Puro**: `construirNav(manifiestos, sesion, { pwa })` (filtra por vertical, módulo, rol y PWA; ordena por grupo y `orden`) y `ocultoEnPWA()`. |
 | `registry/iconos.ts` | **Puro**: `ICONOS_NAV`, los nombres de icono permitidos; el cliente los resuelve en `components/layout/icon-map.tsx`. |
 | `registry/pagina-inicial.ts` | **Puro**: `paginaInicial(sesion)`, a dónde se manda a quien no tiene acceso (por rol legacy o, sin él, por vertical). |
-| `manifest.ts` | Entradas del núcleo: Terceros (FIN-93) y Tarifas y parámetros (FIN-94), solo visibles si el cliente tiene `core.terceros`. Las páginas todavía no existen. |
+| `manifest.ts` | Entradas del núcleo: Terceros (FIN-93) y Tarifas y parámetros (FIN-94), solo visibles si el cliente tiene `core.terceros`. La página de Terceros existe (`/dashboard/terceros`); la de Tarifas todavía no. |
 
 `tenants/tenant.guards.ts` suma `requireModuloPagina(modulo)` (páginas/layouts: redirect a `/dashboard`) junto a `requireModulo()` (Server Actions). **Pantalla nueva = entrada en el manifiesto de su módulo + `requireModuloPagina` en la página + `requireModulo` en sus actions.**
 
 ## `inventario/` — kardex genérico
 
 Artículos y movimientos append-only; el stock es la suma de movimientos y se escribe solo con la RPC `registrar_movimientos`. Detalle en [`inventario/README.md`](./inventario/README.md) y *Inventario tipo kardex* en CLAUDE.md.
+
+## `terceros/` — maestro único de terceros (FIN-93)
+
+Proveedores y clientes en una sola tabla con roles combinables, aviso de duplicados y alta en línea (`TerceroCombobox`). El RLS exige el módulo `core.terceros`. Detalle en [`terceros/README.md`](./terceros/README.md) y *Terceros (FIN-93)* en CLAUDE.md.
 
 ## `consecutivos/` — numeración por serie y año
 

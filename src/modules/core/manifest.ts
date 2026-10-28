@@ -3,9 +3,9 @@ import type { ModuleManifest } from "./registry/types";
 /**
  * Navegación del núcleo: pantallas que sirven a cualquier vertical y aparecen cuando el cliente tiene
  * el módulo activo en `tenant_modulos`. **Hoy ningún cliente tiene `core.terceros`, así que ninguna de
- * estas entradas se ve**, y las dos páginas todavía no existen:
- * - Terceros → la crea FIN-93 (CO-13).
- * - Tarifas y parámetros → la crea FIN-94 (CO-14), que decidirá la ruta definitiva y si merece un módulo
+ * estas entradas se ve**:
+ * - Terceros → `/dashboard/terceros` (FIN-93, ya existe).
+ * - Tarifas y parámetros → su página todavía no existe: la crea FIN-94 (CO-14), que decidirá la ruta definitiva y si merece un módulo
  *   propio (no hay `core.tarifas` en el catálogo; por ahora cuelga de `core.terceros`).
  * Quien cree cada página debe usar `requireModuloPagina()` en ella y `requireModulo()` en sus actions.
  */
