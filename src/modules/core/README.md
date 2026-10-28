@@ -71,3 +71,13 @@ El cliente de la sesión (con `vertical`, plan, marca y **módulos activos**) y 
 | `tenant.guards.ts` | `tenantTieneModulo(id)` para páginas y `requireModulo(id)` para Server Actions (lanza `AuthorizationError`). |
 
 `modulos.test.ts` compara `MODULOS` con el SQL de la migración (siempre) y con la base local (si está levantada y `.env.local` apunta a ella). Para activar un módulo a un cliente, ver *Módulos por cliente* en CLAUDE.md.
+
+## `consecutivos/` — numeración por serie y año
+
+Códigos correlativos de negocio (`MP-2026-0001`, `MQ-…`, `REM-…`) sin carreras: los genera `public.siguiente_consecutivo(serie, fecha)` en Postgres (upsert atómico por `(tenant, serie, año)`), nunca `max(codigo) + 1`. Lo llaman otras RPC **dentro de su transacción**; si fallan después, el rollback devuelve el número (no hay huecos por fallos). Es `SECURITY DEFINER` —**excepción documentada** a la plantilla de arriba— porque nadie puede escribir en `consecutivos`; comprueba tenant y rol (`owner|admin|operativo`) por sí misma. Guía completa (definir una serie, llamarla desde una RPC, huecos) en *Consecutivos por serie y año*, CLAUDE.md.
+
+| Fichero | Qué es |
+|---|---|
+| `formato.ts` | **Puro**: `formatearConsecutivo(formato, serie, anio, n)`, solo para previsualizar ("Próximo número: MP-2026-0013"). No reserva nada y debe dar lo mismo que `public.formatear_consecutivo()`; `formato.test.ts` y `supabase/tests/60_consecutivos.test.sql` comparten los casos. |
+
+Prueba de concurrencia: `pnpm test:concurrencia` (`scripts/test-consecutivos-concurrencia.ts`, necesita la Supabase local).
