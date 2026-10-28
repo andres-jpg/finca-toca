@@ -20,8 +20,8 @@ select is(
      join pg_class c on c.oid = t.tgrelid
     where t.tgfoid = 'audit.registrar_cambio'::regproc and not t.tgisinternal),
   array['animales', 'arriendos', 'arriendos_abonos', 'eventos_animal', 'fincas_cooperativa', 'gastos',
-        'ingresos', 'pagos_finca', 'pajillas', 'precios', 'roles', 'tenants'],
-  'auditoría activa exactamente en las 12 tablas del ticket (no en recolecciones ni extracciones_leche)'
+        'ingresos', 'pagos_finca', 'pajillas', 'precios', 'roles', 'tenant_modulos', 'tenants'],
+  'auditoría activa exactamente en las 12 tablas del ticket más tenant_modulos (no en recolecciones ni extracciones_leche)'
 );
 select ok(
   not has_function_privilege('anon', 'public.historial_cambios(text,text,integer)', 'execute'),

@@ -11,7 +11,7 @@ import {
   formatEdad,
 } from "@/lib/animales/estados";
 import { canDelete, canWrite, checkRoutePermission } from "@/lib/auth/check-permissions";
-import { getTenantActual } from "@/lib/auth/get-tenant";
+import { getTenantActual } from "@/modules/core/tenants/tenant.queries";
 import type { MedicionLecheAnimal } from "@/types";
 
 export default async function AnimalFichaPage({

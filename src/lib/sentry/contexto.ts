@@ -1,6 +1,6 @@
 import { cache } from "react";
 import { getCurrentUser, getUserRole } from "@/lib/auth/get-user-role";
-import { getTenantActual } from "@/lib/auth/get-tenant";
+import { getTenantActual } from "@/modules/core/tenants/tenant.queries";
 import { aplicarContextoSentry } from "./etiquetas";
 
 // La parte pura (sin código de servidor) vive en `etiquetas.ts` para poder usarla también desde
@@ -30,8 +30,7 @@ export const registrarContextoSentry = cache(async function registrarContextoSen
       userId: user?.id ?? null,
       rol,
       tenantSlug: tenant?.slug ?? null,
-      // `vertical`: aún no hay columna en `tenants` (llega con el schema multi-vertical,
-      // FIN-86 / CO-09). Cuando exista, pásalo aquí: `vertical: tenant?.vertical`.
+      vertical: tenant?.vertical ?? null,
     });
   } catch {
     // Sin contexto no se rompe nada: el evento sale igual, solo menos etiquetado.

@@ -1,5 +1,5 @@
 /**
- * Denegación de acceso lanzada por `requireRole()` / `requireModuloTenant()`.
+ * Denegación de acceso lanzada por `requireRole()` / `requireModulo()`.
  *
  * Clase propia —con el mismo mensaje de siempre, "No autorizado"— para que Sentry pueda
  * reconocerla y no la reporte: un acceso denegado es el sistema funcionando, no un fallo.

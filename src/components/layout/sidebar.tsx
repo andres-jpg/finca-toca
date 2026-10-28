@@ -23,7 +23,7 @@ import {
   CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { slugTieneModulo, type ModuloOpcional } from "@/lib/tenants/modulos";
+import { tieneModulo, type ModuloId } from "@/modules/core/tenants/modulos";
 import type { UserRole } from "@/types";
 import { GiCheeseWedge } from "react-icons/gi";
 import { PiCow } from "react-icons/pi";
@@ -35,7 +35,7 @@ type NavItem = {
   allowedRoles: UserRole[];
   hideInPWA?: boolean;
   /** Si está, la opción solo se muestra a los clientes que tengan ese módulo. */
-  modulo?: ModuloOpcional;
+  modulo?: ModuloId;
 };
 
 const navItems: NavItem[] = [
@@ -86,7 +86,7 @@ const navItems: NavItem[] = [
     label: "Arriendos",
     icon: KeyRound,
     allowedRoles: ["admin", "viewer"] as UserRole[],
-    modulo: "arriendos",
+    modulo: "ganaderia.arriendos",
   },
   {
     href: "/dashboard/configuracion",
@@ -155,8 +155,8 @@ interface SidebarProps {
   role?: UserRole | null;
   /** Nombre del cliente (finca) de la sesión. `null` en roles de cooperativa. */
   tenantNombre?: string | null;
-  /** Slug del cliente: filtra las opciones de módulos que no tiene todo el mundo. */
-  tenantSlug?: string | null;
+  /** Módulos activos del cliente: filtra las opciones de módulos que no tiene todo el mundo. */
+  modulos?: string[];
   mobileMenuOpen?: boolean;
   onCloseMobileMenu?: () => void;
 }
@@ -187,7 +187,7 @@ function esPWA() {
 export function Sidebar({
   role,
   tenantNombre = null,
-  tenantSlug = null,
+  modulos = [],
   mobileMenuOpen = false,
   onCloseMobileMenu,
 }: SidebarProps = {}) {
@@ -199,7 +199,7 @@ export function Sidebar({
     if (isPWA && item.hideInPWA && role === "cooperativa_user") return false;
     // Esconder la opción es solo cosmético: la página y los Server Actions repiten la
     // comprobación del módulo en el servidor.
-    if (item.modulo && !slugTieneModulo(tenantSlug, item.modulo)) return false;
+    if (item.modulo && !tieneModulo(modulos, item.modulo)) return false;
     return true;
   });
 

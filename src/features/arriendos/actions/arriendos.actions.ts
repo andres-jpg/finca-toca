@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { formatDate } from "@/lib/utils";
 import { requireRole } from "@/lib/auth/check-permissions";
-import { requireModuloTenant } from "@/lib/auth/get-tenant";
+import { requireModulo } from "@/modules/core/tenants/tenant.guards";
 import type { AbonoArriendo, Arriendo } from "@/types";
 
 /**
@@ -22,18 +22,18 @@ const CAMPOS_ARRIENDO =
   "id, arrendatario, finca_nombre, fecha_inicio, fecha_fin, canon, observaciones, created_at";
 
 /**
- * Rol + módulo. El rol lo comprueba también RLS, pero el módulo no: la lista de clientes
- * con arriendos vive en el código, y cada acción exportada desde este fichero es un
+ * Rol + módulo. El rol lo comprueba también RLS, pero el módulo no: los clientes con
+ * arriendos activos viven en `tenant_modulos`, y cada acción exportada desde este fichero es un
  * endpoint POST público al que se puede llamar sin pasar por la barra lateral.
  */
 async function autorizarLectura() {
   await requireRole(["admin", "user", "viewer"]);
-  await requireModuloTenant("arriendos");
+  await requireModulo("ganaderia.arriendos");
 }
 
 async function autorizarEscritura() {
   await requireRole(["admin", "user"]);
-  await requireModuloTenant("arriendos");
+  await requireModulo("ganaderia.arriendos");
 }
 
 /** Las tres vistas que cambian cuando se toca un arriendo o un abono. */

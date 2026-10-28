@@ -17,9 +17,21 @@
 
 -- 1. Clientes ---------------------------------------------------------------------
 
-INSERT INTO public.tenants (id, nombre, slug) VALUES
-  ('00000000-0000-0000-0000-0000000000a1', 'Villa Blanca (demo)', 'villa-blanca'),
-  ('00000000-0000-0000-0000-0000000000a2', 'El Velero (demo)', 'el-velero');
+-- Toca Lácteos (cooperativa) y su catálogo de módulos los crea la migración 20261027120000, no el seed.
+INSERT INTO public.tenants (id, nombre, slug, vertical) VALUES
+  ('00000000-0000-0000-0000-0000000000a1', 'Villa Blanca (demo)', 'villa-blanca', 'ganaderia'),
+  ('00000000-0000-0000-0000-0000000000a2', 'El Velero (demo)', 'el-velero', 'ganaderia');
+
+-- Módulos activos: base de ganadería para ambos + Arriendos solo para Villa Blanca. Es el mismo
+-- backfill de la migración (en local las filas de tenants no existían cuando corrió).
+INSERT INTO public.tenant_modulos (tenant_id, modulo_id)
+SELECT t.id, m.id
+FROM public.tenants t
+JOIN public.modulos m ON m.vertical = t.vertical AND m.base
+WHERE t.vertical = 'ganaderia';
+
+INSERT INTO public.tenant_modulos (tenant_id, modulo_id)
+SELECT id, 'ganaderia.arriendos' FROM public.tenants WHERE slug = 'villa-blanca';
 
 -- 2. Usuarios (Auth) + roles ---------------------------------------------------------
 -- Patrón documentado por Supabase: auth.users + auth.identities. Los *_token van a ''

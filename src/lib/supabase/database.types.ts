@@ -329,6 +329,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"modulos": {
+                  Row: {
+                    "base": boolean,"descripcion": string | null,"id": string,"nombre": string,"vertical": Database["public"]['Enums']["vertical"] | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "base"?: boolean,"descripcion"?: string | null,"id": string,"nombre": string,"vertical"?: Database["public"]['Enums']["vertical"] | null
+                  }
+                  Update: {
+                    "base"?: boolean,"descripcion"?: string | null,"id"?: string,"nombre"?: string,"vertical"?: Database["public"]['Enums']["vertical"] | null
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"pagos": {
                   Row: {
                     "banco": string | null,"forma_pago": string,"gasto_id": number,"id": number,"numero_cuenta": string | null,"tenant_id": string,"tipo_cuenta": string | null
@@ -553,16 +567,42 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"tenants": {
+                },"tenant_modulos": {
                   Row: {
-                    "created_at": string,"id": string,"nombre": string,"slug": string
+                    "activado_at": string,"activado_por": string | null,"activo": boolean,"config": NonNullable<Json>,"id": string,"modulo_id": string,"tenant_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"id"?: string,"nombre": string,"slug": string
+                    "activado_at"?: string,"activado_por"?: string | null,"activo"?: boolean,"config"?: NonNullable<Json>,"id"?: string,"modulo_id": string,"tenant_id": string
                   }
                   Update: {
-                    "created_at"?: string,"id"?: string,"nombre"?: string,"slug"?: string
+                    "activado_at"?: string,"activado_por"?: string | null,"activo"?: boolean,"config"?: NonNullable<Json>,"id"?: string,"modulo_id"?: string,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "tenant_modulos_modulo_id_fkey"
+      columns: ["modulo_id"]
+isOneToOne: false
+      referencedRelation: "modulos"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "tenant_modulos_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"tenants": {
+                  Row: {
+                    "color_primario": string | null,"created_at": string,"estado": Database["public"]['Enums']["tenant_estado"],"id": string,"logo_url": string | null,"moneda": string,"nit": string | null,"nombre": string,"plan": string,"slug": string,"updated_at": string | null,"updated_by": string | null,"vertical": Database["public"]['Enums']["vertical"],"zona_horaria": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "color_primario"?: string | null,"created_at"?: string,"estado"?: Database["public"]['Enums']["tenant_estado"],"id"?: string,"logo_url"?: string | null,"moneda"?: string,"nit"?: string | null,"nombre": string,"plan"?: string,"slug": string,"updated_at"?: string | null,"updated_by"?: string | null,"vertical": Database["public"]['Enums']["vertical"],"zona_horaria"?: string
+                  }
+                  Update: {
+                    "color_primario"?: string | null,"created_at"?: string,"estado"?: Database["public"]['Enums']["tenant_estado"],"id"?: string,"logo_url"?: string | null,"moneda"?: string,"nit"?: string | null,"nombre"?: string,"plan"?: string,"slug"?: string,"updated_at"?: string | null,"updated_by"?: string | null,"vertical"?: Database["public"]['Enums']["vertical"],"zona_horaria"?: string
                   }
                   Relationships: [
                     
@@ -660,10 +700,13 @@ isOneToOne: false
                            },
 "tenant_actual":
 { Args: Record<PropertyKey, never>; Returns: string
+                           },
+"tenant_tiene_modulo":
+{ Args: { "p_modulo": string }; Returns: boolean
                            }
           }
           Enums: {
-            "animal_raza": "holstein"|"jersey"|"jerhol"|"normando"|"ayrshire"|"cruce","animal_sexo": "hembra"|"macho","estado_productivo": "leche"|"levante_1"|"levante_2"|"produccion"|"secado"|"reproductor","estado_reproductivo": "pre_puber"|"puber"|"pre_servicio"|"servicio"|"servida"|"por_confirmar"|"rechequeo"|"cargada","rol": "admin"|"user"|"cooperativa_admin"|"cooperativa_user"|"viewer","vaca_estado": "produccion"|"secado"|"pre_jardin"|"jardin"|"transicion","vaca_origen": "finca"|"externa"
+            "animal_raza": "holstein"|"jersey"|"jerhol"|"normando"|"ayrshire"|"cruce","animal_sexo": "hembra"|"macho","estado_productivo": "leche"|"levante_1"|"levante_2"|"produccion"|"secado"|"reproductor","estado_reproductivo": "pre_puber"|"puber"|"pre_servicio"|"servicio"|"servida"|"por_confirmar"|"rechequeo"|"cargada","rol": "admin"|"user"|"cooperativa_admin"|"cooperativa_user"|"viewer","tenant_estado": "activo"|"prueba"|"suspendido"|"baja","vaca_estado": "produccion"|"secado"|"pre_jardin"|"jardin"|"transicion","vaca_origen": "finca"|"externa","vertical": "ganaderia"|"cooperativa"|"cafe"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -783,7 +826,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "animal_raza": ["holstein", "jersey", "jerhol", "normando", "ayrshire", "cruce"],"animal_sexo": ["hembra", "macho"],"estado_productivo": ["leche", "levante_1", "levante_2", "produccion", "secado", "reproductor"],"estado_reproductivo": ["pre_puber", "puber", "pre_servicio", "servicio", "servida", "por_confirmar", "rechequeo", "cargada"],"rol": ["admin", "user", "cooperativa_admin", "cooperativa_user", "viewer"],"vaca_estado": ["produccion", "secado", "pre_jardin", "jardin", "transicion"],"vaca_origen": ["finca", "externa"]
+            "animal_raza": ["holstein", "jersey", "jerhol", "normando", "ayrshire", "cruce"],"animal_sexo": ["hembra", "macho"],"estado_productivo": ["leche", "levante_1", "levante_2", "produccion", "secado", "reproductor"],"estado_reproductivo": ["pre_puber", "puber", "pre_servicio", "servicio", "servida", "por_confirmar", "rechequeo", "cargada"],"rol": ["admin", "user", "cooperativa_admin", "cooperativa_user", "viewer"],"tenant_estado": ["activo", "prueba", "suspendido", "baja"],"vaca_estado": ["produccion", "secado", "pre_jardin", "jardin", "transicion"],"vaca_origen": ["finca", "externa"],"vertical": ["ganaderia", "cooperativa", "cafe"]
           }
         }
 } as const
