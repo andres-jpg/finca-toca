@@ -5,6 +5,8 @@ import { Menu, LogOut } from "lucide-react";
 
 interface HeaderProps {
   email: string;
+  /** Selector de cliente activo; solo se pasa si hay más de uno que elegir (o es platform admin). */
+  tenantSwitcher?: React.ReactNode;
   /** Campana de alertas ya renderizada en el servidor; ausente para roles de cooperativa. */
   alertasSlot?: React.ReactNode;
   onOpenMobileMenu?: () => void;
@@ -13,6 +15,7 @@ interface HeaderProps {
 
 export function Header({
   email,
+  tenantSwitcher,
   alertasSlot,
   onOpenMobileMenu,
   onToggleDesktopSidebar,
@@ -36,6 +39,12 @@ export function Header({
       </button>
 
       <div className="flex items-center gap-3 ml-auto">
+        {tenantSwitcher && (
+          <>
+            {tenantSwitcher}
+            <div className="h-5 w-px bg-stone-300 shrink-0 mx-1" aria-hidden />
+          </>
+        )}
         {alertasSlot && (
           <>
             {alertasSlot}

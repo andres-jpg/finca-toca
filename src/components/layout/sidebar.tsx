@@ -9,6 +9,7 @@ import {
   Droplets,
   X,
   Leaf,
+  Coffee,
   Settings,
   Building2,
   MapPin,
@@ -24,6 +25,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { tieneModulo, type ModuloId } from "@/modules/core/tenants/modulos";
+import type { Vertical } from "@/modules/core/tenants/tenant.queries";
 import type { UserRole } from "@/types";
 import { GiCheeseWedge } from "react-icons/gi";
 import { PiCow } from "react-icons/pi";
@@ -153,13 +155,25 @@ const navItems: NavItem[] = [
 
 interface SidebarProps {
   role?: UserRole | null;
-  /** Nombre del cliente de la sesión (la cabecera de cooperativa usa su propia marca, no este nombre). */
+  /** Nombre del cliente activo: es la marca de la cabecera. */
   tenantNombre?: string | null;
+  /** Logo del cliente; sin él se usa el icono de su vertical. */
+  tenantLogoUrl?: string | null;
+  vertical?: Vertical | null;
   /** Módulos activos del cliente: filtra las opciones de módulos que no tiene todo el mundo. */
   modulos?: string[];
   mobileMenuOpen?: boolean;
   onCloseMobileMenu?: () => void;
 }
+
+const MARCA_VERTICAL: Record<
+  Vertical,
+  (nombre: string | null) => { texto: string; fondo: string; Icono: React.ElementType }
+> = {
+  ganaderia: (nombre) => ({ texto: nombre ? `Finca ${nombre}` : "Finca", fondo: "bg-green-600", Icono: Leaf }),
+  cooperativa: (nombre) => ({ texto: nombre ?? "Toca Lácteos", fondo: "bg-teal-600", Icono: GiCheeseWedge }),
+  cafe: (nombre) => ({ texto: nombre ?? "Café", fondo: "bg-amber-700", Icono: Coffee }),
+};
 
 const roleConfig: Record<UserRole, { label: string; classes: string }> = {
   admin: { label: "Administrador", classes: "bg-yellow-500/20 text-yellow-300" },
@@ -187,6 +201,8 @@ function esPWA() {
 export function Sidebar({
   role,
   tenantNombre = null,
+  tenantLogoUrl = null,
+  vertical = null,
   modulos = [],
   mobileMenuOpen = false,
   onCloseMobileMenu,
@@ -204,6 +220,12 @@ export function Sidebar({
   });
 
   const roleMeta = role ? roleConfig[role] : null;
+
+  // Marca del cliente activo. Un cliente ganadero se muestra como "Finca <nombre>" (como siempre); la
+  // cooperativa y el café, con su nombre a secas. El vertical manda; sin él (sesión sin cliente) el rol.
+  const verticalMarca: Vertical =
+    vertical ?? (role === "cooperativa_admin" || role === "cooperativa_user" ? "cooperativa" : "ganaderia");
+  const marca = MARCA_VERTICAL[verticalMarca](tenantNombre);
 
   return (
     <>
@@ -224,28 +246,19 @@ export function Sidebar({
         {/* Brand */}
         <div className="h-16 flex items-center justify-between px-4 border-b border-gray-700">
           <div className="flex items-center gap-2.5">
-            {role === "cooperativa_admin" || role === "cooperativa_user" ? (
-              <>
-                <div className="h-8 w-8 rounded-lg bg-teal-600 flex items-center justify-center shadow-sm shrink-0">
-                  <GiCheeseWedge className="h-4 w-4 text-white" />
-                </div>
-                <span className="font-semibold text-white tracking-tight truncate">
-                  Toca Lácteos
-                </span>
-              </>
+            {tenantLogoUrl ? (
+              // Logo del cliente (URL libre configurada en `tenants.logo_url`): <img> y no next/image,
+              // porque el dominio no se conoce de antemano.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={tenantLogoUrl} alt="" className="h-8 w-8 rounded-lg object-cover shrink-0" />
             ) : (
-              <>
-                <div className="h-8 w-8 rounded-lg bg-green-600 flex items-center justify-center shadow-sm shrink-0">
-                  <Leaf className="h-4 w-4 text-white" />
-                </div>
-                <span
-                  className="font-semibold text-white tracking-tight truncate"
-                  title={tenantNombre ?? undefined}
-                >
-                  {tenantNombre ? `Finca ${tenantNombre}` : "Finca"}
-                </span>
-              </>
+              <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center shadow-sm shrink-0", marca.fondo)}>
+                <marca.Icono className="h-4 w-4 text-white" />
+              </div>
             )}
+            <span className="font-semibold text-white tracking-tight truncate" title={tenantNombre ?? undefined}>
+              {marca.texto}
+            </span>
           </div>
           <button
             onClick={onCloseMobileMenu}
