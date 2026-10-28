@@ -61,6 +61,23 @@ export const MENSAJES_RPC: Readonly<Record<string, string>> = {
   proceso_anulado: "El proceso está anulado: ya no se puede modificar.",
   proceso_con_dependientes: "Hay procesos posteriores que dependen de este: anula primero el último proceso de esos bultos.",
   proceso_vigente: "Los bultos de un proceso vigente no se liberan a mano: anula el proceso.",
+  // Empaque de marca propia y producto terminado
+  empaque_supera_peso: "No puedes empacar más café del que hay disponible en los bultos elegidos.",
+  insumo_no_configurado: "Falta la bolsa o la etiqueta activa de esa presentación en el inventario de insumos.",
+  producto_no_configurado: "No hay un producto terminado activo para ese tipo de café y presentación. Pide a un administrador que lo revise.",
+  usar_registrar_proceso: "El empaque de un lote de servicio no mueve inventario: regístralo como un paso más de la planta.",
+  entrada_pt_no_permitida: "El producto terminado solo aumenta al empacar un lote. Para corregir existencias usa un ajuste.",
+  empaque_no_anulable: "Este empaque ya movió inventario y no se anula. Corrige las existencias con un ajuste.",
+  observacion_obligatoria: "Explica el motivo: la observación es obligatoria.",
+  // Remisiones de entrega (café)
+  remision_solo_servicios: "La remisión de entrega es solo para lotes de trilla y maquila de clientes.",
+  remision_sin_procesos: "El lote aún no tiene ningún proceso registrado: no hay nada que entregar.",
+  servicios_incompletos: "El lote tiene servicios por completar. Un administrador puede entregarlo así, con una observación.",
+  remision_forzar_no_permitido: "Solo un administrador puede entregar un lote con servicios pendientes.",
+  remision_duplicada: "El lote ya tiene una remisión vigente: anúlala si necesitas generar otra.",
+  remision_no_encontrada: "La remisión no existe o no pertenece a tu cliente.",
+  remision_anulada: "La remisión está anulada: ya no se puede modificar.",
+  lote_entregado: "El lote ya tiene una remisión de entrega: anúlala antes de registrar o anular procesos.",
   // Alta de clientes (plataforma)
   slug_duplicado: "Ya existe un cliente con ese identificador.",
   slug_invalido: "El identificador debe tener de 3 a 40 caracteres: minúsculas, números y guiones.",

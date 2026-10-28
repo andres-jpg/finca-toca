@@ -14,6 +14,13 @@ import { EtapasTabla } from "@/modules/cafe/lotes/components/etapas-tabla";
 import { LoteCabecera } from "@/modules/cafe/lotes/components/lote-cabecera";
 import { LoteTimeline } from "@/modules/cafe/lotes/components/lote-timeline";
 import { lotePendienteDeTrabajo } from "@/modules/cafe/lotes/lib/estado";
+import { etiquetaServicio } from "@/modules/cafe/lotes/lib/servicios";
+import { fechaHoyEnZona } from "@/modules/cafe/insumos/lib/insumos";
+import { GenerarRemisionButton } from "@/modules/cafe/remisiones/components/generar-remision-button";
+import { RemisionLoteSeccion } from "@/modules/cafe/remisiones/components/remision-lote-seccion";
+import { aEventoDeLinea, opcionGenerar } from "@/modules/cafe/remisiones/lib/estado";
+import { getRemisionesDeLote } from "@/modules/cafe/remisiones/queries/remisiones.queries";
+import type { Remision } from "@/modules/cafe/remisiones/types";
 import {
   getBultos,
   getEtapas,
@@ -26,7 +33,8 @@ import {
  * Ficha del lote: de dónde viene, qué procesos tuvo, cuánta merma y cuánto queda (HU-F1-05 y HU-F1-12). Todo sale de
  * las vistas `v_lotes`, `v_lote_etapas` y `v_bultos_estado`: nada se guarda a mano. La ven todos los miembros
  * (Gerencia sin botones); «Ir a planta» es de quien opera, «Anular lote» de owner/admin y el historial de cambios
- * de owner/admin. Lo escondido es cosmético: cada acción repite módulo y rol y el RLS es la frontera real.
+ * de owner/admin. En un lote de servicio, «Generar remisión» (CO-32) es de quien opera cuando el lote está listo y
+ * de owner/admin también con servicios pendientes; tras entregar, la sección «Remisión de entrega» imprime y anula. Lo escondido es cosmético: cada acción repite módulo y rol y el RLS es la frontera real.
  */
 export default async function LotePage({ params }: { params: Promise<{ id: string }> }) {
   await requireModuloPagina("cafe.recepcion");
@@ -38,19 +46,27 @@ export default async function LotePage({ params }: { params: Promise<{ id: strin
   if (!lote) notFound();
 
   const esAdmin = sesion.rolTenant === "owner" || sesion.rolTenant === "admin";
-  const [etapas, bultos, responsables, historial] = await Promise.all([
+  const conRemisiones = lote.linea === "servicio" && tieneModulo(sesion.tenant.modulos, "cafe.remisiones");
+  const [etapas, bultos, responsables, historial, remisiones] = await Promise.all([
     getEtapas(lote.id),
     getBultos(lote.id),
     getResponsables(lote.id),
     esAdmin ? historialDelLote(lote.id) : Promise.resolve<CambioAuditado[] | null>(null),
+    conRemisiones ? remisionesDelLote(lote.id) : Promise.resolve<Remision[]>([]),
   ]);
-  const eventos = await getTimeline(lote, bultos, responsables);
+  const eventos = await getTimeline(lote, bultos, responsables, remisiones.map((r) => aEventoDeLinea(r, responsables)));
 
   const zona = sesion.tenant.zonaHoraria;
   const sinProcesos = etapas.length === 0;
   const puedeOperar = sesion.rolTenant !== "viewer" && tieneModulo(sesion.tenant.modulos, "cafe.procesos");
   const verPlanta = puedeOperar && lotePendienteDeTrabajo(lote.estado);
   const puedeAnular = esAdmin && sinProcesos && lote.anulacion === null;
+  // Remisión: Gerencia (`viewer`) no genera. Esconder el botón es cosmético; la action y la RPC lo exigen.
+  const generar = conRemisiones && sesion.rolTenant !== "viewer" ? opcionGenerar({ linea: lote.linea, estado: lote.estado }, esAdmin) : "no";
+  const pendientes = lote.serviciosRequeridos
+    .filter((s) => !etapas.some((e) => e.tipo === s && e.completo))
+    .map((s) => etiquetaServicio(s).toLowerCase())
+    .join(", ");
 
   return (
     <div className="space-y-6">
@@ -61,8 +77,19 @@ export default async function LotePage({ params }: { params: Promise<{ id: strin
             Lotes
           </Link>
         </Button>
-        {(verPlanta || puedeAnular) && (
+        {(verPlanta || puedeAnular || generar !== "no") && (
           <div className="flex flex-col gap-2 sm:flex-row">
+            {generar !== "no" && (
+              <GenerarRemisionButton
+                loteId={lote.id}
+                loteCodigo={lote.codigo}
+                clienteNombre={lote.tercero ?? "el cliente"}
+                fechaHoy={fechaHoyEnZona(zona)}
+                fechaRecepcion={lote.fechaRecepcion}
+                modo={generar === "forzar" ? "forzar" : "normal"}
+                pendientes={pendientes}
+              />
+            )}
             {verPlanta && (
               <Button asChild className="h-11 sm:h-9">
                 <Link href={`/dashboard/cafe/planta/${lote.id}`}>
@@ -77,6 +104,8 @@ export default async function LotePage({ params }: { params: Promise<{ id: strin
       </div>
 
       <LoteCabecera lote={lote} etapas={etapas} zonaHoraria={zona} />
+
+      <RemisionLoteSeccion remisiones={remisiones} puedeAnular={esAdmin} zonaHoraria={zona} />
 
       <section className="space-y-2" aria-labelledby="titulo-etapas">
         <h2 id="titulo-etapas" className="text-lg font-semibold text-gray-800">
@@ -109,6 +138,18 @@ export default async function LotePage({ params }: { params: Promise<{ id: strin
       )}
     </div>
   );
+}
+
+/**
+ * Las remisiones del lote son un extra de la ficha: si la lectura falla (p. ej. la migración de remisiones aún no se
+ * aplicó en este entorno mientras se despliega el código), la ficha se muestra igual, sin esa sección.
+ */
+async function remisionesDelLote(loteId: string): Promise<Remision[]> {
+  try {
+    return await getRemisionesDeLote(loteId);
+  } catch {
+    return [];
+  }
 }
 
 /** El historial es un extra de auditoría: si la RPC falla, la ficha se muestra igual sin esa sección. */

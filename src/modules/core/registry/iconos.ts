@@ -28,6 +28,7 @@ export const ICONOS_NAV = [
   "Boxes",
   "Coffee",
   "Factory",
+  "FileText",
 ] as const;
 
 export type IconoNav = (typeof ICONOS_NAV)[number];

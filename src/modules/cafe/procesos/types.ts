@@ -15,7 +15,7 @@ export type LoteConAvance = Database["cafe"]["Views"]["v_lotes"]["Row"];
 export type BultoEstado = Database["cafe"]["Views"]["v_bultos_estado"]["Row"];
 
 /**
- * Estado derivado del lote (`cafe.v_lotes.estado`). `entregado` lo añadirá la remisión (CO-32).
+ * Estado derivado del lote (`cafe.v_lotes.estado`). `entregado` lo emite la vista con una remisión de entrega vigente (CO-32).
  *   anulado · recibido (sin procesos) · en_proceso · parcial (algún paso con bultos pendientes) · listo
  */
 export type EstadoLote = "anulado" | "recibido" | "en_proceso" | "parcial" | "listo";

@@ -7,7 +7,7 @@ import { LotesFiltros } from "@/modules/cafe/lotes/components/lotes-filtros";
 import { LotesPaginacion } from "@/modules/cafe/lotes/components/lotes-paginacion";
 import { LotesPestanas } from "@/modules/cafe/lotes/components/lotes-pestanas";
 import { LotesTable } from "@/modules/cafe/lotes/components/lotes-table";
-import { parsearFiltros } from "@/modules/cafe/lotes/lib/filtros";
+import { parsearFiltros, serializarFiltros } from "@/modules/cafe/lotes/lib/filtros";
 import { listarLotes } from "@/modules/cafe/lotes/queries/lotes.queries";
 
 const RUTA = "/dashboard/cafe/lotes";
@@ -33,6 +33,8 @@ export default async function LotesPage({
   // la página de destino, la action y la RPC lo vuelven a exigir.
   const puedeRegistrar = activo && rolTenant !== "viewer";
   const pagina = activo ? await listarLotes(filtros) : null;
+  const exportQuery = serializarFiltros(filtros, { conPagina: false });
+  const exportHref = `/api/export/cafe-lotes${exportQuery ? `?${exportQuery}` : ""}`;
 
   return (
     <div className="space-y-5">
@@ -62,10 +64,13 @@ export default async function LotesPage({
                 </Button>
               </>
             )}
-            {/* La exportación llega con CO-35 (`/api/export/cafe-lotes?` + estos mismos filtros). */}
-            <Button variant="outline" disabled title="Disponible próximamente" className="h-11 w-full sm:h-9 sm:w-auto">
-              <Download className="mr-2 h-4 w-4" />
-              Exportar
+            {/* Excel de lotes y procesos (CO-35) con los mismos filtros de la URL, sin la página. Un `<a>` normal:
+                es una descarga, no una navegación de Next. Todos los roles, Gerencia incluida. */}
+            <Button asChild variant="outline" className="h-11 w-full sm:h-9 sm:w-auto">
+              <a href={exportHref}>
+                <Download className="mr-2 h-4 w-4" />
+                Exportar
+              </a>
             </Button>
           </div>
         )}

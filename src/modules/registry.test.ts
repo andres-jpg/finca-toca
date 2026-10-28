@@ -4,6 +4,7 @@ import { MODULOS, type ModuloId } from "@/modules/core/tenants/modulos";
 import type { Vertical } from "@/modules/core/tenants/tenant.queries";
 import { ocultoEnPWA, type SesionNav } from "@/modules/core/registry/nav";
 import { ICONOS_NAV } from "@/modules/core/registry/iconos";
+import { getExportador } from "@/modules/core/export/registry";
 import { MANIFIESTOS, getNavParaSesion } from "./registry";
 import { MENU_BASELINE } from "./registry.baseline";
 
@@ -99,7 +100,11 @@ describe("getNavParaSesion: módulos y verticales", () => {
 
   it("café solo muestra las entradas de los módulos que tiene", () => {
     expect(hrefs(sesion("cafe", ["cafe.procesos"], null, "owner"))).toEqual(["/dashboard/cafe/planta"]);
-    expect(hrefs(sesion("cafe", ["cafe.inventario"], null, "owner"))).toEqual(["/dashboard/cafe/insumos"]);
+    expect(hrefs(sesion("cafe", ["cafe.inventario"], null, "owner"))).toEqual([
+      "/dashboard/cafe/inventario",
+      "/dashboard/cafe/insumos",
+    ]);
+    expect(hrefs(sesion("cafe", ["cafe.remisiones"], null, "viewer"))).toEqual(["/dashboard/cafe/remisiones"]);
     expect(hrefs(sesion("cafe", ["cafe.recepcion"], null, "owner"))).toEqual([
       "/dashboard/cafe/lotes",
       "/dashboard/cafe/maestros/tipos",
@@ -147,11 +152,13 @@ describe("getNavParaSesion: tenant de café (CO-21)", () => {
     "core.auditoria",
   ];
 
-  it("admin: menú agrupado Operación (lotes, planta), Inventario, Gerencia y Maestros (tipos, terceros, tarifas)", () => {
+  it("admin: menú agrupado Operación (lotes, planta), Inventario (producto terminado, insumos), Comercial (remisiones), Gerencia y Maestros (tipos, terceros, tarifas)", () => {
     expect(resumen(sesion("cafe", MODULOS_CAFE, null, "admin"))).toEqual([
       { href: "/dashboard/cafe/lotes", label: "Lotes", icon: "Boxes" },
       { href: "/dashboard/cafe/planta", label: "Planta", icon: "Factory" },
+      { href: "/dashboard/cafe/inventario", label: "Producto terminado", icon: "Package" },
       { href: "/dashboard/cafe/insumos", label: "Insumos", icon: "Package" },
+      { href: "/dashboard/cafe/remisiones", label: "Remisiones", icon: "FileText" },
       { href: "/dashboard/cafe", label: "Panel", icon: "LayoutDashboard" },
       { href: "/dashboard/cafe/maestros/tipos", label: "Tipos de café", icon: "Coffee" },
       { href: "/dashboard/terceros", label: "Terceros", icon: "Handshake" },
@@ -163,20 +170,24 @@ describe("getNavParaSesion: tenant de café (CO-21)", () => {
     expect(hrefs(sesion("cafe", MODULOS_CAFE, null, "owner"))).toEqual(hrefs(sesion("cafe", MODULOS_CAFE, null, "admin")));
   });
 
-  it("operativo: lotes, planta, insumos, panel y terceros (sin tipos de café ni tarifas)", () => {
+  it("operativo: lotes, planta, producto terminado, insumos, remisiones, panel y terceros (sin tipos de café ni tarifas)", () => {
     expect(resumen(sesion("cafe", MODULOS_CAFE, null, "operativo"))).toEqual([
       { href: "/dashboard/cafe/lotes", label: "Lotes", icon: "Boxes" },
       { href: "/dashboard/cafe/planta", label: "Planta", icon: "Factory" },
+      { href: "/dashboard/cafe/inventario", label: "Producto terminado", icon: "Package" },
       { href: "/dashboard/cafe/insumos", label: "Insumos", icon: "Package" },
+      { href: "/dashboard/cafe/remisiones", label: "Remisiones", icon: "FileText" },
       { href: "/dashboard/cafe", label: "Panel", icon: "LayoutDashboard" },
       { href: "/dashboard/terceros", label: "Terceros", icon: "Handshake" },
     ]);
   });
 
-  it("viewer (gerencia): consulta lotes, insumos, panel y terceros, pero no ve Planta", () => {
+  it("viewer (gerencia): consulta lotes, producto terminado, insumos, remisiones, panel y terceros, pero no ve Planta", () => {
     expect(resumen(sesion("cafe", MODULOS_CAFE, null, "viewer"))).toEqual([
       { href: "/dashboard/cafe/lotes", label: "Lotes", icon: "Boxes" },
+      { href: "/dashboard/cafe/inventario", label: "Producto terminado", icon: "Package" },
       { href: "/dashboard/cafe/insumos", label: "Insumos", icon: "Package" },
+      { href: "/dashboard/cafe/remisiones", label: "Remisiones", icon: "FileText" },
       { href: "/dashboard/cafe", label: "Panel", icon: "LayoutDashboard" },
       { href: "/dashboard/terceros", label: "Terceros", icon: "Handshake" },
     ]);
@@ -260,5 +271,10 @@ describe("integridad de los manifiestos", () => {
 
   it("cada vertical tiene su manifiesto, más el del núcleo", () => {
     expect(MANIFIESTOS.map((m) => m.vertical).sort()).toEqual(["cafe", "cooperativa", "core", "ganaderia"]);
+  });
+
+  it("registra los exportadores a Excel del núcleo y de café", () => {
+    expect(getExportador("terceros")?.modulo).toBe("core.terceros");
+    expect(getExportador("cafe-lotes")?.modulo).toBe("cafe.recepcion");
   });
 });

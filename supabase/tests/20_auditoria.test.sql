@@ -19,11 +19,11 @@ select is(
      from pg_trigger t
      join pg_class c on c.oid = t.tgrelid
     where t.tgfoid = 'audit.registrar_cambio'::regproc and not t.tgisinternal),
-  array['animales', 'arriendos', 'arriendos_abonos', 'articulos', 'baches', 'eventos_animal', 'fincas_cooperativa', 'gastos',
+  array['animales', 'arriendos', 'arriendos_abonos', 'articulos', 'baches', 'empaque_lineas', 'eventos_animal', 'fincas_cooperativa', 'gastos',
         'ingresos', 'lote_bultos', 'lotes', 'pagos_finca', 'pajillas', 'parametros', 'precios', 'proceso_bultos', 'procesos',
-        'roles', 'series_consecutivo', 'tarifas', 'tenant_members',
+        'remisiones', 'roles', 'series_consecutivo', 'tarifas', 'tenant_members',
         'tenant_modulos', 'tenants', 'terceros', 'tipos_cafe'],
-  'auditoría activa exactamente en las 12 tablas del ticket más articulos, series_consecutivo, tarifas, parametros, tenant_modulos, tenant_members, terceros, tipos_cafe, lotes, lote_bultos, procesos, proceso_bultos y baches (no en recolecciones ni extracciones_leche)'
+  'auditoría activa exactamente en las 12 tablas del ticket más articulos, series_consecutivo, tarifas, parametros, tenant_modulos, tenant_members, terceros, tipos_cafe, lotes, lote_bultos, procesos, proceso_bultos, baches, empaque_lineas y remisiones (no en recolecciones ni extracciones_leche)'
 );
 select ok(
   not has_function_privilege('anon', 'public.historial_cambios(text,text,integer)', 'execute'),

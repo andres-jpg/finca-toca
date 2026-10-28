@@ -25,6 +25,26 @@ isOneToOne: false
       referencedColumns: ["tenant_id","id"]
     }
                   ]
+                },"empaque_lineas": {
+                  Row: {
+                    "articulo_pt_id": string,"created_at": string,"created_by": string | null,"id": string,"presentacion_g": number,"proceso_id": string,"tenant_id": string,"unidades": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "articulo_pt_id": string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"presentacion_g": number,"proceso_id": string,"tenant_id"?: string,"unidades": number
+                  }
+                  Update: {
+                    "articulo_pt_id"?: string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"presentacion_g"?: number,"proceso_id"?: string,"tenant_id"?: string,"unidades"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "empaque_lineas_proceso_fk"
+      columns: ["tenant_id","proceso_id"]
+isOneToOne: false
+      referencedRelation: "procesos"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
                 },"lote_bultos": {
                   Row: {
                     "created_at": string,"created_by": string | null,"id": string,"lote_id": string,"numero": number,"peso_kg": number,"tenant_id": string,"updated_at": string | null,"updated_by": string | null
@@ -123,6 +143,32 @@ isOneToOne: false
       referencedColumns: ["tenant_id","id"]
     },{
       foreignKeyName: "procesos_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
+      referencedRelation: "v_lotes"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
+                },"remisiones": {
+                  Row: {
+                    "anulada_at": string | null,"anulada_por": string | null,"cliente_identificacion": string | null,"cliente_nombre": string,"created_at": string,"created_by": string | null,"detalle": NonNullable<Json>,"fecha": string,"forzada": boolean,"id": string,"lote_codigo": string,"lote_id": string,"merma_total_kg": number | null,"merma_total_pct": number | null,"motivo_anulacion": string | null,"numero": string,"observaciones": string | null,"peso_entregado_kg": number,"peso_recibido_kg": number,"recibido_por": string | null,"tenant_id": string,"tercero_id": string,"updated_at": string | null,"updated_by": string | null,"valor_servicios": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "anulada_at"?: string | null,"anulada_por"?: string | null,"cliente_identificacion"?: string | null,"cliente_nombre": string,"created_at"?: string,"created_by"?: string | null,"detalle": NonNullable<Json>,"fecha": string,"forzada"?: boolean,"id"?: string,"lote_codigo": string,"lote_id": string,"merma_total_kg"?: never,"merma_total_pct"?: never,"motivo_anulacion"?: string | null,"numero": string,"observaciones"?: string | null,"peso_entregado_kg": number,"peso_recibido_kg": number,"recibido_por"?: string | null,"tenant_id"?: string,"tercero_id": string,"updated_at"?: string | null,"updated_by"?: string | null,"valor_servicios": number
+                  }
+                  Update: {
+                    "anulada_at"?: string | null,"anulada_por"?: string | null,"cliente_identificacion"?: string | null,"cliente_nombre"?: string,"created_at"?: string,"created_by"?: string | null,"detalle"?: NonNullable<Json>,"fecha"?: string,"forzada"?: boolean,"id"?: string,"lote_codigo"?: string,"lote_id"?: string,"merma_total_kg"?: never,"merma_total_pct"?: never,"motivo_anulacion"?: string | null,"numero"?: string,"observaciones"?: string | null,"peso_entregado_kg"?: number,"peso_recibido_kg"?: number,"recibido_por"?: string | null,"tenant_id"?: string,"tercero_id"?: string,"updated_at"?: string | null,"updated_by"?: string | null,"valor_servicios"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "remisiones_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
+      referencedRelation: "lotes"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "remisiones_lote_fk"
       columns: ["tenant_id","lote_id"]
 isOneToOne: false
       referencedRelation: "v_lotes"
@@ -235,11 +281,17 @@ isOneToOne: false
 "anular_proceso":
 { Args: { "p_motivo": string,"p_proceso": string }; Returns: Json
                            },
+"anular_remision":
+{ Args: { "p_motivo": string,"p_remision": string }; Returns: Json
+                           },
 "asegurar_productos_terminados":
 { Args: { "p_tenant"?: string }; Returns: number
                            },
 "etiqueta_presentacion":
 { Args: { "p_gramos": number }; Returns: string
+                           },
+"generar_remision":
+{ Args: { "p": Json }; Returns: Json
                            },
 "instante_fecha":
 { Args: { "p_fecha": string }; Returns: string
@@ -268,10 +320,16 @@ isOneToOne: false
 "registrar_compra":
 { Args: { "p": Json }; Returns: Json
                            },
+"registrar_empaque":
+{ Args: { "p": Json }; Returns: Json
+                           },
 "registrar_proceso":
 { Args: { "p": Json }; Returns: Json
                            },
 "registrar_recepcion":
+{ Args: { "p": Json }; Returns: Json
+                           },
+"registrar_salida_pt":
 { Args: { "p": Json }; Returns: Json
                            },
 "repartir_peso":

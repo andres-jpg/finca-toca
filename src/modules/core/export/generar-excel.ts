@@ -35,6 +35,12 @@ export interface Hoja<T> {
   subtitulo?: string;
   /** Claves (`Columna.key`) de las columnas numéricas que llevan fila de totales con fórmula `SUM`. */
   totales?: (keyof T)[];
+  /**
+   * Totales por grupo en vez de uno solo al final: tras cada bloque de filas consecutivas con el mismo grupo se
+   * inserta una fila «Subtotal …» con su propio `SUM`, y NO hay total general (para cuando sumar todo mezclaría
+   * cosas que no se deben mezclar, p. ej. café propio y de clientes). Las filas deben llegar ya ordenadas por grupo.
+   */
+  subtotales?: { agruparPor: (fila: T) => string; etiqueta?: (grupo: string) => string };
 }
 
 export interface OpcionesExcel {
@@ -121,9 +127,28 @@ function escribirHoja(libro: ExcelJS.Workbook, nombre: string, hoja: HojaExcel, 
   });
   cabecera.height = 22;
 
+  // Bloques de filas consecutivas: uno solo (total general al final) o uno por grupo (subtotal tras cada uno).
+  const subtotales = hoja.subtotales;
+  const bloques: { grupo: string; desde: number; hasta: number }[] = [];
+  const filaDe: number[] = [];
+  let siguiente = FILA_CABECERA + 1;
+  filas.forEach((fila, r) => {
+    const grupo = subtotales ? subtotales.agruparPor(fila) : "";
+    const ultimo = bloques[bloques.length - 1];
+    if (ultimo && ultimo.grupo === grupo) {
+      ultimo.hasta = siguiente;
+    } else {
+      // Entre bloques queda una fila para el subtotal del anterior.
+      if (ultimo && subtotales) siguiente += 1;
+      bloques.push({ grupo, desde: siguiente, hasta: siguiente });
+    }
+    filaDe[r] = siguiente;
+    siguiente += 1;
+  });
+
   // Datos.
   filas.forEach((fila, r) => {
-    const row = ws.getRow(FILA_CABECERA + 1 + r);
+    const row = ws.getRow(filaDe[r]);
     columnas.forEach((c, i) => {
       const formato = formatoDe(c);
       const bruto = typeof c.key === "function" ? c.key(fila) : fila[c.key];
@@ -137,36 +162,41 @@ function escribirHoja(libro: ExcelJS.Workbook, nombre: string, hoja: HojaExcel, 
   // Totales: `SUM` real sobre el rango de datos. Sin filas no hay nada que sumar (y el rango apuntaría a la propia fila).
   const claveTotales = hoja.totales ?? [];
   if (claveTotales.length > 0 && filas.length > 0) {
-    const primera = FILA_CABECERA + 1;
-    const ultima = FILA_CABECERA + filas.length;
-    const filaTotal = ws.getRow(ultima + 1);
+    const escribirTotal = (filaTotal: ExcelJS.Row, etiqueta: string, primera: number, ultima: number) => {
+      columnas.forEach((_, i) => {
+        const celda = filaTotal.getCell(i + 1);
+        celda.font = { bold: true, color: { argb: COLOR_HEADER_FG } };
+        celda.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_TOTALS_BG } };
+      });
+      filaTotal.getCell(1).value = etiqueta;
 
-    columnas.forEach((_, i) => {
-      const celda = filaTotal.getCell(i + 1);
-      celda.font = { bold: true, color: { argb: COLOR_HEADER_FG } };
-      celda.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_TOTALS_BG } };
-    });
-    filaTotal.getCell(1).value = "TOTAL";
+      for (const clave of claveTotales) {
+        const idx = columnas.findIndex((c) => c.key === clave);
+        if (idx < 0) throw new Error(`totales: la hoja "${hoja.nombre}" no tiene una columna con key "${String(clave)}"`);
+        const formato = formatoDe(columnas[idx]);
+        if (!FORMATOS_SUMABLES.includes(formato)) {
+          throw new Error(`totales: la columna "${columnas[idx].header}" tiene formato "${formato}", que no se puede sumar`);
+        }
+        if (idx === 0) throw new Error(`totales: la primera columna de "${hoja.nombre}" lleva la etiqueta TOTAL, no puede sumarse`);
 
-    for (const clave of claveTotales) {
-      const idx = columnas.findIndex((c) => c.key === clave);
-      if (idx < 0) throw new Error(`totales: la hoja "${hoja.nombre}" no tiene una columna con key "${String(clave)}"`);
-      const formato = formatoDe(columnas[idx]);
-      if (!FORMATOS_SUMABLES.includes(formato)) {
-        throw new Error(`totales: la columna "${columnas[idx].header}" tiene formato "${formato}", que no se puede sumar`);
+        const letra = ws.getColumn(idx + 1).letter;
+        let suma = 0;
+        for (let r = primera; r <= ultima; r++) {
+          const v = ws.getCell(r, idx + 1).value;
+          if (typeof v === "number") suma += v;
+        }
+        const celda = filaTotal.getCell(idx + 1);
+        // `result` es solo el valor en caché para visores que no recalculan (vista previa, móvil); Excel recalcula la fórmula.
+        celda.value = { formula: `SUM(${letra}${primera}:${letra}${ultima})`, result: suma };
+        celda.numFmt = NUM_FMT[formato] ?? "General";
       }
-      if (idx === 0) throw new Error(`totales: la primera columna de "${hoja.nombre}" lleva la etiqueta TOTAL, no puede sumarse`);
+    };
 
-      const letra = ws.getColumn(idx + 1).letter;
-      let suma = 0;
-      for (let r = primera; r <= ultima; r++) {
-        const v = ws.getCell(r, idx + 1).value;
-        if (typeof v === "number") suma += v;
-      }
-      const celda = filaTotal.getCell(idx + 1);
-      // `result` es solo el valor en caché para visores que no recalculan (vista previa, móvil); Excel recalcula la fórmula.
-      celda.value = { formula: `SUM(${letra}${primera}:${letra}${ultima})`, result: suma };
-      celda.numFmt = NUM_FMT[formato] ?? "General";
+    if (subtotales) {
+      const etiqueta = subtotales.etiqueta ?? ((g: string) => `Subtotal ${g}`);
+      for (const b of bloques) escribirTotal(ws.getRow(b.hasta + 1), etiqueta(b.grupo), b.desde, b.hasta);
+    } else {
+      escribirTotal(ws.getRow(siguiente), "TOTAL", FILA_CABECERA + 1, siguiente - 1);
     }
   }
 

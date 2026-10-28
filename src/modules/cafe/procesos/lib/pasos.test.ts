@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TipoProceso } from "../../lotes/types";
 import {
-  MOTIVO_EMPAQUE_MARCA_PROPIA,
   evaluarBulto,
   evaluarPaso,
   evaluarPasos,
@@ -123,9 +122,16 @@ describe("evaluarPasos: orden y motivos", () => {
     expect(r.motivo).toBe("Los bultos pendientes ya pasaron por un paso posterior.");
   });
 
-  it("el empaque de marca propia no se registra en la planta, aunque haya bultos tostados", () => {
+  it("el empaque de marca propia se ofrece con los bultos tostados (lo registra el formulario de presentaciones)", () => {
     const r = evaluarPaso(MARCA, "empaque", bultos(2, () => ["tostion"]));
-    expect(r).toMatchObject({ disponible: false, motivo: MOTIVO_EMPAQUE_MARCA_PROPIA, elegibles: [] });
+    expect(r).toMatchObject({ disponible: true, motivo: null });
+    expect(r.elegibles).toHaveLength(2);
+  });
+
+  it("y no antes de tostar: sin tostión no hay nada que empacar", () => {
+    const r = evaluarPaso(MARCA, "empaque", bultos(2, () => []));
+    expect(r).toMatchObject({ disponible: false, elegibles: [] });
+    expect(r.motivo).toContain("tostión");
   });
 
   it("el empaque de maquila sí (sin insumos)", () => {
@@ -145,8 +151,8 @@ describe("pasoInicial", () => {
     expect(pasoInicial(COMPLETO, bultos(8, () => ["trilla"]), COMPLETO.servicios)).toBe("tostion");
   });
 
-  it("marca propia con todo tostado: el empaque no es registrable aquí, se ofrece la molienda", () => {
-    expect(pasoInicial(MARCA, bultos(3, () => ["tostion"]), pasosRequeridos(MARCA, false))).toBe("molienda");
+  it("marca propia con todo tostado: se preselecciona el empaque (la molienda es opcional)", () => {
+    expect(pasoInicial(MARCA, bultos(3, () => ["tostion"]), pasosRequeridos(MARCA, false))).toBe("empaque");
   });
 
   it("sin nada disponible devuelve null", () => {
