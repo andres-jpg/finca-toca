@@ -20,10 +20,12 @@ select is_empty(
   'toda tabla de public con tenant_id tiene RLS activada'
 );
 select is_empty(
-  $$ select table_name
-       from information_schema.columns
-      where table_schema = 'public' and column_name = 'tenant_id' and is_nullable = 'YES'
-        and table_name <> 'roles' $$,
+  $$ select c.table_name
+       from information_schema.columns c
+       join information_schema.tables t
+         on t.table_schema = c.table_schema and t.table_name = c.table_name and t.table_type = 'BASE TABLE'
+      where c.table_schema = 'public' and c.column_name = 'tenant_id' and c.is_nullable = 'YES'
+        and c.table_name <> 'roles' $$,
   'tenant_id es NOT NULL en todas las tablas de negocio (roles lo admite NULL para la cooperativa)'
 );
 

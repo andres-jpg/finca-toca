@@ -16,6 +16,11 @@ export const MENSAJES_RPC: Readonly<Record<string, string>> = {
 
   // De negocio (ejemplos del patrón; las funciones reales añaden los suyos)
   stock_insuficiente: "No hay existencias suficientes para completar la operación.",
+  movimientos_invalidos: "Los movimientos no son válidos. Revisa los datos e inténtalo de nuevo.",
+  movimiento_invalido: "Alguno de los movimientos no es válido. Revisa los datos e inténtalo de nuevo.",
+  articulo_no_encontrado: "El artículo no existe o no pertenece a tu cliente.",
+  articulo_inactivo: "El artículo está desactivado. Actívalo para registrar movimientos.",
+  datos_invalidos: "Revisa los datos del formulario.",
   orden_proceso_invalido: "El orden del proceso no es válido para esta operación.",
   consecutivo_bloqueado: "El consecutivo está bloqueado por otra operación en curso. Inténtalo de nuevo.",
   tarifa_no_definida: "No hay una tarifa definida para esta operación.",

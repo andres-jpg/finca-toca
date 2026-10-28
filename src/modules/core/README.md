@@ -71,3 +71,7 @@ El cliente de la sesión (con `vertical`, plan, marca y **módulos activos**) y 
 | `tenant.guards.ts` | `tenantTieneModulo(id)` para páginas y `requireModulo(id)` para Server Actions (lanza `AuthorizationError`). |
 
 `modulos.test.ts` compara `MODULOS` con el SQL de la migración (siempre) y con la base local (si está levantada y `.env.local` apunta a ella). Para activar un módulo a un cliente, ver *Módulos por cliente* en CLAUDE.md.
+
+## `inventario/` — kardex genérico
+
+Artículos y movimientos append-only; el stock es la suma de movimientos y se escribe solo con la RPC `registrar_movimientos`. Detalle en [`inventario/README.md`](./inventario/README.md) y *Inventario tipo kardex* en CLAUDE.md.
