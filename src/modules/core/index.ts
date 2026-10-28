@@ -4,7 +4,7 @@ export { mensajeRpc } from "./rpc/mensajes";
 export { getTenantActual, type Tenant, type Vertical, type TenantEstado } from "./tenants/tenant.queries";
 export { getSesion, getSesionBase, type Sesion, type SesionBase, type Membresia, type RolTenant, type RolLegacy } from "./auth/sesion";
 export { requireSesion, requireRolTenant, requirePlatformAdmin } from "./auth/guards";
-export { requireModulo, tenantTieneModulo } from "./tenants/tenant.guards";
+export { requireModulo, requireModuloPagina, tenantTieneModulo } from "./tenants/tenant.guards";
 export { MODULOS, tieneModulo, type ModuloId } from "./tenants/modulos";
 export {
   crearArticulo,
@@ -29,3 +29,7 @@ export {
 } from "./inventario/lib/inventario";
 export type { Articulo, StockArticulo, MovimientoKardex, RespuestaMovimientos } from "./inventario/types";
 export { formatearConsecutivo } from "./consecutivos/formato";
+export { construirNav, ocultoEnPWA, ORDEN_GRUPOS, type SesionNav } from "./registry/nav";
+export { paginaInicial, PAGINA_INICIAL_POR_ROL, PAGINA_INICIAL_POR_VERTICAL } from "./registry/pagina-inicial";
+export type { NavItemDef, ModuleManifest } from "./registry/types";
+export { ICONOS_NAV, type IconoNav } from "./registry/iconos";

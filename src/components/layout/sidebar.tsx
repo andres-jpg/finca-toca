@@ -2,156 +2,14 @@
 import React, { useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import {
-  LayoutDashboard,
-  ArrowDownCircle,
-  ArrowUpCircle,
-  Droplets,
-  X,
-  Leaf,
-  Coffee,
-  Settings,
-  Building2,
-  MapPin,
-  ClipboardList,
-  Package,
-  FileSpreadsheet,
-  Users,
-  Route,
-  Banknote,
-  History,
-  KeyRound,
-  CalendarClock,
-} from "lucide-react";
+import { Leaf, Coffee, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { tieneModulo, type ModuloId } from "@/modules/core/tenants/modulos";
+import { ocultoEnPWA } from "@/modules/core/registry/nav";
+import type { NavItemDef } from "@/modules/core/registry/types";
 import type { Vertical } from "@/modules/core/tenants/tenant.queries";
 import type { UserRole } from "@/types";
 import { GiCheeseWedge } from "react-icons/gi";
-import { PiCow } from "react-icons/pi";
-
-type NavItem = {
-  href: string;
-  label: string;
-  icon: React.ElementType;
-  allowedRoles: UserRole[];
-  hideInPWA?: boolean;
-  /** Si está, la opción solo se muestra a los clientes que tengan ese módulo. */
-  modulo?: ModuloId;
-};
-
-const navItems: NavItem[] = [
-  {
-    href: "/dashboard",
-    label: "Dashboard",
-    icon: LayoutDashboard,
-    allowedRoles: ["admin", "viewer"] as UserRole[],
-  },
-  {
-    href: "/dashboard/gastos",
-    label: "Gastos",
-    icon: ArrowDownCircle,
-    allowedRoles: ["admin", "viewer"] as UserRole[],
-  },
-  {
-    href: "/dashboard/ingresos",
-    label: "Ingresos",
-    icon: ArrowUpCircle,
-    allowedRoles: ["admin", "viewer"] as UserRole[],
-  },
-  {
-    href: "/dashboard/extracciones",
-    label: "Extracciones",
-    icon: Droplets,
-    allowedRoles: ["admin", "viewer", "user"] as UserRole[],
-  },
-  {
-    href: "/dashboard/animales",
-    label: "Animales",
-    icon: PiCow,
-    allowedRoles: ["admin", "viewer"] as UserRole[],
-  },
-  {
-    href: "/dashboard/informe-avanzado",
-    label: "Informe avanzado",
-    icon: CalendarClock,
-    allowedRoles: ["admin", "viewer"] as UserRole[],
-  },
-  {
-    href: "/dashboard/inventario",
-    label: "Inventario",
-    icon: Package,
-    allowedRoles: ["admin", "viewer"] as UserRole[],
-  },
-  {
-    href: "/dashboard/arriendos",
-    label: "Arriendos",
-    icon: KeyRound,
-    allowedRoles: ["admin", "viewer"] as UserRole[],
-    modulo: "ganaderia.arriendos",
-  },
-  {
-    href: "/dashboard/configuracion",
-    label: "Configuración",
-    icon: Settings,
-    allowedRoles: ["admin"] as UserRole[],
-  },
-  {
-    href: "/dashboard/cooperativa",
-    label: "Dashboard Coop.",
-    icon: LayoutDashboard,
-    allowedRoles: ["cooperativa_admin"] as UserRole[],
-  },
-  {
-    href: "/dashboard/fincas-cooperativa",
-    label: "Fincas",
-    icon: Building2,
-    allowedRoles: ["cooperativa_admin"] as UserRole[],
-  },
-  {
-    href: "/dashboard/rutas-cooperativa",
-    label: "Rutas",
-    icon: MapPin,
-    allowedRoles: ["cooperativa_admin"] as UserRole[],
-  },
-  {
-    href: "/dashboard/itinerarios",
-    label: "Itinerarios",
-    icon: Route,
-    allowedRoles: ["cooperativa_admin", "cooperativa_user"] as UserRole[],
-    hideInPWA: true,
-  },
-  {
-    href: "/dashboard/recolecciones",
-    label: "Recolecciones",
-    icon: ClipboardList,
-    allowedRoles: ["cooperativa_admin", "cooperativa_user"] as UserRole[],
-  },
-  {
-    href: "/dashboard/mi-historial",
-    label: "Mi historial",
-    icon: History,
-    allowedRoles: ["cooperativa_user"] as UserRole[],
-  },
-  {
-    href: "/dashboard/informes-cooperativa",
-    label: "Informes",
-    icon: FileSpreadsheet,
-    allowedRoles: ["cooperativa_admin"] as UserRole[],
-  },
-  {
-    href: "/dashboard/pagos-cooperativa",
-    label: "Pagos",
-    icon: Banknote,
-    allowedRoles: ["cooperativa_admin"] as UserRole[],
-  },
-  {
-    href: "/dashboard/usuarios-cooperativa",
-    label: "Usuarios",
-    icon: Users,
-    allowedRoles: ["cooperativa_admin"] as UserRole[],
-  },
-];
+import { ICONOS } from "./icon-map";
 
 interface SidebarProps {
   role?: UserRole | null;
@@ -160,8 +18,12 @@ interface SidebarProps {
   /** Logo del cliente; sin él se usa el icono de su vertical. */
   tenantLogoUrl?: string | null;
   vertical?: Vertical | null;
-  /** Módulos activos del cliente: filtra las opciones de módulos que no tiene todo el mundo. */
-  modulos?: string[];
+  /**
+   * Entradas del menú ya filtradas en el servidor por vertical, módulos activos y rol
+   * (`getNavParaSesion()`). Este componente solo las pinta; lo único que decide aquí es lo que el
+   * servidor no sabe: si la app corre instalada (PWA).
+   */
+  items?: NavItemDef[];
   mobileMenuOpen?: boolean;
   onCloseMobileMenu?: () => void;
 }
@@ -203,21 +65,14 @@ export function Sidebar({
   tenantNombre = null,
   tenantLogoUrl = null,
   vertical = null,
-  modulos = [],
+  items = [],
   mobileMenuOpen = false,
   onCloseMobileMenu,
 }: SidebarProps = {}) {
   const pathname = usePathname();
   const isPWA = useSyncExternalStore(suscribirPWA, esPWA, () => false);
 
-  const allowedItems = navItems.filter((item) => {
-    if (!role || !item.allowedRoles.includes(role)) return false;
-    if (isPWA && item.hideInPWA && role === "cooperativa_user") return false;
-    // Esconder la opción es solo cosmético: la página y los Server Actions repiten la
-    // comprobación del módulo en el servidor.
-    if (item.modulo && !tieneModulo(modulos, item.modulo)) return false;
-    return true;
-  });
+  const allowedItems = items.filter((item) => !ocultoEnPWA(item, role ?? null, isPWA));
 
   const roleMeta = role ? roleConfig[role] : null;
 
@@ -271,7 +126,8 @@ export function Sidebar({
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
-          {allowedItems.map(({ href, label, icon: Icon }) => {
+          {allowedItems.map(({ href, label, icon }) => {
+            const Icon = ICONOS[icon];
             const isActive =
               href === "/dashboard"
                 ? pathname === href

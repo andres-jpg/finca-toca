@@ -17,7 +17,8 @@ import {
   ESTADO_REPRODUCTIVO_LABELS,
 } from "@/lib/animales/estados";
 import { canWrite, checkRoutePermission } from "@/lib/auth/check-permissions";
-import { getUserRole } from "@/lib/auth/get-user-role";
+import { getSesionBase } from "@/modules/core/auth/sesion";
+import { paginaInicial } from "@/modules/core/registry/pagina-inicial";
 import { redirect } from "next/navigation";
 import { PiCow } from "react-icons/pi";
 import { DashboardFilter } from "@/components/dashboard/dashboard-filter";
@@ -63,10 +64,14 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ mes?: string; anio?: string }>;
 }) {
-  const role = await getUserRole();
-  if (role === "cooperativa_admin") redirect("/dashboard/cooperativa");
-  if (role === "cooperativa_user") redirect("/dashboard/recolecciones");
-  await checkRoutePermission(["admin", "viewer"]);
+  // Este dashboard es de ganadería (admin/viewer). Quien tiene otro rol va a la página de inicio de su
+  // rol (cooperativa → su panel o sus recolecciones, `user` → extracciones); `paginaInicial()` cae al
+  // vertical del cliente cuando no hay rol legacy.
+  const sesion = await getSesionBase();
+  if (sesion?.rolLegacy && sesion.rolLegacy !== "admin" && sesion.rolLegacy !== "viewer") {
+    redirect(paginaInicial(sesion));
+  }
+  const role = await checkRoutePermission(["admin", "viewer"]);
 
   const params = await searchParams;
   const now = new Date();

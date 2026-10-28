@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { TenantSwitcher } from "@/modules/core/tenants/components/tenant-switcher";
 import type { Membresia } from "@/modules/core/auth/sesion";
+import type { NavItemDef } from "@/modules/core/registry/types";
 import type { Vertical } from "@/modules/core/tenants/tenant.queries";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types";
@@ -18,8 +19,8 @@ interface DashboardLayoutClientProps {
   tenantNombre: string;
   tenantLogoUrl: string | null;
   vertical: Vertical;
-  /** Módulos activos del cliente (`Tenant.modulos`): deciden qué opciones aparecen en el menú. */
-  modulos: string[];
+  /** Entradas del menú, ya filtradas en el servidor por vertical, módulos y rol (`getNavParaSesion()`). */
+  navItems: NavItemDef[];
   /** Con más de una (o siendo platform admin) aparece el selector de cliente en el header. */
   membresias: Membresia[];
   esPlatformAdmin: boolean;
@@ -37,7 +38,7 @@ export function DashboardLayoutClient({
   tenantNombre,
   tenantLogoUrl,
   vertical,
-  modulos,
+  navItems,
   membresias,
   esPlatformAdmin,
   soporteLimitado,
@@ -60,7 +61,7 @@ export function DashboardLayoutClient({
           tenantNombre={tenantNombre}
           tenantLogoUrl={tenantLogoUrl}
           vertical={vertical}
-          modulos={modulos}
+          items={navItems}
           mobileMenuOpen={mobileMenuOpen}
           onCloseMobileMenu={() => setMobileMenuOpen(false)}
         />

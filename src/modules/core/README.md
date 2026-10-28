@@ -4,6 +4,8 @@ Lo que comparten **todos** los verticales (café, ganadería, cooperativa) y que
 
 Aquí van las piezas transversales que irán llegando en CO-08 … CO-18 (multi-tenancy, autorización, registro de módulos, etc.).
 
+El núcleo también publica su propio `manifest.ts` (entradas de menú que sirven a cualquier vertical); ver `registry/` más abajo.
+
 ## Reglas
 
 - `core` puede importar de `@/components` (ui) y `@/lib`.
@@ -71,6 +73,20 @@ El cliente de la sesión (con `vertical`, plan, marca y **módulos activos**) y 
 | `tenant.guards.ts` | `tenantTieneModulo(id)` para páginas y `requireModulo(id)` para Server Actions (lanza `AuthorizationError`). |
 
 `modulos.test.ts` compara `MODULOS` con el SQL de la migración (siempre) y con la base local (si está levantada y `.env.local` apunta a ella). Para activar un módulo a un cliente, ver *Módulos por cliente* en CLAUDE.md.
+
+## `registry/` — manifiestos y barra lateral (FIN-92)
+
+Cada módulo declara su navegación en un `manifest.ts` y la barra lateral sale de los manifiestos de los módulos activos del cliente. `core` solo tiene los tipos y la lógica; **no importa ningún vertical**: la lista de manifiestos la monta `src/modules/registry.ts` (único fichero con permiso para ver todos los verticales, ver `eslint.config.mjs`).
+
+| Fichero | Qué es |
+|---|---|
+| `registry/types.ts` | `NavItemDef` (entrada del menú: `modulo`, `roles` / `rolesLegacy`, `grupo`, `orden`, `hideInPWA`, `icon` como nombre) y `ModuleManifest`. |
+| `registry/nav.ts` | **Puro**: `construirNav(manifiestos, sesion, { pwa })` (filtra por vertical, módulo, rol y PWA; ordena por grupo y `orden`) y `ocultoEnPWA()`. |
+| `registry/iconos.ts` | **Puro**: `ICONOS_NAV`, los nombres de icono permitidos; el cliente los resuelve en `components/layout/icon-map.tsx`. |
+| `registry/pagina-inicial.ts` | **Puro**: `paginaInicial(sesion)`, a dónde se manda a quien no tiene acceso (por rol legacy o, sin él, por vertical). |
+| `manifest.ts` | Entradas del núcleo: Terceros (FIN-93) y Tarifas y parámetros (FIN-94), solo visibles si el cliente tiene `core.terceros`. Las páginas todavía no existen. |
+
+`tenants/tenant.guards.ts` suma `requireModuloPagina(modulo)` (páginas/layouts: redirect a `/dashboard`) junto a `requireModulo()` (Server Actions). **Pantalla nueva = entrada en el manifiesto de su módulo + `requireModuloPagina` en la página + `requireModulo` en sus actions.**
 
 ## `inventario/` — kardex genérico
 
