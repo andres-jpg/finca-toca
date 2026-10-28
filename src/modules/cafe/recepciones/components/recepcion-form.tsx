@@ -198,7 +198,9 @@ export function RecepcionForm({ config, fechaHoy, puedeAdministrar }: RecepcionF
       toast.error(r.message);
       return;
     }
-    toast.success(`Recepción registrada: ${r.data.codigo}`);
+    toast.success(`Recepción registrada: ${r.data.codigo}`, {
+      action: { label: "Ver lote", onClick: () => router.push(`/dashboard/cafe/lotes/${r.data.id}`) },
+    });
     if (r.data.alertas_calidad.length > 0) {
       toast.warning(
         `Alertas de calidad: ${r.data.alertas_calidad.map((a) => ETIQUETA_ALERTA_CALIDAD[a]).join(", ")}. El lote se guardó igualmente.`,

@@ -180,8 +180,7 @@ export function CompraForm({ tipos, pesoBultoKg, fechaHoy }: CompraFormProps) {
     }
 
     toast.success(`Compra registrada: ${r.data.codigo} · ${formatearCOP(r.data.valor_compra)}`, {
-      // La ficha del lote llega con CO-29; mientras tanto «Ver lote» lleva a la lista.
-      action: { label: "Ver lote", onClick: () => router.push("/dashboard/cafe/lotes") },
+      action: { label: "Ver lote", onClick: () => router.push(`/dashboard/cafe/lotes/${r.data.id}`) },
     });
     router.push("/dashboard/cafe/lotes");
   }

@@ -23,6 +23,7 @@ import {
   SlidersHorizontal,
   Boxes,
   Coffee,
+  Factory,
 } from "lucide-react";
 import { PiCow } from "react-icons/pi";
 import type { IconoNav } from "@/modules/core/registry/iconos";
@@ -55,4 +56,5 @@ export const ICONOS: Record<IconoNav, ElementType> = {
   SlidersHorizontal,
   Boxes,
   Coffee,
+  Factory,
 };

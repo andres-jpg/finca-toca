@@ -27,6 +27,7 @@ export const ICONOS_NAV = [
   "SlidersHorizontal",
   "Boxes",
   "Coffee",
+  "Factory",
 ] as const;
 
 export type IconoNav = (typeof ICONOS_NAV)[number];
