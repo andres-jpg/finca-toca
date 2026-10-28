@@ -3,25 +3,18 @@ import { redirect } from "next/navigation";
 import type { UserRole } from "@/types";
 import { AuthorizationError } from "./errors";
 import { registrarContextoSentry } from "@/lib/sentry/contexto";
+// Página de inicio garantizada para cada rol (siempre accesible, sin redirigir de nuevo).
+import { PAGINA_INICIAL_POR_ROL } from "@/modules/core/registry/pagina-inicial";
 
 /**
  * Verifica si el usuario tiene permiso para acceder a una ruta.
- * Si no tiene permiso, redirige a /dashboard/extracciones (ruta por defecto).
+ * Si no tiene permiso, redirige a la página de inicio de su rol (`PAGINA_INICIAL_POR_ROL`).
  *
  * @deprecated Solo para las pantallas legacy (roles de `roles`). En código nuevo usa `getSesion()` /
  * `requireSesion()` de `@/modules/core/auth` y el rol de la membresía (`rolTenant`).
  * @param allowedRoles - Array de roles permitidos para acceder
  * @returns El rol del usuario si tiene permiso
  */
-// Página de inicio garantizada para cada rol — siempre accesible sin redirigir de nuevo.
-const ROLE_HOME: Record<UserRole, string> = {
-  admin:            "/dashboard",
-  viewer:           "/dashboard",
-  user:             "/dashboard/extracciones",
-  cooperativa_admin: "/dashboard/cooperativa",
-  cooperativa_user:  "/dashboard/recolecciones",
-};
-
 export async function checkRoutePermission(
   allowedRoles: UserRole[]
 ): Promise<UserRole> {
@@ -30,7 +23,7 @@ export async function checkRoutePermission(
   // Sin rol (sesión nula o error) → login, nunca a una ruta protegida.
   if (!role) redirect("/login");
 
-  if (!allowedRoles.includes(role)) redirect(ROLE_HOME[role]);
+  if (!allowedRoles.includes(role)) redirect(PAGINA_INICIAL_POR_ROL[role]);
 
   await registrarContextoSentry();
   return role;

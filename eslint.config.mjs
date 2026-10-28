@@ -25,6 +25,9 @@ const eslintConfig = defineConfig([
         { type: "lib", pattern: "src/lib/**", partialMatch: false },
         { type: "app", pattern: "src/app/**", partialMatch: false },
       ],
+      // Agregador de manifiestos (src/modules/registry.ts): el único fichero que puede importar todos los
+      // verticales a la vez. Es un fichero suelto, no una carpeta, así que se clasifica por categoría.
+      "boundaries/files": [{ category: "registry", pattern: "src/modules/registry.ts" }],
     },
     rules: {
       "boundaries/dependencies": [
@@ -58,6 +61,19 @@ const eslintConfig = defineConfig([
                 ],
               },
             },
+            // El agregador es la excepción acotada: ve el núcleo y TODOS los verticales (solo para leer sus
+            // manifiestos). Nada más tiene este permiso.
+            {
+              from: { file: { categories: "registry" } },
+              allow: {
+                to: [
+                  { element: { type: "core" } },
+                  { element: { type: "vertical" } },
+                  { element: { type: "ui" } },
+                  { element: { type: "lib" } },
+                ],
+              },
+            },
             // Prohibiciones explícitas: ganan sobre las permisiones y dan un mensaje claro.
             {
               from: { element: { type: "vertical" } },
@@ -79,6 +95,11 @@ const eslintConfig = defineConfig([
             },
             {
               from: { element: { type: ["core", "vertical"] } },
+              disallow: { to: { file: { categories: "registry" } } },
+              message: "Solo src/app y los componentes pueden importar el registro (src/modules/registry.ts): importarlo desde un módulo crea un ciclo con los manifiestos.",
+            },
+            {
+              from: [{ element: { type: ["core", "vertical"] } }, { file: { categories: "registry" } }],
               disallow: { to: { element: { type: "legacy-feature" } } },
               message: "src/modules no puede importar de src/features (código legacy, se migra en la Fase 2).",
             },

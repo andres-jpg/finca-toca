@@ -8,6 +8,7 @@ import { AlertasBell } from "@/features/alertas/components/alertas-bell";
 import { registrarContextoSentry } from "@/lib/sentry/contexto";
 import { ContextoSentryCliente } from "@/components/sentry/contexto-sentry-cliente";
 import { getSesionBase } from "@/modules/core/auth/sesion";
+import { getNavParaSesion } from "@/modules/registry";
 import type { UserRole } from "@/types";
 
 /** El hato solo existe para la finca: los roles de cooperativa no pagan la consulta. */
@@ -54,6 +55,10 @@ export default async function DashboardLayout({
   // rol_actual()). Un platform admin sin fila en `roles` entra, pero no ve datos: se le avisa.
   const soporteLimitado = esPlatformAdmin && rolLegacy === null && tenant.vertical !== "cafe";
 
+  // El menú se arma aquí, en el servidor: manifiestos de los módulos activos del cliente, filtrados por su
+  // vertical y su rol. Al cliente solo viajan las entradas (datos); el PWA lo resuelve la barra lateral.
+  const navItems = getNavParaSesion({ tenant, rolTenant: sesion.rolTenant, rolLegacy });
+
   return (
     <>
       {/* Mismo contexto de Sentry, pero para los errores que ocurren en el navegador. */}
@@ -70,7 +75,7 @@ export default async function DashboardLayout({
         tenantNombre={tenant.nombre}
         tenantLogoUrl={tenant.logoUrl}
         vertical={tenant.vertical}
-        modulos={tenant.modulos}
+        navItems={navItems}
         membresias={membresias}
         esPlatformAdmin={esPlatformAdmin}
         soporteLimitado={soporteLimitado}
