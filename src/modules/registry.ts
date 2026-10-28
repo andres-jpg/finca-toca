@@ -1,4 +1,5 @@
 import { cafeManifest } from "./cafe/manifest";
+import { exportadorLotes } from "./cafe/lotes/exportador";
 import { CONCEPTOS_TARIFA_CAFE, DEFINICIONES_PARAMETROS_CAFE } from "./cafe/parametros";
 import { defineExportadores } from "./core/export/registry";
 import { coreManifest } from "./core/manifest";
@@ -40,6 +41,6 @@ defineConceptosTarifa(CONCEPTOS_TARIFA_CAFE);
 
 /**
  * Recursos exportables a Excel (`GET /api/export/<recurso>`): los del núcleo y, cuando existan, los de cada
- * vertical (café añadirá `lotes` en la Fase 1). Mismo contrato que arriba: la ruta hace `import "@/modules/registry"`.
+ * vertical (café: `cafe-lotes`, lotes y procesos). Mismo contrato que arriba: la ruta hace `import "@/modules/registry"`.
  */
-defineExportadores([exportadorTerceros]);
+defineExportadores([exportadorTerceros, exportadorLotes]);

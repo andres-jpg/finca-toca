@@ -102,6 +102,32 @@ describe("generarExcel", () => {
     await expect(generarExcel([hojaLotes({ totales: ["codigo"] })], OPCIONES)).rejects.toThrow(/no se puede sumar/);
   });
 
+  it("con subtotales: una fila SUM por bloque y ningún total general que los mezcle", async () => {
+    const filas: Lote[] = [
+      { codigo: "MP-1", kg: 10, valor: 100, merma: 0.1, recibido: "2026-01-01", llegada: "2026-01-01T12:00:00Z" },
+      { codigo: "MP-2", kg: 20, valor: 200, merma: 0.1, recibido: "2026-01-02", llegada: "2026-01-02T12:00:00Z" },
+      { codigo: "MQ-1", kg: 5, valor: 50, merma: 0.1, recibido: "2026-01-03", llegada: "2026-01-03T12:00:00Z" },
+    ];
+    const ws = (
+      await leer(
+        await generarExcel(
+          [hojaLotes({ filas, totales: ["kg", "valor"], subtotales: { agruparPor: (l) => (l.codigo.startsWith("MP") ? "Marca propia" : "Servicios") } })],
+          OPCIONES,
+        )
+      )
+    ).getWorksheet("Lotes")!;
+
+    expect(ws.getCell("A4").value).toBe("MP-1");
+    expect(ws.getCell("A5").value).toBe("MP-2");
+    expect(ws.getCell("A6").value).toBe("Subtotal Marca propia");
+    expect(ws.getCell("B6").value).toMatchObject({ formula: "SUM(B4:B5)", result: 30 });
+    expect(ws.getCell("C6").value).toMatchObject({ formula: "SUM(C4:C5)", result: 300 });
+    expect(ws.getCell("A7").value).toBe("MQ-1");
+    expect(ws.getCell("A8").value).toBe("Subtotal Servicios");
+    expect(ws.getCell("B8").value).toMatchObject({ formula: "SUM(B7:B7)", result: 5 });
+    expect(ws.getCell("A9").value).toBeNull(); // sin «TOTAL» general
+  });
+
   it("crea varias hojas con nombres válidos y únicos", async () => {
     const libro = await leer(
       await generarExcel([hojaLotes({ nombre: "Lotes: 2026/Q1?" }), hojaLotes({ nombre: "lotes 2026 q1" }), hojaLotes({ nombre: "Procesos", titulo: undefined })], OPCIONES),
