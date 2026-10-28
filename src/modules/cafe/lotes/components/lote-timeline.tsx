@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeftRight, Ban, Cog, Flame, Package, Truck, Wheat } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, Ban, Cog, FileText, Flame, Package, Truck, Wheat } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { formatearCOP, formatearKg } from "@/modules/cafe/compras/lib/compra";
@@ -11,6 +11,7 @@ import {
   type MovimientoLinea,
   type ProcesoLinea,
   type RecepcionLinea,
+  type RemisionLinea,
 } from "../lib/linea-tiempo";
 import { etiquetaServicio, etiquetaTueste } from "../lib/servicios";
 import type { TipoProceso } from "../types";
@@ -29,6 +30,7 @@ const CONFIG_PROCESO: Record<TipoProceso, Config> = {
 };
 const CONFIG_RECEPCION: Config = { icon: Truck, color: "text-sky-600", bg: "bg-sky-50 border-sky-200" };
 const CONFIG_MOVIMIENTO: Config = { icon: ArrowLeftRight, color: "text-violet-600", bg: "bg-violet-50 border-violet-200" };
+const CONFIG_REMISION: Config = { icon: FileText, color: "text-teal-700", bg: "bg-teal-50 border-teal-200" };
 const CONFIG_ANULACION: Config = { icon: Ban, color: "text-red-700", bg: "bg-red-50 border-red-200" };
 
 function Tarjeta({ config, titulo, fecha, children, quien, atenuada = false }: {
@@ -169,10 +171,45 @@ function Movimiento({ datos }: { datos: MovimientoLinea }) {
   );
 }
 
+function Remision({ datos }: { datos: RemisionLinea }) {
+  const anulada = datos.anulacion !== null;
+  return (
+    <Tarjeta config={CONFIG_REMISION} titulo="Remisión de entrega" fecha={fechaCorta(datos.fecha)} quien={datos.creadoPor} atenuada={anulada}>
+      <div className={cn("space-y-1", anulada && "line-through decoration-gray-400")}>
+        <p className="text-sm text-gray-800">
+          <span className="tabular-nums font-medium">{datos.numero}</span> ·{" "}
+          <span className="tabular-nums">{formatearKg3(datos.pesoEntregadoKg)} kg</span> entregados de{" "}
+          <span className="tabular-nums">{formatearKg3(datos.pesoRecibidoKg)} kg</span>
+          <span className="tabular-nums text-gray-600">
+            {" "}
+            · merma {formatearKg3(datos.mermaTotalKg)} kg ({formatearMermaPct(datos.mermaTotalKg, datos.pesoRecibidoKg)})
+          </span>
+        </p>
+        <p className="text-xs text-gray-600">
+          Valor de los servicios <span className="tabular-nums">{formatearCOP(datos.valorServicios)}</span> (referencia)
+        </p>
+      </div>
+      {datos.forzada && !anulada && (
+        <p className="flex flex-wrap items-center gap-1 text-xs font-medium text-amber-700">
+          <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+          Entregado con servicios pendientes
+        </p>
+      )}
+      {anulada && datos.anulacion && (
+        <p className="flex flex-wrap items-center gap-1 text-xs font-medium text-red-700">
+          <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Anulada</Badge>
+          {fechaCorta(datos.anulacion.en.slice(0, 10))}
+          {datos.anulacion.por ? ` · ${datos.anulacion.por}` : ""} · {datos.anulacion.motivo}
+        </p>
+      )}
+    </Tarjeta>
+  );
+}
+
 /**
  * La historia del lote de principio a fin: recepción o compra, cada proceso con sus kilos de entrada y salida, su
  * merma, su valor y quién lo registró, los baches de la tostión desplegables, los movimientos de inventario ligados
- * al lote y, si aplica, su anulación. Los procesos anulados se conservan, tachados y con su motivo.
+ * al lote, la remisión de entrega (también las anuladas) y, si aplica, su anulación. Los procesos anulados se conservan, tachados y con su motivo.
  */
 export function LoteTimeline({ eventos, zonaHoraria }: { eventos: EventoLinea[]; zonaHoraria: string }) {
   if (eventos.length === 0) {
@@ -188,6 +225,8 @@ export function LoteTimeline({ eventos, zonaHoraria }: { eventos: EventoLinea[];
             return <Proceso key={e.clave} datos={e.datos} numBultosLote={e.numBultosLote} />;
           case "movimiento":
             return <Movimiento key={e.clave} datos={e.datos} />;
+          case "remision":
+            return <Remision key={e.clave} datos={e.datos} />;
           case "anulacion_lote":
             return (
               <Tarjeta key={e.clave} config={CONFIG_ANULACION} titulo="Lote anulado" fecha={fechaHoraZona(e.datos.en, zonaHoraria)} quien={e.datos.por}>

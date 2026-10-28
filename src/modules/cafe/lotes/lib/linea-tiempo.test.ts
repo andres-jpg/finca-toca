@@ -6,6 +6,7 @@ import {
   mermaPctBache,
   type ProcesoLinea,
   type RecepcionLinea,
+  type RemisionLinea,
 } from "./linea-tiempo";
 
 const recepcion: RecepcionLinea = {
@@ -98,5 +99,56 @@ describe("mermaPctBache / etiquetaMotivoMovimiento", () => {
   it("etiqueta el motivo o lo deja como viene", () => {
     expect(etiquetaMotivoMovimiento("consumo")).toBe("Consumo");
     expect(etiquetaMotivoMovimiento("otro")).toBe("otro");
+  });
+});
+
+describe("construirLineaDeTiempo: remisión de entrega (CO-32)", () => {
+  const remision = (id: string, fecha: string, extra: Partial<RemisionLinea> = {}): RemisionLinea => ({
+    id,
+    numero: `REM-2026-000${id}`,
+    fecha,
+    creadoEn: `${fecha}T20:00:00Z`,
+    creadoPor: null,
+    pesoRecibidoKg: 500,
+    pesoEntregadoKg: 330,
+    mermaTotalKg: 170,
+    valorServicios: 1923000,
+    forzada: false,
+    anulacion: null,
+    ...extra,
+  });
+
+  it("va después de los procesos del mismo día y antes de la anulación del lote", () => {
+    const eventos = construirLineaDeTiempo({
+      recepcion,
+      numBultosLote: 8,
+      procesos: [proceso("p1", "trilla", "2026-11-12", "2026-11-12T14:00:00Z")],
+      movimientos: [],
+      remisiones: [remision("1", "2026-11-12")],
+      anulacionLote: { en: "2026-11-12T23:00:00Z", por: null, motivo: "x" },
+    });
+    expect(eventos.map((e) => e.clase)).toEqual(["recepcion", "proceso", "remision", "anulacion_lote"]);
+  });
+
+  it("conserva las anuladas y ordena las remisiones por fecha de entrega", () => {
+    const eventos = construirLineaDeTiempo({
+      recepcion,
+      numBultosLote: 8,
+      procesos: [],
+      movimientos: [],
+      remisiones: [
+        remision("2", "2026-11-14"),
+        remision("1", "2026-11-12", { anulacion: { en: "2026-11-13T10:00:00Z", por: null, motivo: "Error" } }),
+      ],
+      anulacionLote: null,
+    });
+    expect(eventos.filter((e) => e.clase === "remision").map((e) => e.clave)).toEqual(["remision-1", "remision-2"]);
+  });
+
+  it("sin remisiones (o sin el parámetro) la línea de tiempo no cambia", () => {
+    const sin = construirLineaDeTiempo({ recepcion, numBultosLote: 8, procesos: [], movimientos: [], anulacionLote: null });
+    const vacio = construirLineaDeTiempo({ recepcion, numBultosLote: 8, procesos: [], movimientos: [], remisiones: [], anulacionLote: null });
+    expect(sin).toEqual(vacio);
+    expect(sin.map((e) => e.clase)).toEqual(["recepcion"]);
   });
 });
