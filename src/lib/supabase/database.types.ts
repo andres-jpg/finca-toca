@@ -1017,9 +1017,32 @@ isOneToOne: false
 "parametro":
 { Args: { "p_clave": string,"p_default"?: Json }; Returns: Json
                            },
+"platform_actualizar_tenant":
+{ Args: { "p_cambios": Json,"p_tenant": string }; Returns: undefined
+                           },
+"platform_agregar_miembro":
+{ Args: { "p_email": string,"p_rol": Database["public"]['Enums']["rol_tenant"],"p_tenant": string }; Returns: string
+                           },
+"platform_crear_tenant":
+{ Args: { "p_modulos"?: (string)[],"p_nit"?: string,"p_nombre": string,"p_plan"?: string,"p_slug": string,"p_vertical": Database["public"]['Enums']["vertical"] }; Returns: string
+                           },
 "platform_listar_tenants":
 { Args: Record<PropertyKey, never>; Returns: {
               "estado": Database["public"]['Enums']["tenant_estado"],"id": string,"nombre": string,"slug": string,"vertical": Database["public"]['Enums']["vertical"]
+            }[]
+                           },
+"platform_obtener_tenant":
+{ Args: { "p_tenant": string }; Returns: Json
+                           },
+"platform_quitar_miembro":
+{ Args: { "p_tenant": string,"p_user": string }; Returns: undefined
+                           },
+"platform_set_modulo":
+{ Args: { "p_activo": boolean,"p_modulo": string,"p_tenant": string }; Returns: undefined
+                           },
+"platform_tenants_resumen":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "created_at": string,"estado": Database["public"]['Enums']["tenant_estado"],"id": string,"miembros": number,"modulos": number,"nit": string,"nombre": string,"plan": string,"slug": string,"vertical": Database["public"]['Enums']["vertical"]
             }[]
                            },
 "registrar_movimientos":

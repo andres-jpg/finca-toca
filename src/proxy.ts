@@ -43,8 +43,8 @@ export async function proxy(request: NextRequest) {
 
   const url = request.nextUrl.clone();
 
-  // Redirect dashboard routes to login if not authenticated
-  if (!user && url.pathname.startsWith("/dashboard")) {
+  // Redirect dashboard and platform backoffice routes to login if not authenticated
+  if (!user && (url.pathname.startsWith("/dashboard") || url.pathname.startsWith("/admin"))) {
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
