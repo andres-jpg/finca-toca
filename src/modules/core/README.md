@@ -71,3 +71,16 @@ El cliente de la sesión (con `vertical`, plan, marca y **módulos activos**) y 
 | `tenant.guards.ts` | `tenantTieneModulo(id)` para páginas y `requireModulo(id)` para Server Actions (lanza `AuthorizationError`). |
 
 `modulos.test.ts` compara `MODULOS` con el SQL de la migración (siempre) y con la base local (si está levantada y `.env.local` apunta a ella). Para activar un módulo a un cliente, ver *Módulos por cliente* en CLAUDE.md.
+
+## `auth/` — sesión unificada (FIN-91)
+
+`getSesion()` (`auth/sesion.ts`) es el **único punto de entrada a la sesión para código nuevo**: usuario, cliente activo (con vertical y módulos), `rolTenant`, `rolLegacy`, `esPlatformAdmin` y membresías, con dos round-trips en total (Auth + RPC `public.mi_sesion()`). Es un módulo plano con `React.cache()`: no le pongas `"use server"`.
+
+```ts
+const sesion = await requireSesion();                         // página/layout: redirect a /login
+const { tenant, rolTenant } = await requireRolTenant(["owner", "admin"]); // Server Action: lanza AuthorizationError
+```
+
+`getSesionBase()` es la misma lectura sin exigir cliente activo (para el platform admin que aún no eligió uno). `requireRole()` / `checkRoutePermission()` siguen existiendo para las pantallas legacy y están `@deprecated`.
+
+`tenants/` incluye el selector de cliente (`TenantSwitcher` + `cambiarTenantActivo`): la autorización la hace la RPC `cambiar_tenant_activo()`, no la UI.

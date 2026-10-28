@@ -8,6 +8,8 @@ import { registrarContextoSentry } from "@/lib/sentry/contexto";
  * Verifica si el usuario tiene permiso para acceder a una ruta.
  * Si no tiene permiso, redirige a /dashboard/extracciones (ruta por defecto).
  *
+ * @deprecated Solo para las pantallas legacy (roles de `roles`). En código nuevo usa `getSesion()` /
+ * `requireSesion()` de `@/modules/core/auth` y el rol de la membresía (`rolTenant`).
  * @param allowedRoles - Array de roles permitidos para acceder
  * @returns El rol del usuario si tiene permiso
  */
@@ -53,6 +55,10 @@ export function canView(role: UserRole | null, allowedRoles: UserRole[]): boolea
   return role ? allowedRoles.includes(role) : false;
 }
 
+/**
+ * @deprecated Solo para los Server Actions legacy. En módulos nuevos usa `requireRolTenant()` de
+ * `@/modules/core/auth` (rol de la membresía en el cliente activo).
+ */
 export async function requireRole(allowedRoles: UserRole[]): Promise<UserRole> {
   const role = await getUserRole();
   if (!role) throw new AuthorizationError();

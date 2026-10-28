@@ -1,13 +1,13 @@
-import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { getUserRole } from "@/lib/auth/get-user-role";
-import { getTenantActual } from "@/modules/core/tenants/tenant.queries";
+import { getCurrentUser } from "@/lib/auth/get-user-role";
 import { canWrite } from "@/lib/auth/check-permissions";
 import { DashboardLayoutClient } from "@/components/layout/dashboard-layout-client";
+import { SinClienteActivo } from "@/components/layout/sin-cliente-activo";
 import { getAlertas } from "@/features/alertas/actions/alertas.queries";
 import { AlertasBell } from "@/features/alertas/components/alertas-bell";
 import { registrarContextoSentry } from "@/lib/sentry/contexto";
 import { ContextoSentryCliente } from "@/components/sentry/contexto-sentry-cliente";
+import { getSesionBase } from "@/modules/core/auth/sesion";
 import type { UserRole } from "@/types";
 
 /** El hato solo existe para la finca: los roles de cooperativa no pagan la consulta. */
@@ -18,42 +18,62 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const [
-    {
-      data: { session },
-    },
-    userRole,
-    tenant,
-  ] = await Promise.all([supabase.auth.getSession(), getUserRole(), getTenantActual()]);
+  // Un único punto de lectura de sesión (usuario + RPC mi_sesion(): 2 round-trips). La sesión "base"
+  // admite no tener cliente activo, para poder mostrar el selector al platform admin que aún no eligió.
+  const sesion = await getSesionBase();
 
-  if (!session) {
-    redirect("/login");
+  if (!sesion) {
+    // Sin usuario → login. Con usuario pero sin lectura de sesión (fallo de la RPC) no se redirige a
+    // /login: el proxy devolvería al usuario autenticado a /dashboard y entraría en bucle.
+    if (!(await getCurrentUser())) redirect("/login");
+    return <SinClienteActivo email="" esPlatformAdmin={false} membresias={[]} />;
   }
 
   // Tags tenant/rol y user.id (sin email) para que los errores de Sentry digan qué cliente los sufre.
   await registrarContextoSentry();
 
+  const { tenant, rolLegacy, esPlatformAdmin, membresias } = sesion;
+
+  if (!tenant) {
+    return (
+      <SinClienteActivo
+        email={sesion.user.email}
+        esPlatformAdmin={esPlatformAdmin}
+        membresias={membresias}
+      />
+    );
+  }
+
   // getAlertas() está envuelto en React.cache(): el dashboard reutiliza esta misma lectura.
   const alertasSlot =
-    userRole && ROLES_CON_ALERTAS.includes(userRole) ? (
-      <AlertasBell alertas={await getAlertas()} canEdit={canWrite(userRole)} />
+    rolLegacy && ROLES_CON_ALERTAS.includes(rolLegacy) ? (
+      <AlertasBell alertas={await getAlertas()} canEdit={canWrite(rolLegacy)} />
     ) : undefined;
+
+  // Los clientes ganaderos y de cooperativa siguen gobernados por `roles` (políticas legacy con
+  // rol_actual()). Un platform admin sin fila en `roles` entra, pero no ve datos: se le avisa.
+  const soporteLimitado = esPlatformAdmin && rolLegacy === null && tenant.vertical !== "cafe";
 
   return (
     <>
       {/* Mismo contexto de Sentry, pero para los errores que ocurren en el navegador. */}
       <ContextoSentryCliente
-        userId={session.user.id}
-        rol={userRole}
-        tenantSlug={tenant?.slug ?? null}
-        vertical={tenant?.vertical ?? null}
+        userId={sesion.user.id}
+        rol={rolLegacy}
+        tenantSlug={tenant.slug}
+        vertical={tenant.vertical}
       />
       <DashboardLayoutClient
-        email={session.user.email ?? ""}
-        userRole={userRole}
-        tenantNombre={tenant?.nombre ?? null}
-        modulos={tenant?.modulos ?? []}
+        email={sesion.user.email}
+        userRole={rolLegacy}
+        tenantId={tenant.id}
+        tenantNombre={tenant.nombre}
+        tenantLogoUrl={tenant.logoUrl}
+        vertical={tenant.vertical}
+        modulos={tenant.modulos}
+        membresias={membresias}
+        esPlatformAdmin={esPlatformAdmin}
+        soporteLimitado={soporteLimitado}
         alertasSlot={alertasSlot}
       >
         {children}
