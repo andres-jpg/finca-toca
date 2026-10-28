@@ -59,3 +59,15 @@ grant execute on function <schema>.<fn>(jsonb) to authenticated;
 `rpc/mensajes.ts` traduce cada código a un mensaje en español para los toasts (`mensajeRpc()`); al estrenar un código en SQL, se añade ahí.
 
 Tipado: `args` y el retorno se validan con `Database[schema]["Functions"][fn]` (`pnpm db:types`). Mientras la función no aparezca en los tipos generados —hoy `cafe` no tiene ninguna— `args` es un objeto libre y el retorno `unknown`; el genérico `T` lo afina (`callRpc<"cafe", "crear_lote", { id: string }>(...)`) pero es una afirmación, no una validación en ejecución.
+
+## `tenants/` — cliente actual y módulos activos
+
+El cliente de la sesión (con `vertical`, plan, marca y **módulos activos**) y la comprobación de módulos. Lo que tiene cada cliente vive en la base (`tenants`, `modulos`, `tenant_modulos`), no en el código: activar un módulo es una fila, sin deploy.
+
+| Fichero | Qué es |
+|---|---|
+| `modulos.ts` | **Puro** (sin servidor): `MODULOS` (`as const`, debe coincidir con el seed de `public.modulos`), el tipo `ModuloId` y `tieneModulo(modulos, id)`. Es lo que importa la barra lateral (cliente), directamente y no desde el barril. |
+| `tenant.queries.ts` | `getTenantActual()` (`React.cache()`): una consulta con join a `tenant_modulos` activos → `{ id, nombre, slug, vertical, plan, estado, logoUrl, colorPrimario, zonaHoraria, moneda, modulos }`. `null` si no hay sesión o el rol no es de un cliente (cooperativa). |
+| `tenant.guards.ts` | `tenantTieneModulo(id)` para páginas y `requireModulo(id)` para Server Actions (lanza `AuthorizationError`). |
+
+`modulos.test.ts` compara `MODULOS` con el SQL de la migración (siempre) y con la base local (si está levantada y `.env.local` apunta a ella). Para activar un módulo a un cliente, ver *Módulos por cliente* en CLAUDE.md.

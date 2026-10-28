@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getUserRole } from "@/lib/auth/get-user-role";
-import { getTenantActual } from "@/lib/auth/get-tenant";
+import { getTenantActual } from "@/modules/core/tenants/tenant.queries";
 import { canWrite } from "@/lib/auth/check-permissions";
 import { DashboardLayoutClient } from "@/components/layout/dashboard-layout-client";
 import { getAlertas } from "@/features/alertas/actions/alertas.queries";
@@ -47,12 +47,13 @@ export default async function DashboardLayout({
         userId={session.user.id}
         rol={userRole}
         tenantSlug={tenant?.slug ?? null}
+        vertical={tenant?.vertical ?? null}
       />
       <DashboardLayoutClient
         email={session.user.email ?? ""}
         userRole={userRole}
         tenantNombre={tenant?.nombre ?? null}
-        tenantSlug={tenant?.slug ?? null}
+        modulos={tenant?.modulos ?? []}
         alertasSlot={alertasSlot}
       >
         {children}

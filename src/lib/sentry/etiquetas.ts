@@ -4,7 +4,7 @@ export interface ContextoSentry {
   userId: string | null;
   rol: string | null;
   tenantSlug: string | null;
-  /** Vertical del cliente (finca, café…). Todavía no existe en `tenants`: ver abajo. */
+  /** Vertical del cliente (`tenants.vertical`: ganaderia, cooperativa, cafe). */
   vertical?: string | null;
 }
 

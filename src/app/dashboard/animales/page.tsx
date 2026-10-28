@@ -3,7 +3,7 @@ import { getLotesPajillas } from "@/features/inventario/pajillas/actions/pajilla
 import { AnimalesTable } from "@/features/animales/components/animales-table";
 import { ESTADOS_PRODUCTIVOS, ESTADOS_REPRODUCTIVOS } from "@/lib/animales/estados";
 import { canWrite, checkRoutePermission } from "@/lib/auth/check-permissions";
-import { getTenantActual } from "@/lib/auth/get-tenant";
+import { getTenantActual } from "@/modules/core/tenants/tenant.queries";
 
 export default async function AnimalesPage({
   searchParams,
