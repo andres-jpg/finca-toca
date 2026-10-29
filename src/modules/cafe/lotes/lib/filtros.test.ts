@@ -127,6 +127,9 @@ describe("aplicarFiltrosLotes", () => {
     expect(condiciones({ tipo: "trilla" })).toEqual(["linea=servicio", "servicios contiene trilla"]);
     expect(condiciones({ tipo: "maquila" })).toEqual(["linea=servicio", "servicios solapa tostion,molienda,empaque"]);
   });
+  it("solo_trilla (panel de gerencia): servicio cuyo único servicio es la trilla, sin los «Trilla + maquila»", () => {
+    expect(condiciones({ tipo: "solo_trilla" })).toEqual(["linea=servicio", "servicios={trilla}"]);
+  });
   it("tipo=maquila&estado=parcial&desde&hasta&tercero&q", () => {
     expect(condiciones({ tipo: "maquila", estado: "parcial", desde: "2026-11-01", hasta: "2026-11-30", tercero: TERCERO, q: "MQ_1" })).toEqual([
       "linea=servicio",

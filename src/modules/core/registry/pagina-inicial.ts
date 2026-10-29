@@ -1,4 +1,5 @@
-import type { RolLegacy } from "../auth/sesion";
+import type { RolLegacy, RolTenant } from "../auth/sesion";
+import { tieneModulo } from "../tenants/modulos";
 import type { Vertical } from "../tenants/tenant.queries";
 
 /**
@@ -22,7 +23,23 @@ export const PAGINA_INICIAL_POR_VERTICAL: Record<Vertical, string> = {
   cafe: "/dashboard/cafe/lotes",
 };
 
-export function paginaInicial(sesion: { rolLegacy: RolLegacy | null; tenant: { vertical: Vertical } | null }): string {
+/**
+ * Gerencia de café (`viewer`) abre el panel operativo (FIN-115 · CO-34) en vez de los lotes, siempre que el cliente tenga
+ * el módulo `cafe.dashboard` (no es módulo base). Sin él el panel redirige a `/dashboard`, que mandaría de vuelta aquí:
+ * por eso se comprueba el módulo y, sin él, Gerencia cae en los lotes como todos.
+ */
+export const PAGINA_INICIAL_GERENCIA_CAFE = "/dashboard/cafe";
+
+export function paginaInicial(sesion: {
+  rolLegacy: RolLegacy | null;
+  /** Rol de la membresía; solo cambia la página de inicio de Gerencia de café. */
+  rolTenant?: RolTenant | null;
+  tenant: { vertical: Vertical; modulos?: readonly string[] } | null;
+}): string {
   if (sesion.rolLegacy) return PAGINA_INICIAL_POR_ROL[sesion.rolLegacy];
-  return sesion.tenant ? PAGINA_INICIAL_POR_VERTICAL[sesion.tenant.vertical] : "/dashboard";
+  if (!sesion.tenant) return "/dashboard";
+  if (sesion.tenant.vertical === "cafe" && sesion.rolTenant === "viewer" && tieneModulo(sesion.tenant.modulos, "cafe.dashboard")) {
+    return PAGINA_INICIAL_GERENCIA_CAFE;
+  }
+  return PAGINA_INICIAL_POR_VERTICAL[sesion.tenant.vertical];
 }

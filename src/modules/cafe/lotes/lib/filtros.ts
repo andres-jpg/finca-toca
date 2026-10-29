@@ -7,8 +7,12 @@ import { fechaCorta } from "./formato";
 // `aplicarFiltrosLotes` la ÚNICA traducción a consulta, de modo que lo que ve la pantalla y lo que baja al Excel
 // no pueden separarse. Pura: no conoce Next ni Supabase (solo la forma de un filtro de PostgREST).
 
-/** `servicios` = todos los lotes de servicio (la pestaña «Servicios»); trilla y maquila los parten. */
-export const TIPOS_FILTRO = ["marca_propia", "servicios", "trilla", "maquila"] as const;
+/**
+ * `servicios` = todos los lotes de servicio (la pestaña «Servicios»); trilla y maquila los parten (y se solapan: un lote
+ * «Trilla + maquila» sale en los dos). `solo_trilla` = servicios cuyo ÚNICO servicio es la trilla: no lo ofrece el listado,
+ * lo usa el panel de gerencia (CO-34), donde trilla y maquila son una partición y su Excel debe sumar lo mismo.
+ */
+export const TIPOS_FILTRO = ["marca_propia", "servicios", "trilla", "maquila", "solo_trilla"] as const;
 export type TipoFiltro = (typeof TIPOS_FILTRO)[number];
 
 export interface FiltrosLotes {
@@ -105,6 +109,7 @@ const ETIQUETA_TIPO_FILTRO: Readonly<Record<TipoFiltro, string>> = {
   servicios: "Servicios",
   trilla: etiquetaTipoLote("trilla"),
   maquila: etiquetaTipoLote("maquila"),
+  solo_trilla: "Solo trilla",
 };
 
 export function etiquetaTipoFiltro(tipo: TipoFiltro): string {
@@ -149,7 +154,7 @@ export interface ConsultaFiltrable<Q> {
  * Traduce los filtros a condiciones sobre `cafe.v_lotes`. Es la que usan el listado y (CO-35) el Excel:
  *   marca_propia → línea marca propia · servicios → línea servicio
  *   trilla → servicio que incluye trilla · maquila → servicio que incluye tostión, molienda o empaque
- *   (un lote «Trilla + maquila» aparece en los dos)
+ *   (un lote «Trilla + maquila» aparece en los dos) · solo_trilla → servicio cuyo único servicio es la trilla
  * La página no entra aquí: la pone quien pagina.
  */
 export function aplicarFiltrosLotes<Q extends ConsultaFiltrable<Q>>(consulta: Q, filtros: FiltrosLotes): Q {
@@ -166,6 +171,10 @@ export function aplicarFiltrosLotes<Q extends ConsultaFiltrable<Q>>(consulta: Q,
       break;
     case "maquila":
       q = q.eq("linea", "servicio").overlaps("servicios", [...SERVICIOS_MAQUILA]);
+      break;
+    case "solo_trilla":
+      // `servicios` se guarda normalizado (sin repetidos y ordenado), así que «solo trilla» es igualdad exacta con {trilla}.
+      q = q.eq("linea", "servicio").eq("servicios", "{trilla}");
       break;
   }
   if (filtros.estado) q = q.eq("estado", filtros.estado);

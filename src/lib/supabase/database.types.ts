@@ -442,8 +442,17 @@ isOneToOne: false
 "generar_remision":
 { Args: { "p": Json }; Returns: Json
                            },
+"hoy_local":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
 "instante_fecha":
 { Args: { "p_fecha": string }; Returns: string
+                           },
+"kpis_periodo":
+{ Args: { "p_desde"?: string,"p_hasta"?: string,"p_linea"?: string }; Returns: Json
+                           },
+"linea_panel":
+{ Args: { "p_linea": Database["cafe"]['Enums']["linea_lote"],"p_servicios": (Database["cafe"]['Enums']["tipo_proceso"])[] }; Returns: string
                            },
 "orden_proceso":
 { Args: { "t": Database["cafe"]['Enums']["tipo_proceso"] }; Returns: number
@@ -466,8 +475,16 @@ isOneToOne: false
 "peso_disponible_reapertura":
 { Args: { "p_reapertura": string,"p_tipo": Database["cafe"]['Enums']["tipo_proceso"] }; Returns: number
                            },
+"produccion_diaria":
+{ Args: { "p_desde"?: string,"p_hasta"?: string,"p_linea"?: string }; Returns: {
+              "fecha": string,"kg_entrada": number,"kg_salida": number,"linea": string,"merma_pct": number,"tipo": Database["cafe"]['Enums']["tipo_proceso"],"valor": number
+            }[]
+                           },
 "rango_calidad":
 { Args: { "p_clave": string }; Returns: Json
+                           },
+"rango_panel":
+{ Args: { "p_desde": string,"p_hasta": string,"p_linea": string }; Returns: Record<string, unknown>
                            },
 "reabrir_producto":
 { Args: { "p": Json }; Returns: Json
@@ -512,6 +529,11 @@ isOneToOne: false
                            },
 "ultimo_precio_compra":
 { Args: { "p_tercero": string,"p_tipo": string }; Returns: number
+                           },
+"ventas_diarias":
+{ Args: { "p_desde"?: string,"p_hasta"?: string,"p_linea"?: string }; Returns: {
+              "fecha": string,"n_ventas": number,"total": number,"unidades_cortesia": number
+            }[]
                            },
 "verificar_baches_proceso":
 { Args: { "p_proceso": string }; Returns: undefined

@@ -68,8 +68,11 @@ export default async function DashboardPage({
   // rol (cooperativa → su panel o sus recolecciones, `user` → extracciones); `paginaInicial()` cae al
   // vertical del cliente cuando no hay rol legacy.
   const sesion = await getSesionBase();
-  if (sesion?.rolLegacy && sesion.rolLegacy !== "admin" && sesion.rolLegacy !== "viewer") {
-    redirect(paginaInicial(sesion));
+  if (sesion && sesion.rolLegacy !== "admin" && sesion.rolLegacy !== "viewer") {
+    // Sin rol legacy (café) `checkRoutePermission()` mandaría a /login y el proxy devolvería a /dashboard: bucle. Se manda
+    // a la página de inicio de su vertical (para Gerencia de café, el panel). Solo si es otra página: `/dashboard` es esta.
+    const inicio = paginaInicial(sesion);
+    if (inicio !== "/dashboard") redirect(inicio);
   }
   const role = await checkRoutePermission(["admin", "viewer"]);
 
