@@ -53,7 +53,11 @@ type EsquemaRemisiones = {
 
 export type ClienteRemisiones = SupabaseClient<EsquemaRemisiones, "cafe">;
 
-/** Cliente del servidor (sesión del usuario, el RLS aplica) tipado para `cafe.remisiones`. */
+/**
+ * Cliente del servidor (sesión del usuario, el RLS aplica) tipado para `cafe.remisiones`. `createClient()` resuelve el
+ * schema `public`: sin `.schema("cafe")` PostgREST responde PGRST205 (tabla inexistente) y la ficha del lote, el listado
+ * y el tiquete se quedaban sin remisiones (lo destapó el test E2E del servicio completo, FIN-117).
+ */
 export async function createClienteRemisiones(): Promise<ClienteRemisiones> {
-  return (await createClient()) as unknown as ClienteRemisiones;
+  return (await createClient()).schema("cafe") as unknown as ClienteRemisiones;
 }

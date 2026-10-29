@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:db": "supabase test db",
+    "test:e2e": "playwright test",
     "test:concurrencia": "node scripts/test-consecutivos-concurrencia.ts",
     "tenant:create": "node scripts/crear-tenant.ts",
     "db:start": "supabase start",
@@ -60,6 +61,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^20.19.43",
     "@types/react": "^19.2.17",
