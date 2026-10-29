@@ -1,0 +1,89 @@
+# Tests E2E (Playwright, FIN-117 / CO-36): los flujos completos de Cofradía en el navegador y la regresión de humo de
+# ganadería y cooperativa, contra la Supabase local y la app compilada (`pnpm start`). Es un workflow APARTE del `ci` para no tocar el check
+# obligatorio de la protección de ramas: no bloquea el merge por sí solo (si se quiere, se añade el job `e2e` a Settings →
+# Branches). Se puede lanzar a mano desde la pestaña Actions (`workflow_dispatch`).
+name: E2E
+
+on:
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+
+# Un push nuevo a la misma PR cancela la ejecución anterior.
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CI: true
+  NEXT_TELEMETRY_DISABLED: 1
+
+jobs:
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+
+      # El repo no declara `packageManager`: la versión de pnpm se fija aquí (11.x, la del lockfile).
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11
+          cache: true
+
+      # Node 22 es el mínimo real (vitest 5 y pnpm 11), igual que en el job `ci`.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      # El CLI es la devDependency fijada (`supabase@2.122.0`), nunca `supabase/setup-cli`. Solo los servicios que usa la
+      # app (db, auth, rest, kong y postgres-meta). `start` aplica las migraciones y `seed.sql`; el seed de los tests
+      # (`supabase/dev/e2e-seed.sql`) lo aplica `e2e/global-setup.ts` por `docker exec` al contenedor `supabase_db_finca-toca`.
+      - name: Arrancar Supabase local
+        run: pnpm exec supabase start -x studio,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor,realtime,storage-api
+
+      # Las claves de DESARROLLO que imprime la Supabase local de este mismo job (válidas solo aquí); el servidor
+      # `pnpm dev` que levanta Playwright y los tests las leen de `.env.local`, como en local.
+      - name: Escribir .env.local con las claves de la Supabase local
+        run: |
+          eval "$(pnpm exec supabase status -o env 2>/dev/null | grep -E '^(API_URL|PUBLISHABLE_KEY|SERVICE_ROLE_KEY)=')"
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=$PUBLISHABLE_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "CRON_SECRET=ci_dummy"
+          } > .env.local
+          # Comprobación sin imprimir ningún valor.
+          grep -c '=.' .env.local
+
+      - name: Instalar Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # Los tests corren contra la app COMPILADA (`pnpm start`), no contra `pnpm dev`: con `next dev` cada ruta se compila al
+      # primer uso y la suite pasa de ~1 min a más de 10. Las variables públicas se incrustan en el build desde `.env.local`.
+      - name: Build
+        run: pnpm build
+
+      - name: Tests E2E (Playwright)
+        run: pnpm test:e2e
+        env:
+          E2E_SERVER: start
+
+      # Solo si algo falla: el informe HTML (con trazas y capturas de lo que falló) y los resultados crudos.
+      - name: Subir el informe de Playwright
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore

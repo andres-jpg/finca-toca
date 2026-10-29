@@ -55,3 +55,9 @@ supabase/.temp
 .claire/
 
 
+
+# playwright (E2E): sesiones guardadas por rol, informe HTML y resultados/trazas de la última ejecución
+/e2e/.auth/
+/playwright-report/
+/test-results/
+/blob-report/

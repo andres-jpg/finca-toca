@@ -1,5 +1,5 @@
 import tsconfigPaths from "vite-tsconfig-paths";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 // Solo las dos variables de Supabase de `.env.local`: las usa el test que compara el catálogo de
 // módulos con la base local (se salta si no hay base o si apunta a un entorno remoto).
@@ -19,6 +19,8 @@ export default defineConfig({
       SUPABASE_SERVICE_ROLE_KEY: env.SUPABASE_SERVICE_ROLE_KEY ?? "",
     },
     include: ["src/**/*.test.ts"],
+    // Los tests E2E (`e2e/**/*.spec.ts`) son de Playwright (`pnpm test:e2e`) y no los ejecuta Vitest.
+    exclude: [...configDefaults.exclude, "e2e/**", "playwright-report/**", "test-results/**"],
     coverage: {
       provider: "v8",
       include: ["src/lib/**/*.ts", "src/features/**/lib/**/*.ts"],
