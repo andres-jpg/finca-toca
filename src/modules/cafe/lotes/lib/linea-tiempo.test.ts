@@ -5,6 +5,7 @@ import {
   listaBultos,
   mermaPctBache,
   type ProcesoLinea,
+  type ReaperturaLinea,
   type RecepcionLinea,
   type RemisionLinea,
 } from "./linea-tiempo";
@@ -150,5 +151,59 @@ describe("construirLineaDeTiempo: remisión de entrega (CO-32)", () => {
     const vacio = construirLineaDeTiempo({ recepcion, numBultosLote: 8, procesos: [], movimientos: [], remisiones: [], anulacionLote: null });
     expect(sin).toEqual(vacio);
     expect(sin.map((e) => e.clase)).toEqual(["recepcion"]);
+  });
+});
+
+describe("construirLineaDeTiempo: reapertura de producto empacado (CO-33)", () => {
+  const reapertura = (id: string, fecha: string, creadoEn: string, extra: Partial<ReaperturaLinea> = {}): ReaperturaLinea => ({
+    id,
+    fecha,
+    creadoEn,
+    creadoPor: "ana@cofradia.test",
+    presentacionG: 500,
+    unidades: 40,
+    producto: "Excelso 500 g",
+    pesoKg: 20,
+    motivo: "Pedido de 2.500 g molido",
+    texto: "40 × Excelso 500 g (20 kg)",
+    ...extra,
+  });
+  const base = { recepcion, numBultosLote: 8, movimientos: [], anulacionLote: null };
+
+  it("es un evento propio y queda antes de la molienda que se hace sobre ella el mismo día", () => {
+    const eventos = construirLineaDeTiempo({
+      ...base,
+      procesos: [proceso("m", "molienda", "2026-11-15", "2026-11-15T16:00:00Z", { bultos: [], reaperturaId: "r1" })],
+      reaperturas: [reapertura("r1", "2026-11-15", "2026-11-15T15:00:00Z")],
+    });
+    expect(eventos.map((e) => e.clave)).toEqual(["recepcion", "reapertura-r1", "proceso-m"]);
+  });
+
+  it("los procesos de la reapertura llevan su reapertura; los del lote no", () => {
+    const eventos = construirLineaDeTiempo({
+      ...base,
+      procesos: [
+        proceso("t", "tostion", "2026-11-06", "2026-11-06T14:00:00Z"),
+        proceso("m", "molienda", "2026-11-15", "2026-11-15T16:00:00Z", { bultos: [], reaperturaId: "r1" }),
+      ],
+      reaperturas: [reapertura("r1", "2026-11-15", "2026-11-15T15:00:00Z")],
+    });
+    const procesos = eventos.filter((e) => e.clase === "proceso");
+    expect(procesos.map((e) => (e.clase === "proceso" ? e.reapertura?.id ?? null : "x"))).toEqual([null, "r1"]);
+  });
+
+  it("una reapertura de otro día va por fecha, antes de la remisión y de la anulación del lote", () => {
+    const eventos = construirLineaDeTiempo({
+      ...base,
+      procesos: [proceso("p", "tostion", "2026-11-06", "2026-11-06T14:00:00Z")],
+      reaperturas: [reapertura("r2", "2026-11-20", "2026-11-20T15:00:00Z"), reapertura("r1", "2026-11-10", "2026-11-10T15:00:00Z")],
+      anulacionLote: { en: "2026-11-21T10:00:00Z", por: null, motivo: "x" },
+    });
+    expect(eventos.map((e) => e.clave)).toEqual(["recepcion", "proceso-p", "reapertura-r1", "reapertura-r2", "anulacion-lote"]);
+  });
+
+  it("sin reaperturas no cambia nada", () => {
+    const eventos = construirLineaDeTiempo({ ...base, procesos: [] });
+    expect(eventos.map((e) => e.clase)).toEqual(["recepcion"]);
   });
 });

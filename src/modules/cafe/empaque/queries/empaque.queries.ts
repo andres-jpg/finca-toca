@@ -5,6 +5,7 @@ import { callRpc } from "@/modules/core/rpc/call-rpc";
 import { leerAtributosInsumo } from "../../insumos/lib/insumos";
 import { construirMatriz, leerAtributosProducto, type MatrizProductoTerminado, type ProductoTerminado, type TipoCafeMatriz } from "../lib/matriz";
 import {
+  REF_LOTE,
   REF_PROCESO,
   REF_VENTA,
   type ConfigEmpaque,
@@ -97,7 +98,15 @@ export async function getKardexProducto(articuloId: string): Promise<KardexProdu
   const idsUsuarios = [...new Set(movimientos.flatMap((m) => (m.created_by ? [m.created_by] : [])))];
   const idsProcesos = [...new Set(movimientos.flatMap((m) => (m.ref_tipo === REF_PROCESO && m.ref_id ? [m.ref_id] : [])))];
 
-  const [usuarios, lotesDeProceso] = await Promise.all([nombresUsuarios(idsUsuarios), lotesDeProcesos(idsProcesos)]);
+  const idsLotes = [...new Set(movimientos.flatMap((m) => (m.ref_tipo === REF_LOTE && m.ref_id ? [m.ref_id] : [])))];
+
+  const [usuarios, lotesDeProceso, codigosDeLote] = await Promise.all([
+    nombresUsuarios(idsUsuarios),
+    lotesDeProcesos(idsProcesos),
+    codigosDeLotes(idsLotes),
+  ]);
+
+  const numerosDeVenta = await numerosDeVentas([...new Set(movimientos.flatMap((m) => (m.ref_tipo === REF_VENTA && m.ref_id ? [m.ref_id] : [])))]);
 
   const referencias: Record<string, string> = {};
   const enlaces: Record<string, string> = {};
@@ -108,9 +117,16 @@ export async function getKardexProducto(articuloId: string): Promise<KardexProdu
       if (!lote) continue;
       referencias[m.ref_id] = lote.codigo;
       enlaces[m.ref_id] = `/dashboard/cafe/lotes/${lote.id}`;
+    } else if (m.ref_tipo === REF_LOTE) {
+      // La reapertura de un lote (CO-33) apunta directamente al lote reabierto.
+      const codigo = codigosDeLote.get(m.ref_id);
+      if (!codigo) continue;
+      referencias[m.ref_id] = codigo;
+      enlaces[m.ref_id] = `/dashboard/cafe/lotes/${m.ref_id}`;
     } else if (m.ref_tipo === REF_VENTA) {
-      // La pantalla de ventas es de CO-31: hasta entonces el origen se nombra pero no se enlaza.
-      referencias[m.ref_id] = "Venta";
+      // Una venta, una cortesía o su anulación (CO-31): el número (VT-2026-0001) enlaza al detalle.
+      referencias[m.ref_id] = numerosDeVenta.get(m.ref_id) ?? "Venta";
+      if (numerosDeVenta.has(m.ref_id)) enlaces[m.ref_id] = `/dashboard/cafe/ventas/${m.ref_id}`;
     }
   }
   return { movimientos, usuarios, referencias, enlaces };
@@ -121,6 +137,24 @@ async function nombresUsuarios(ids: string[]): Promise<Record<string, string>> {
   const r = await callRpc<"public", "nombres_usuarios_tenant", { user_id: string; email: string }[]>("public", "nombres_usuarios_tenant", { p_ids: ids });
   if (!r.ok) return {};
   return Object.fromEntries((r.data ?? []).map((u) => [u.user_id, u.email]));
+}
+
+/** `lote_id` → código de los lotes reabiertos (movimientos con `ref_tipo = 'cafe.lote'`, CO-33). */
+async function codigosDeLotes(loteIds: string[]): Promise<Map<string, string>> {
+  if (loteIds.length === 0) return new Map();
+  const cafe = (await createClient()).schema("cafe");
+  const { data, error } = await cafe.from("lotes").select("id, codigo").in("id", loteIds);
+  if (error) return new Map();
+  return new Map((data ?? []).map((l) => [l.id, l.codigo]));
+}
+
+/** `venta_id` → número (`VT-2026-0001`) de las ventas y cortesías que originaron esos movimientos (CO-31). */
+async function numerosDeVentas(ventaIds: string[]): Promise<Map<string, string>> {
+  if (ventaIds.length === 0) return new Map();
+  const cafe = (await createClient()).schema("cafe");
+  const { data, error } = await cafe.from("ventas").select("id, numero").in("id", ventaIds);
+  if (error) return new Map();
+  return new Map((data ?? []).map((v) => [v.id, v.numero]));
 }
 
 /** `proceso_id` → lote (id y código) de los empaques que originaron esos movimientos. */

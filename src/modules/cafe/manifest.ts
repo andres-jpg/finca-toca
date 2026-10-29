@@ -3,9 +3,7 @@ import type { ModuleManifest } from "@/modules/core/registry/types";
 /**
  * Navegación del vertical de café. Cada pantalla de la Fase 1 añade aquí su entrada cuando existe su página
  * (más `requireModuloPagina()` en ella y `requireModulo()` + `requireRolTenant()` en sus actions): una entrada
- * cuya página aún no existe no se declara. Previstas, con su grupo, ruta, módulo y roles:
- *
- *   Comercial   Ventas               /dashboard/cafe/ventas        cafe.ventas       todos
+ * cuya página aún no existe no se declara.
  *
  * Terceros y Tarifas y parámetros (grupo «Maestros») los aporta el manifiesto del núcleo, no este.
  * Los grupos están en `ORDEN_GRUPOS` (`core/registry/nav.ts`). Al ser un módulo nuevo, las entradas usan
@@ -29,6 +27,10 @@ export const cafeManifest: ModuleManifest = {
     // Maestro: lo edita solo owner/admin (Terceros y Tarifas, del núcleo, completan el grupo).
     // Remisiones de entrega (FIN-113): las ven todos (Gerencia consulta y reimprime); se generan desde la ficha del lote.
     { href: "/dashboard/cafe/remisiones", label: "Remisiones", icon: "FileText", modulo: "cafe.remisiones", roles: TODOS, grupo: "Comercial", orden: 20 },
+    // Ventas y cortesías de marca propia (FIN-112): las ven todos (Gerencia solo consulta); registran owner/admin/operativo y
+    // anula owner/admin. `cafe.ventas` no es módulo base: se activa por cliente. Sin icono propio en `ICONOS_NAV`:
+    // reutiliza el de ingresos.
+    { href: "/dashboard/cafe/ventas", label: "Ventas", icon: "ArrowUpCircle", modulo: "cafe.ventas", roles: TODOS, grupo: "Comercial", orden: 10 },
     { href: "/dashboard/cafe/maestros/tipos", label: "Tipos de café", icon: "Coffee", modulo: "cafe.recepcion", roles: ["owner", "admin"], grupo: "Maestros", orden: 5 },
   ],
 };

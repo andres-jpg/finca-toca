@@ -119,6 +119,8 @@ export async function getLoteParaProceso(loteId: string): Promise<LoteParaProces
         "id, tipo, fecha, peso_entrada_kg, peso_salida_kg, merma_kg, merma_pct, desvio, valor, tarifa_kg, nivel_tueste, observaciones, anulado_at, motivo_anulacion, created_at",
       )
       .eq("lote_id", loteId)
+      // Los procesos de una reapertura (CO-33) no son de los bultos del lote: se ven en su propia pantalla.
+      .is("reapertura_id", null)
       .order("created_at", { ascending: true }),
     cafe.from("proceso_bultos").select("proceso_id, bulto_id, tipo").eq("lote_id", loteId),
     getConfigPlanta(),

@@ -69,6 +69,13 @@ export const MENSAJES_RPC: Readonly<Record<string, string>> = {
   entrada_pt_no_permitida: "El producto terminado solo aumenta al empacar un lote. Para corregir existencias usa un ajuste.",
   empaque_no_anulable: "Este empaque ya movió inventario y no se anula. Corrige las existencias con un ajuste.",
   observacion_obligatoria: "Explica el motivo: la observación es obligatoria.",
+  // Reapertura de producto empacado (café)
+  reapertura_solo_marca_propia: "Solo se reabre producto empacado de un lote de marca propia, nunca café de un cliente.",
+  reapertura_supera_saldo_lote: "No puedes reabrir más unidades de las que se empacaron de ese lote en esa presentación.",
+  reapertura_sin_stock: "No hay existencias suficientes en el inventario: lo que ya salió (venta, cortesía, muestra…) no se puede reabrir.",
+  reapertura_solo_molienda_empaque: "El café reabierto ya está tostado: solo se muele o se empaca, sin repetir trilla ni tostión.",
+  reapertura_no_encontrada: "La reapertura no existe o no pertenece a tu cliente.",
+  reapertura_proceso_duplicado: "Esta reapertura ya tiene registrado ese paso: admite una molienda y un empaque.",
   // Remisiones de entrega (café)
   remision_solo_servicios: "La remisión de entrega es solo para lotes de trilla y maquila de clientes.",
   remision_sin_procesos: "El lote aún no tiene ningún proceso registrado: no hay nada que entregar.",
@@ -78,6 +85,12 @@ export const MENSAJES_RPC: Readonly<Record<string, string>> = {
   remision_no_encontrada: "La remisión no existe o no pertenece a tu cliente.",
   remision_anulada: "La remisión está anulada: ya no se puede modificar.",
   lote_entregado: "El lote ya tiene una remisión de entrega: anúlala antes de registrar o anular procesos.",
+  // Ventas y cortesías (café)
+  tercero_no_cliente: "El tercero elegido no tiene el rol de cliente de marca propia.",
+  venta_no_encontrada: "La venta no existe o no pertenece a tu cliente.",
+  venta_anulada: "La venta está anulada: ya no se puede modificar.",
+  factura_no_requerida: "La venta no requiere factura electrónica: no tiene número de Aliados.",
+  venta_total_incoherente: "El total de la venta debe ser la suma de sus líneas, y la venta debe tener al menos una.",
   // Alta de clientes (plataforma)
   slug_duplicado: "Ya existe un cliente con ese identificador.",
   slug_invalido: "El identificador debe tener de 3 a 40 caracteres: minúsculas, números y guiones.",

@@ -11,6 +11,7 @@ import {
   type EventoLinea,
   type MovimientoLinea,
   type ProcesoLinea,
+  type ReaperturaLinea,
   type RemisionLinea,
 } from "../lib/linea-tiempo";
 import type { LineaLote, NivelTueste, TipoProceso } from "../types";
@@ -278,15 +279,17 @@ export async function getResponsables(loteId: string): Promise<Map<string, strin
 
 /**
  * La historia completa del lote, ordenada: recepción → procesos (con baches y bultos) → movimientos de inventario
- * con `ref_tipo = 'cafe.lote'` (los empaques de CO-30) → remisiones de entrega → anulación. `usuarios` (id → email)
- * viene de `getResponsables()`. Las remisiones (CO-32) las lee quien llama (`remisiones/`) y llegan ya como eventos:
- * así `lotes` no depende de ese módulo. Las reaperturas (CO-33) se sumarán aquí.
+ * con `ref_tipo = 'cafe.lote'` → remisiones de entrega → anulación. `usuarios` (id → email) viene de `getResponsables()`.
+ * Las remisiones (CO-32) y las reaperturas (CO-33) las lee quien llama (`remisiones/`, `reapertura/`) y llegan ya como
+ * eventos: así `lotes` no depende de esos módulos. El movimiento de inventario de una reapertura NO sale como evento
+ * suelto de «Inventario»: ya lo cuenta su evento de reapertura.
  */
 export async function getTimeline(
   lote: LoteFicha,
   bultos: readonly BultoFicha[],
   usuarios: ReadonlyMap<string, string>,
   remisiones: readonly RemisionLinea[] = [],
+  reaperturas: readonly ReaperturaLinea[] = [],
 ): Promise<EventoLinea[]> {
   const supabase = await createClient();
   const cafe = supabase.schema("cafe");
@@ -295,7 +298,7 @@ export async function getTimeline(
     cafe
       .from("procesos")
       .select(
-        "id, tipo, fecha, created_at, created_by, peso_entrada_kg, peso_salida_kg, merma_kg, tarifa_kg, valor, merma_referencia_pct, tolerancia_pts, desvio, nivel_tueste, observaciones, anulado_at, anulado_por, motivo_anulacion",
+        "id, tipo, fecha, created_at, created_by, peso_entrada_kg, peso_salida_kg, merma_kg, tarifa_kg, valor, merma_referencia_pct, tolerancia_pts, desvio, nivel_tueste, observaciones, anulado_at, anulado_por, motivo_anulacion, reapertura_id",
       )
       .eq("lote_id", lote.id),
     cafe.from("proceso_bultos").select("proceso_id, bulto_id").eq("lote_id", lote.id),
@@ -303,7 +306,8 @@ export async function getTimeline(
       .from("movimientos_inventario")
       .select("id, articulo_id, fecha, cantidad, motivo, observaciones, created_at, created_by")
       .eq("ref_tipo", "cafe.lote")
-      .eq("ref_id", lote.id),
+      .eq("ref_id", lote.id)
+      .neq("motivo", "reapertura"),
   ]);
   if (procesosRes.error) throw new Error("No se pudieron cargar los procesos del lote");
   if (procesoBultosRes.error) throw new Error("No se pudieron cargar los bultos de los procesos");
@@ -375,6 +379,7 @@ export async function getTimeline(
       observaciones: p.observaciones,
       baches: bachesDe.get(p.id) ?? [],
       lineasEmpaque: lineasEmpaque.get(p.id) ?? [],
+      reaperturaId: p.reapertura_id,
       anulacion: p.anulado_at ? { en: p.anulado_at, por: quien(p.anulado_por), motivo: p.motivo_anulacion ?? "" } : null,
     }),
   );
@@ -406,6 +411,7 @@ export async function getTimeline(
     procesos: procesosLinea,
     movimientos: movimientosLinea,
     remisiones,
+    reaperturas,
     anulacionLote: lote.anulacion
       ? { en: lote.anulacion.en, por: quien(lote.anulacion.por), motivo: lote.anulacion.motivo }
       : null,

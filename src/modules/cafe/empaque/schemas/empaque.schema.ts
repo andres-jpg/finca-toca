@@ -58,6 +58,11 @@ export const empaqueSchema = z
     fecha: z.string({ message: "Indica la fecha" }).regex(/^\d{4}-\d{2}-\d{2}$/, "La fecha no es válida"),
     /** Bultos que se empacan. Un lote de un solo bulto manda el suyo (el formulario no muestra la selección). */
     bultoIds: z.array(z.uuid({ message: "Bulto no válido" })).max(MAX_BULTOS),
+    /** Empaque de un café reabierto (CO-33): en vez de bultos del lote, la reapertura que se empaca. */
+    reaperturaId: z
+      .uuid({ message: "La reapertura no es válida" })
+      .nullish()
+      .transform((v) => v ?? null),
     pesoEntradaKg: kilosOpcional,
     lineas: z
       .array(lineaEmpaqueSchema)
@@ -89,6 +94,8 @@ export function payloadEmpaque(v: EmpaqueValues): Json {
     lote_id: v.loteId,
     fecha: v.fecha,
     bultos: v.bultoIds,
+    // Solo con un café reabierto (CO-33); sin él la RPC recibe lo mismo de siempre.
+    ...(v.reaperturaId ? { reapertura_id: v.reaperturaId } : {}),
     peso_entrada_kg: v.pesoEntradaKg,
     lineas: v.lineas.map((l) => ({ presentacion_g: l.presentacionG, unidades: l.unidades })),
     observaciones: v.observaciones,
@@ -106,7 +113,7 @@ export const ETIQUETA_MOTIVO_SALIDA_PT: Record<MotivoSalidaPt, string> = {
   ajuste: "Ajuste",
 };
 
-/** La venta y la cortesía son de CO-31; la reapertura, de CO-33. Aquí solo muestra, pérdida y ajuste. */
+/** La venta y la cortesía son de CO-31; la reapertura tiene su propia acción (CO-33). Aquí solo muestra, pérdida y ajuste. */
 export const salidaPtSchema = z
   .object({
     articuloId: z.uuid({ message: "Elige un producto" }),

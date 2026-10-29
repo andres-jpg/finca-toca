@@ -20,6 +20,8 @@ import { GenerarRemisionButton } from "@/modules/cafe/remisiones/components/gene
 import { RemisionLoteSeccion } from "@/modules/cafe/remisiones/components/remision-lote-seccion";
 import { aEventoDeLinea, opcionGenerar } from "@/modules/cafe/remisiones/lib/estado";
 import { getRemisionesDeLote } from "@/modules/cafe/remisiones/queries/remisiones.queries";
+import { EmpacadoSeccion } from "@/modules/cafe/reapertura/components/empacado-seccion";
+import { getReaperturasDeFicha } from "@/modules/cafe/reapertura/queries/reapertura.queries";
 import type { Remision } from "@/modules/cafe/remisiones/types";
 import {
   getBultos,
@@ -54,7 +56,10 @@ export default async function LotePage({ params }: { params: Promise<{ id: strin
     esAdmin ? historialDelLote(lote.id) : Promise.resolve<CambioAuditado[] | null>(null),
     conRemisiones ? remisionesDelLote(lote.id) : Promise.resolve<Remision[]>([]),
   ]);
-  const eventos = await getTimeline(lote, bultos, responsables, remisiones.map((r) => aEventoDeLinea(r, responsables)));
+  // Reaperturas de producto empacado (CO-33): solo un lote de marca propia las tiene.
+  const reaperturas =
+    lote.linea === "marca_propia" ? await getReaperturasDeFicha(lote.id, responsables) : { saldos: [], reaperturas: [], procesos: [], eventos: [] };
+  const eventos = await getTimeline(lote, bultos, responsables, remisiones.map((r) => aEventoDeLinea(r, responsables)), reaperturas.eventos);
 
   const zona = sesion.tenant.zonaHoraria;
   const sinProcesos = etapas.length === 0;
@@ -106,6 +111,18 @@ export default async function LotePage({ params }: { params: Promise<{ id: strin
       <LoteCabecera lote={lote} etapas={etapas} zonaHoraria={zona} />
 
       <RemisionLoteSeccion remisiones={remisiones} puedeAnular={esAdmin} zonaHoraria={zona} />
+
+      <EmpacadoSeccion
+        loteId={lote.id}
+        loteCodigo={lote.codigo}
+        saldos={reaperturas.saldos}
+        reaperturas={reaperturas.reaperturas}
+        procesos={reaperturas.procesos}
+        puedeOperar={puedeOperar}
+        loteAnulado={lote.anulacion !== null}
+        fechaHoy={fechaHoyEnZona(zona)}
+        fechaRecepcion={lote.fechaRecepcion}
+      />
 
       <section className="space-y-2" aria-labelledby="titulo-etapas">
         <h2 id="titulo-etapas" className="text-lg font-semibold text-gray-800">

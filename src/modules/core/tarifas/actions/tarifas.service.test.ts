@@ -16,7 +16,7 @@ vi.mock("@/lib/supabase/server", () => ({
   })),
 }));
 
-import { defineConceptosTarifa, limpiarConceptosTarifa } from "../registry";
+import { defineConceptosTarifa, defineProveedorConceptosTarifa, limpiarConceptosTarifa } from "../registry";
 import { crearTarifa, eliminarTarifaProgramada } from "./tarifas.service";
 
 describe("crearTarifa", () => {
@@ -60,6 +60,23 @@ describe("crearTarifa", () => {
     const r = await crearTarifa({ concepto: "cafe.trilla", valor: 1400 });
     expect(r).toEqual({ ok: true, data: { id: "t1" } });
     expect(db.insert).toHaveBeenCalledWith({ concepto: "cafe.trilla", valor: 1400, unidad: "kg", observaciones: null });
+  });
+
+  it("acepta un concepto dinámico que el proveedor de su módulo declara (precio de venta por producto)", async () => {
+    defineProveedorConceptosTarifa("cafe.ventas", async () => [
+      { concepto: "cafe.precio_aaaa", modulo: "cafe.ventas", etiqueta: "Excelso 500 g", unidad: "unidad" },
+    ]);
+    const r = await crearTarifa({ concepto: "cafe.precio_aaaa", valor: 29000 });
+    expect(r).toEqual({ ok: true, data: { id: "t1" } });
+    expect(guards.requireModulo).toHaveBeenCalledWith("cafe.ventas");
+    expect(db.insert).toHaveBeenCalledWith({ concepto: "cafe.precio_aaaa", valor: 29000, unidad: "unidad", observaciones: null });
+  });
+
+  it("rechaza un concepto dinámico que el proveedor no lista (p. ej. el producto de otro cliente)", async () => {
+    defineProveedorConceptosTarifa("cafe.ventas", async () => []);
+    const r = await crearTarifa({ concepto: "cafe.precio_bbbb", valor: 29000 });
+    expect(r).toMatchObject({ ok: false, code: "datos_invalidos" });
+    expect(db.insert).not.toHaveBeenCalled();
   });
 
   it("acepta una vigencia futura (tarifa programada)", async () => {

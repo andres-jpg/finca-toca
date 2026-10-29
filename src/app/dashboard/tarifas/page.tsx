@@ -6,7 +6,7 @@ import { requireModuloPagina } from "@/modules/core/tenants/tenant.guards";
 import { definicionesParametrosDeModulos } from "@/modules/core/parametros/registry";
 import { getParametrosConValor } from "@/modules/core/parametros/queries/parametros.queries";
 import { ParametrosForm, type ParametroVista } from "@/modules/core/parametros/components/parametros-form";
-import { conceptosTarifaDeModulos } from "@/modules/core/tarifas/registry";
+import { conceptosTarifaDeModulos, conceptosTarifaDinamicosDeModulos, type ConceptoTarifaDef } from "@/modules/core/tarifas/registry";
 import { getHistorialTarifas, getTarifasVigentes } from "@/modules/core/tarifas/queries/tarifas.queries";
 import { formatearPesos, formatearVigencia } from "@/modules/core/tarifas/lib/formato";
 import { TarifasPanel, type ConceptoTarifaVista } from "@/modules/core/tarifas/components/tarifas-panel";
@@ -21,13 +21,15 @@ export default async function TarifasYParametrosPage() {
   const conceptos = conceptosTarifaDeModulos(tenant.modulos);
   const defs = definicionesParametrosDeModulos(tenant.modulos);
 
-  const [vigentes, historial, valores] = await Promise.all([
+  const [vigentes, historial, valores, dinamicos] = await Promise.all([
     getTarifasVigentes(),
     getHistorialTarifas(),
     getParametrosConValor(defs),
+    // Conceptos que dependen de los datos del cliente (p. ej. un precio de venta por producto terminado).
+    conceptosTarifaDinamicosDeModulos(tenant.modulos),
   ]);
 
-  const vistaConceptos: ConceptoTarifaVista[] = conceptos.map((c) => {
+  const aVista = (c: ConceptoTarifaDef, textoSinTarifa?: string): ConceptoTarifaVista => {
     const vigente = vigentes.find((v) => v.concepto === c.concepto);
     return {
       concepto: c.concepto,
@@ -51,8 +53,12 @@ export default async function TarifasYParametrosPage() {
           email: h.email,
           observaciones: h.observaciones,
         })),
+      ...(textoSinTarifa ? { textoSinTarifa, ocultarCodigo: true } : {}),
     };
-  });
+  };
+
+  const vistaConceptos = conceptos.map((c) => aVista(c));
+  const vistaPrecios = dinamicos.map((c) => aVista(c, "Sin precio: la venta pedirá el valor a mano para este producto."));
 
   const vistaParametros: ParametroVista[] = defs.map((d) => {
     const v = valores.find((x) => x.clave === d.clave);
@@ -79,6 +85,18 @@ export default async function TarifasYParametrosPage() {
         <h2 className="text-lg font-semibold text-gray-800">Tarifas</h2>
         <TarifasPanel conceptos={vistaConceptos} crearTarifa={crearTarifa} eliminarTarifa={eliminarTarifa} />
       </section>
+
+      {vistaPrecios.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-gray-800">Precios de venta</h2>
+          <TarifasPanel
+            conceptos={vistaPrecios}
+            crearTarifa={crearTarifa}
+            eliminarTarifa={eliminarTarifa}
+            nota="Precio por unidad de cada producto terminado. Las ventas ya registradas conservan el precio con el que se vendieron."
+          />
+        </section>
+      )}
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-gray-800">Parámetros</h2>

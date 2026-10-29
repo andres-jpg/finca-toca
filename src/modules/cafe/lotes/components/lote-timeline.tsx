@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeftRight, Ban, Cog, FileText, Flame, Package, Truck, Wheat } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, Ban, Cog, FileText, Flame, Package, PackageOpen, Truck, Wheat } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { formatearCOP, formatearKg } from "@/modules/cafe/compras/lib/compra";
@@ -10,6 +10,7 @@ import {
   type EventoLinea,
   type MovimientoLinea,
   type ProcesoLinea,
+  type ReaperturaLinea,
   type RecepcionLinea,
   type RemisionLinea,
 } from "../lib/linea-tiempo";
@@ -30,6 +31,7 @@ const CONFIG_PROCESO: Record<TipoProceso, Config> = {
 };
 const CONFIG_RECEPCION: Config = { icon: Truck, color: "text-sky-600", bg: "bg-sky-50 border-sky-200" };
 const CONFIG_MOVIMIENTO: Config = { icon: ArrowLeftRight, color: "text-violet-600", bg: "bg-violet-50 border-violet-200" };
+const CONFIG_REAPERTURA: Config = { icon: PackageOpen, color: "text-amber-700", bg: "bg-amber-50 border-amber-200" };
 const CONFIG_REMISION: Config = { icon: FileText, color: "text-teal-700", bg: "bg-teal-50 border-teal-200" };
 const CONFIG_ANULACION: Config = { icon: Ban, color: "text-red-700", bg: "bg-red-50 border-red-200" };
 
@@ -72,7 +74,7 @@ function Recepcion({ datos }: { datos: RecepcionLinea }) {
   );
 }
 
-function Proceso({ datos, numBultosLote }: { datos: ProcesoLinea; numBultosLote: number }) {
+function Proceso({ datos, numBultosLote, reapertura }: { datos: ProcesoLinea; numBultosLote: number; reapertura: ReaperturaLinea | null }) {
   const anulado = datos.anulacion !== null;
   return (
     <Tarjeta
@@ -92,6 +94,11 @@ function Proceso({ datos, numBultosLote }: { datos: ProcesoLinea; numBultosLote:
             · merma {formatearKg3(datos.mermaKg)} kg ({formatearMermaPct(datos.mermaKg, datos.pesoEntradaKg)})
           </span>
         </p>
+        {datos.reaperturaId && (
+          <p className="text-xs font-medium text-amber-800">
+            De la reapertura{reapertura ? ` de ${reapertura.texto}` : ""}
+          </p>
+        )}
         <p className="text-xs text-gray-600">
           {datos.bultos.length > 0 && <>Bultos: {listaBultos(datos.bultos, numBultosLote)}</>}
           {datos.nivelTueste && <> · Tueste {etiquetaTueste(datos.nivelTueste).toLowerCase()}</>}
@@ -176,6 +183,19 @@ function Movimiento({ datos }: { datos: MovimientoLinea }) {
   );
 }
 
+/** «Reapertura: 40 × Excelso 500 g (20 kg) — Ana, 15/11»: el producto empacado que volvió a granel para moler o reempacar. */
+function Reapertura({ datos }: { datos: ReaperturaLinea }) {
+  return (
+    <Tarjeta config={CONFIG_REAPERTURA} titulo="Reapertura" fecha={fechaCorta(datos.fecha)} quien={datos.creadoPor}>
+      <p className="text-sm text-gray-800">
+        <span className="tabular-nums font-medium">{datos.texto}</span>
+        <span className="text-gray-600"> · descontado del producto terminado</span>
+      </p>
+      {datos.motivo && <p className="text-xs italic text-gray-600">{datos.motivo}</p>}
+    </Tarjeta>
+  );
+}
+
 function Remision({ datos }: { datos: RemisionLinea }) {
   const anulada = datos.anulacion !== null;
   return (
@@ -214,7 +234,7 @@ function Remision({ datos }: { datos: RemisionLinea }) {
 /**
  * La historia del lote de principio a fin: recepción o compra, cada proceso con sus kilos de entrada y salida, su
  * merma, su valor y quién lo registró, los baches de la tostión desplegables, los movimientos de inventario ligados
- * al lote, la remisión de entrega (también las anuladas) y, si aplica, su anulación. Los procesos anulados se conservan, tachados y con su motivo.
+ * al lote, las reaperturas de producto empacado (con los procesos que cuelgan de ellas), la remisión de entrega (también las anuladas) y, si aplica, su anulación. Los procesos anulados se conservan, tachados y con su motivo.
  */
 export function LoteTimeline({ eventos, zonaHoraria }: { eventos: EventoLinea[]; zonaHoraria: string }) {
   if (eventos.length === 0) {
@@ -227,7 +247,9 @@ export function LoteTimeline({ eventos, zonaHoraria }: { eventos: EventoLinea[];
           case "recepcion":
             return <Recepcion key={e.clave} datos={e.datos} />;
           case "proceso":
-            return <Proceso key={e.clave} datos={e.datos} numBultosLote={e.numBultosLote} />;
+            return <Proceso key={e.clave} datos={e.datos} numBultosLote={e.numBultosLote} reapertura={e.reapertura} />;
+          case "reapertura":
+            return <Reapertura key={e.clave} datos={e.datos} />;
           case "movimiento":
             return <Movimiento key={e.clave} datos={e.datos} />;
           case "remision":

@@ -20,6 +20,10 @@ Estructura de cada feature: `<feature>/{actions,components,schemas,lib}`.
 
 `empaque/` es el empaque de marca propia y el inventario de producto terminado (FIN-111): `cafe.empaque_lineas`, `registrar_empaque` y `registrar_salida_pt` en `cafe_empaque.sql`, el formulario de empaque que monta la planta y la pantalla `/dashboard/cafe/inventario` (matriz tipo × presentación con su kardex). El producto terminado solo aumenta al empacar; ver *Empaque e inventario de producto terminado* en CLAUDE.md.
 
+`reapertura/` es la reapertura de producto empacado de marca propia (FIN-114 · CO-33): `cafe.reaperturas`, `reabrir_producto` y la extensión de `registrar_proceso`/`registrar_empaque` con `reapertura_id` en `cafe_reapertura.sql`, el botón «Reabrir» y la sección «Empacado» de la ficha del lote, y la pantalla `/dashboard/cafe/planta/reapertura/[id]` (moler y/o empacar). **Supuesto:** el producto terminado se lleva por tipo × presentación, no por lote (las ventas no dicen de qué lote sale cada bolsa); por eso el saldo reabrible de un lote es lo empacado de él menos lo ya reabierto de él, y además tiene que haber stock global. Ver *Reapertura de producto empacado* en CLAUDE.md.
+
+`ventas/` son las ventas de marca propia y las cortesías (FIN-112 · CO-31): `cafe.ventas`, `cafe.venta_lineas`, `registrar_venta` y `anular_venta` en `cafe_ventas.sql` (serie `VT`, precio de cada línea como snapshot, salida de inventario que avisa y no bloquea, anulación con devolución), la lista de precios (filas de `public.tarifas` con concepto `cafe.precio_<uuid>`, sección «Precios de venta» de Tarifas y parámetros) y el nº de factura emitida en Aliados (esta app no emite facturas). Ver *Ventas y cortesías* en CLAUDE.md.
+
 `tipos/` es el catálogo de tipos de café (FIN-102): al crear o activar un tipo, o dar de alta una bolsa, los triggers de `cafe_tipos.sql` generan sus productos terminados (ver *Vertical café* en CLAUDE.md).
 
 ## Matriz de permisos por rol (HU-F1-11)
