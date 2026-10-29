@@ -39,8 +39,15 @@ import type { ConfigEmpaque } from "../types";
 // genérico de proceso cuando el paso es el empaque de un lote de marca propia.
 const CAMPO = "h-11 text-base";
 
+/** Empaque de un café REABIERTO (CO-33): sin bultos, el peso de entrada es todo lo reabierto (o su molienda). */
+export interface ReaperturaEmpaque {
+  id: string;
+  /** De dónde viene el café, para el texto del peso: «Viene de la reapertura de 40 × Excelso 500 g (20 kg)». */
+  origen: string;
+}
+
 interface EmpaqueFormProps {
-  lote: LoteParaProceso["lote"];
+  lote: Pick<LoteParaProceso["lote"], "id" | "linea" | "servicios" | "tipoCafe">;
   bultos: BultoPlanta[];
   config: ConfigEmpaque;
   /** `YYYY-MM-DD` de hoy en la zona del cliente (lo calcula el servidor). */
@@ -48,9 +55,11 @@ interface EmpaqueFormProps {
   /** Bultos elegibles para empacar (preseleccionados). */
   bultoIdsIniciales: string[];
   pesoDisponibleInicial: number | null;
+  /** Presente = se empaca un café reabierto en vez de bultos del lote. */
+  reapertura?: ReaperturaEmpaque;
 }
 
-export function EmpaqueForm({ lote, bultos, config, fechaHoy, bultoIdsIniciales, pesoDisponibleInicial }: EmpaqueFormProps) {
+export function EmpaqueForm({ lote, bultos, config, fechaHoy, bultoIdsIniciales, pesoDisponibleInicial, reapertura }: EmpaqueFormProps) {
   const router = useRouter();
   const unSoloBulto = bultos.length === 1;
   const lotePasos: LotePasos = useMemo(() => ({ linea: lote.linea, servicios: lote.servicios }), [lote.linea, lote.servicios]);
@@ -111,21 +120,24 @@ export function EmpaqueForm({ lote, bultos, config, fechaHoy, bultoIdsIniciales,
   const textoOrigen =
     pesoDisp === null
       ? "No se pudo calcular el peso disponible: escríbelo."
-      : origen.previo
+      : reapertura
+        ? `${reapertura.origen}: ${formatearPeso(pesoDisp)} kg`
+        : origen.previo
         ? `Viene de ${ARTICULO_PASO[origen.previo]} del ${origen.fechas.map((f) => fechaCorta(f)).join(" y ") || "—"}: ${formatearPeso(pesoDisp)} kg`
         : `Suma de los bultos elegidos: ${formatearPeso(pesoDisp)} kg`;
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!unSoloBulto && bultoIds.length === 0) {
+    if (!reapertura && !unSoloBulto && bultoIds.length === 0) {
       setError("Elige al menos un bulto");
       return;
     }
     const parsed = empaqueSchema.safeParse({
       loteId: lote.id,
       fecha,
-      bultoIds,
+      bultoIds: reapertura ? [] : bultoIds,
+      reaperturaId: reapertura?.id ?? null,
       pesoEntradaKg: entradaTxt,
       lineas: lineas.map(({ presentacionG, unidades }) => ({ presentacionG, unidades })),
       observaciones,
@@ -164,7 +176,7 @@ export function EmpaqueForm({ lote, bultos, config, fechaHoy, bultoIdsIniciales,
   return (
     <form onSubmit={guardar} noValidate className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="space-y-6">
-        {!unSoloBulto && (
+        {!unSoloBulto && !reapertura && (
           <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
             <div>
               <h2 className="text-base font-semibold text-gray-800">Bultos</h2>
@@ -187,6 +199,7 @@ export function EmpaqueForm({ lote, bultos, config, fechaHoy, bultoIdsIniciales,
                 placeholder="Ej: 81"
                 className={CAMPO}
                 value={entradaTxt}
+                readOnly={reapertura !== undefined}
                 onChange={(e) => setEntradaTxt(e.target.value)}
               />
               <p className="text-xs text-gray-500" aria-live="polite">
@@ -197,7 +210,7 @@ export function EmpaqueForm({ lote, bultos, config, fechaHoy, bultoIdsIniciales,
                   Supera el peso disponible ({formatearPeso(pesoDisp)} kg): el sistema no lo aceptará.
                 </p>
               )}
-              {pesoDisp !== null && entradaKg !== pesoDisp && (
+              {!reapertura && pesoDisp !== null && entradaKg !== pesoDisp && (
                 <Button type="button" variant="outline" className="h-11" onClick={() => setEntradaTxt(aTextoDecimal(pesoDisp))}>
                   Usar el disponible ({formatearPeso(pesoDisp)} kg)
                 </Button>

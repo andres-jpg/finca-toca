@@ -67,5 +67,7 @@ export interface KardexProducto {
 
 /** `ref_tipo` de los movimientos que genera un empaque (`ref_id` = el proceso). */
 export const REF_PROCESO = "cafe.proceso";
+/** `ref_tipo` de la reapertura de un lote (CO-33): `ref_id` = el lote. */
+export const REF_LOTE = "cafe.lote";
 /** `ref_tipo` de una venta (CO-31): `ref_id` = la venta. */
 export const REF_VENTA = "cafe.venta";

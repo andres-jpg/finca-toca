@@ -6,7 +6,7 @@ import { traducirErrorRpc, type Result } from "../../rpc/call-rpc";
 import { mensajeRpc } from "../../rpc/mensajes";
 import { requireModulo } from "../../tenants/tenant.guards";
 import { RUTA_CONFIGURACION } from "../../parametros/actions/parametros.service";
-import { getConceptoTarifa } from "../registry";
+import { buscarConceptoTarifaDinamico, getConceptoTarifa } from "../registry";
 import { MARGEN_VIGENCIA_MS, crearTarifaSchema, type CrearTarifaInput } from "../schemas/tarifas.schemas";
 
 // Lógica de las acciones de tarifas. Sin "use server": el Server Action real está en
@@ -27,7 +27,7 @@ export async function crearTarifa(input: CrearTarifaInput): Promise<Result<{ id:
   if (!parsed.success) return datosInvalidos(parsed.error.issues[0]?.message ?? mensajeRpc("datos_invalidos"));
 
   const { concepto, valor, vigenteDesde, observaciones } = parsed.data;
-  const def = getConceptoTarifa(concepto);
+  const def = getConceptoTarifa(concepto) ?? (await buscarConceptoTarifaDinamico(concepto));
   if (!def) return datosInvalidos("Ese concepto no tiene tarifa configurable.");
   await requireModulo(def.modulo);
 

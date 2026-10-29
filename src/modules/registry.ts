@@ -1,5 +1,6 @@
 import { cafeManifest } from "./cafe/manifest";
 import { exportadorLotes } from "./cafe/lotes/exportador";
+import { conceptosPrecioVenta } from "./cafe/ventas/queries/precios.queries";
 import { CONCEPTOS_TARIFA_CAFE, DEFINICIONES_PARAMETROS_CAFE } from "./cafe/parametros";
 import { defineExportadores } from "./core/export/registry";
 import { coreManifest } from "./core/manifest";
@@ -7,7 +8,7 @@ import { construirNav, type SesionNav } from "./core/registry/nav";
 import { defineParametros } from "./core/parametros/registry";
 import { PARAMETRO_IMPRESORA_ANCHO } from "./core/print/parametros";
 import type { ModuleManifest, NavItemDef } from "./core/registry/types";
-import { defineConceptosTarifa } from "./core/tarifas/registry";
+import { defineConceptosTarifa, defineProveedorConceptosTarifa } from "./core/tarifas/registry";
 import { exportadorTerceros } from "./core/terceros/exportador";
 import { cooperativaManifest } from "./cooperativa/manifest";
 import { ganaderiaManifest } from "./ganaderia/manifest";
@@ -38,6 +39,8 @@ export function getNavParaSesion(sesion: SesionNav, opciones: { pwa?: boolean } 
  */
 defineParametros([PARAMETRO_IMPRESORA_ANCHO, ...DEFINICIONES_PARAMETROS_CAFE]);
 defineConceptosTarifa(CONCEPTOS_TARIFA_CAFE);
+// Precios de venta (FIN-112): un concepto por producto terminado activo del cliente, no una lista fija.
+defineProveedorConceptosTarifa("cafe.ventas", conceptosPrecioVenta);
 
 /**
  * Recursos exportables a Excel (`GET /api/export/<recurso>`): los del núcleo y, cuando existan, los de cada

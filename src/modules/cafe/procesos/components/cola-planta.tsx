@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { etiquetaServicio } from "../../lotes/lib/servicios";
 import type { TipoProceso } from "../../lotes/types";
+import { TarjetaReapertura } from "../../reapertura/components/tarjeta-reapertura";
+import type { ReaperturaVista } from "../../reapertura/types";
 import { contarPorPaso, filtrarCola, separarPorLinea } from "../lib/cola";
 import type { TarjetaLotePlanta } from "../types-planta";
 import { TarjetaLote } from "./tarjeta-lote";
@@ -20,17 +22,25 @@ const INACTIVO = "border-gray-300 bg-white text-gray-700 hover:bg-gray-50";
 /**
  * Cola de trabajo de la planta (HU-F1-04). Servicios (clientes) y marca propia van en pestañas SEPARADAS:
  * nunca se mezclan en una lista ni se suman sus kilos (HU-12 c3). Filtro por paso pendiente y búsqueda por
- * código (o cliente); todo se filtra en el navegador sobre la lista que ya trajo el servidor.
+ * código (o cliente); todo se filtra en el navegador sobre la lista que ya trajo el servidor. Las reaperturas de
+ * producto empacado (CO-33) son café de marca propia: salen como tarjetas aparte al principio de esa pestaña, con
+ * los pasos molienda y/o empaque.
  */
-export function ColaPlanta({ tarjetas }: { tarjetas: TarjetaLotePlanta[] }) {
+export function ColaPlanta({ tarjetas, reaperturas = [] }: { tarjetas: TarjetaLotePlanta[]; reaperturas?: ReaperturaVista[] }) {
   const { servicios, marcaPropia } = useMemo(() => separarPorLinea(tarjetas), [tarjetas]);
-  const [pestana, setPestana] = useState<Pestana>(servicios.length === 0 && marcaPropia.length > 0 ? "marca_propia" : "servicios");
+  const [pestana, setPestana] = useState<Pestana>(servicios.length === 0 && marcaPropia.length + reaperturas.length > 0 ? "marca_propia" : "servicios");
   const [paso, setPaso] = useState<TipoProceso | null>(null);
   const [q, setQ] = useState("");
 
   const lista = pestana === "servicios" ? servicios : marcaPropia;
   const visibles = useMemo(() => filtrarCola(lista, { paso, q }), [lista, paso, q]);
   const porPaso = useMemo(() => contarPorPaso(lista), [lista]);
+  // Una reapertura solo tiene molienda y/o empaque: el filtro por trilla o tostión las esconde.
+  const reaperturasVisibles = useMemo(() => {
+    if (pestana !== "marca_propia" || (paso !== null && paso !== "molienda" && paso !== "empaque")) return [];
+    const texto = q.trim().toLowerCase();
+    return reaperturas.filter((r) => texto === "" || r.loteCodigo.toLowerCase().includes(texto));
+  }, [reaperturas, pestana, paso, q]);
 
   return (
     <div className="space-y-4">
@@ -38,7 +48,7 @@ export function ColaPlanta({ tarjetas }: { tarjetas: TarjetaLotePlanta[] }) {
         {(
           [
             ["servicios", "Servicios (clientes)", servicios.length],
-            ["marca_propia", "Marca propia", marcaPropia.length],
+            ["marca_propia", "Marca propia", marcaPropia.length + reaperturas.length],
           ] as const
         ).map(([id, etiqueta, n]) => (
           <button
@@ -84,9 +94,9 @@ export function ColaPlanta({ tarjetas }: { tarjetas: TarjetaLotePlanta[] }) {
         </div>
       </div>
 
-      {visibles.length === 0 ? (
+      {visibles.length === 0 && reaperturasVisibles.length === 0 ? (
         <p className="rounded-lg border border-dashed border-gray-300 px-4 py-12 text-center text-base text-gray-500">
-          {lista.length === 0
+          {lista.length === 0 && (pestana === "servicios" || reaperturas.length === 0)
             ? pestana === "servicios"
               ? "No hay café de clientes pendiente de proceso."
               : "No hay café de marca propia pendiente de proceso."
@@ -94,6 +104,11 @@ export function ColaPlanta({ tarjetas }: { tarjetas: TarjetaLotePlanta[] }) {
         </p>
       ) : (
         <ul className="grid gap-3 xl:grid-cols-2">
+          {reaperturasVisibles.map((r) => (
+            <li key={r.id}>
+              <TarjetaReapertura reapertura={r} />
+            </li>
+          ))}
           {visibles.map((t) => (
             <li key={t.id}>
               <TarjetaLote lote={t} />

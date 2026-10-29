@@ -105,6 +105,12 @@ describe("getNavParaSesion: módulos y verticales", () => {
       "/dashboard/cafe/insumos",
     ]);
     expect(hrefs(sesion("cafe", ["cafe.remisiones"], null, "viewer"))).toEqual(["/dashboard/cafe/remisiones"]);
+    // Ventas (CO-31): cualquier rol la ve (Gerencia solo consulta) y va antes que Remisiones en «Comercial».
+    expect(hrefs(sesion("cafe", ["cafe.ventas"], null, "viewer"))).toEqual(["/dashboard/cafe/ventas"]);
+    expect(hrefs(sesion("cafe", ["cafe.ventas", "cafe.remisiones"], null, "operativo"))).toEqual([
+      "/dashboard/cafe/ventas",
+      "/dashboard/cafe/remisiones",
+    ]);
     expect(hrefs(sesion("cafe", ["cafe.recepcion"], null, "owner"))).toEqual([
       "/dashboard/cafe/lotes",
       "/dashboard/cafe/maestros/tipos",

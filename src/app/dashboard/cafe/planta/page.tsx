@@ -3,6 +3,7 @@ import { requireSesion } from "@/modules/core/auth/guards";
 import { requireModuloPagina } from "@/modules/core/tenants/tenant.guards";
 import { ColaPlanta } from "@/modules/cafe/procesos/components/cola-planta";
 import { getColaPlanta } from "@/modules/cafe/procesos/queries/planta.queries";
+import { getReaperturasPendientes } from "@/modules/cafe/reapertura/queries/reapertura.queries";
 
 /**
  * Cola de trabajo de la planta (HU-F1-04): los lotes con pasos pendientes, servicios (clientes) y marca propia
@@ -15,18 +16,18 @@ export default async function PlantaPage() {
   const { rolTenant } = await requireSesion();
   if (rolTenant === "viewer") redirect("/dashboard/cafe/lotes");
 
-  const cola = await getColaPlanta();
+  const [cola, reaperturas] = await Promise.all([getColaPlanta(), getReaperturasPendientes()]);
 
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-gray-800">Planta</h1>
         <p className="mt-0.5 text-sm text-gray-500">
-          Lotes con trabajo pendiente, del más antiguo al más reciente. Toca uno para registrar trilla, tostión, molienda o empaque.
+          Lotes con trabajo pendiente, del más antiguo al más reciente. Toca uno para registrar trilla, tostión, molienda o empaque. El producto empacado que se reabrió aparece en Marca propia.
         </p>
       </div>
 
-      <ColaPlanta tarjetas={cola} />
+      <ColaPlanta tarjetas={cola} reaperturas={reaperturas} />
     </div>
   );
 }

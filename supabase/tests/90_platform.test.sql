@@ -7,7 +7,7 @@
 -- "actúa como" ese usuario, que es lo que permite probar `platform.*` directamente.
 begin;
 
-select plan(110);
+select plan(111);
 
 -- 0. Preparación --------------------------------------------------------------------------------------------
 insert into auth.users (id, aud, role, email) values
@@ -114,14 +114,25 @@ select is(
 );
 select is(
   (select jsonb_object_agg(x.concepto, x.valor)
-     from public.tarifas x join public.tenants t on t.id = x.tenant_id where t.slug = 'cofradia-demo'),
+     from public.tarifas x join public.tenants t on t.id = x.tenant_id
+    where t.slug = 'cofradia-demo' and x.concepto not like 'cafe.precio\_%'),
   '{"cafe.trilla": 1400, "cafe.tostion": 2200, "cafe.molienda": 1000}'::jsonb,
-  '3 tarifas: trilla 1400, tostión 2200 y molienda 1000 (sin empaque)'
+  '3 tarifas de proceso: trilla 1400, tostión 2200 y molienda 1000 (sin empaque)'
 );
 select ok(
   (select bool_and(x.vigente_desde <= now() and x.unidad = 'kg')
-     from public.tarifas x join public.tenants t on t.id = x.tenant_id where t.slug = 'cofradia-demo'),
+     from public.tarifas x join public.tenants t on t.id = x.tenant_id
+    where t.slug = 'cofradia-demo' and x.concepto not like 'cafe.precio\_%'),
   'las tarifas rigen desde el alta, por kg'
+);
+select is(
+  (select jsonb_object_agg(a.nombre, x.valor)
+     from public.tarifas x
+     join public.tenants t on t.id = x.tenant_id
+     join public.articulos a on a.tenant_id = t.id and cafe.concepto_precio(a.id) = x.concepto
+    where t.slug = 'cofradia-demo' and x.unidad = 'unidad'),
+  '{"Consumo 500 g": 23000, "Excelso 500 g": 29000}'::jsonb,
+  'lista de precios (CO-31): Consumo 500 g 23.000 y Excelso 500 g 29.000; los de 2.500 g sin precio'
 );
 select is(
   (select jsonb_object_agg(p.clave, p.valor)
@@ -132,7 +143,7 @@ select is(
 select is(
   (select array_agg(s.serie order by s.serie)
      from public.series_consecutivo s join public.tenants t on t.id = s.tenant_id where t.slug = 'cofradia-demo' and s.activo and s.reinicia_anual),
-  array['MP', 'MQ', 'REM'], '3 series de consecutivos'
+  array['MP', 'MQ', 'REM', 'VT'], '4 series de consecutivos (lotes, remisiones y ventas)'
 );
 select is(
   (select count(*)::int from public.terceros x join public.tenants t on t.id = x.tenant_id
@@ -168,7 +179,7 @@ select is(
            (select count(*) from public.terceros where tenant_id = t.id),
            (select count(*) from public.articulos where tenant_id = t.id))::text
      from public.tenants t where t.slug = 'cofradia-demo'),
-  '(3,4,3,1,8)', 'no duplica tarifas, parámetros, series, consumidor final ni artículos (4 insumos + 4 productos terminados)'
+  '(5,4,4,1,8)', 'no duplica tarifas (3 de proceso + 2 precios), parámetros, series, consumidor final ni artículos (4 insumos + 4 productos terminados)'
 );
 select is(
   (select p.valor from public.parametros p join public.tenants t on t.id = p.tenant_id
@@ -444,7 +455,7 @@ select is(
 reset role;
 select tests.autenticar_como('nuevo@test');
 select is((select slug from public.tenants), 'cofradia-demo', 'el owner nuevo ve solo su cliente');
-select is((select count(*)::int from public.tarifas), 3, 've sus 3 tarifas');
+select is((select count(*)::int from public.tarifas), 5, 've sus 5 tarifas (3 de proceso y 2 precios de venta)');
 select is((select count(*)::int from public.terceros), 1, 'y su consumidor final (core.terceros activo)');
 select is((select count(*)::int from public.tenant_modulos), 8, 'y solo los módulos de su cliente');
 select is((select count(*)::int from public.gastos) + (select count(*)::int from public.animales), 0,

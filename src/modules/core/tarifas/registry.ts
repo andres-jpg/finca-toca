@@ -38,7 +38,36 @@ export function conceptosTarifaDeModulos(modulos: readonly string[]): ConceptoTa
   return [...conceptos.values()].filter((d) => modulos.includes(d.modulo));
 }
 
+/**
+ * Conceptos que dependen de los datos del cliente (p. ej. un precio de venta por cada producto terminado: el
+ * catálogo cambia sin deploy). El módulo dueño registra una función asíncrona que los lista con el RLS del usuario.
+ */
+export type ProveedorConceptosTarifa = () => Promise<readonly ConceptoTarifaDef[]>;
+
+const proveedores = new Map<ModuloId, ProveedorConceptosTarifa>();
+
+/** Registra el proveedor de conceptos dinámicos de un módulo (idempotente). Lo agrega `src/modules/registry.ts`. */
+export function defineProveedorConceptosTarifa(modulo: ModuloId, proveedor: ProveedorConceptosTarifa): void {
+  proveedores.set(modulo, proveedor);
+}
+
+/** Conceptos dinámicos de los módulos activos del cliente (los lee de su proveedor, uno por módulo). */
+export async function conceptosTarifaDinamicosDeModulos(modulos: readonly string[]): Promise<ConceptoTarifaDef[]> {
+  const activos = [...proveedores].filter(([modulo]) => modulos.includes(modulo));
+  return (await Promise.all(activos.map(([, proveedor]) => proveedor()))).flat();
+}
+
+/** Busca un concepto dinámico por su nombre en todos los proveedores (para validar `crearTarifa`). */
+export async function buscarConceptoTarifaDinamico(concepto: string): Promise<ConceptoTarifaDef | undefined> {
+  for (const proveedor of proveedores.values()) {
+    const def = (await proveedor()).find((d) => d.concepto === concepto);
+    if (def) return def;
+  }
+  return undefined;
+}
+
 /** Solo para los tests: vacía el registro. */
 export function limpiarConceptosTarifa(): void {
   conceptos.clear();
+  proveedores.clear();
 }

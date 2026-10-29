@@ -30,6 +30,10 @@ export interface ConceptoTarifaVista {
   etiqueta: string;
   ayuda?: string;
   unidad: string;
+  /** Texto cuando el concepto aún no tiene tarifa (por defecto, el de los procesos). */
+  textoSinTarifa?: string;
+  /** No pintar el código del concepto (p. ej. un uuid ilegible). */
+  ocultarCodigo?: boolean;
   /** La que rige ahora (`null` si el concepto aún no tiene tarifa). */
   vigente: { valorLabel: string; desdeLabel: string } | null;
   historial: FilaHistorialTarifa[];
@@ -39,6 +43,8 @@ interface TarifasPanelProps {
   conceptos: ConceptoTarifaVista[];
   crearTarifa: (input: CrearTarifaInput) => Promise<Result<{ id: string }>>;
   eliminarTarifa: (id: string) => Promise<Result<{ id: string }>>;
+  /** Nota sobre la sección (por defecto, la de los procesos). */
+  nota?: string;
 }
 
 /** `YYYY-MM-DDTHH:mm` en hora local del navegador, el formato de `datetime-local` (para su `min`). */
@@ -48,14 +54,14 @@ function ahoraLocal(): string {
   return d.toISOString().slice(0, 16);
 }
 
-export function TarifasPanel({ conceptos, crearTarifa, eliminarTarifa }: TarifasPanelProps) {
+export function TarifasPanel({ conceptos, crearTarifa, eliminarTarifa, nota }: TarifasPanelProps) {
   if (conceptos.length === 0) {
     return <p className="text-sm text-gray-500">Tu cliente no tiene conceptos con tarifa configurable.</p>;
   }
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-500">
-        Los procesos ya registrados conservan la tarifa con la que se cobraron.
+        {nota ?? "Los procesos ya registrados conservan la tarifa con la que se cobraron."}
       </p>
       {conceptos.map((c) => (
         <ConceptoCard key={c.concepto} c={c} crearTarifa={crearTarifa} eliminarTarifa={eliminarTarifa} />
@@ -79,7 +85,7 @@ function ConceptoCard({ c, crearTarifa, eliminarTarifa }: { c: ConceptoTarifaVis
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           {c.etiqueta}
-          <span className="text-xs font-normal text-gray-400">{c.concepto}</span>
+          {!c.ocultarCodigo && <span className="text-xs font-normal text-gray-400">{c.concepto}</span>}
         </CardTitle>
         {c.ayuda && <CardDescription>{c.ayuda}</CardDescription>}
       </CardHeader>
@@ -94,7 +100,9 @@ function ConceptoCard({ c, crearTarifa, eliminarTarifa }: { c: ConceptoTarifaVis
               <p className="text-xs text-gray-500">Vigente desde {c.vigente.desdeLabel}</p>
             </div>
           ) : (
-            <p className="text-sm text-amber-700">Sin tarifa definida: los procesos de este concepto no se podrán registrar.</p>
+            <p className="text-sm text-amber-700">
+              {c.textoSinTarifa ?? "Sin tarifa definida: los procesos de este concepto no se podrán registrar."}
+            </p>
           )}
           <NuevaTarifaDialog concepto={c} crearTarifa={crearTarifa} />
         </div>
@@ -197,7 +205,7 @@ function NuevaTarifaDialog({ concepto, crearTarifa }: { concepto: ConceptoTarifa
         <DialogHeader>
           <DialogTitle>Nueva tarifa de {concepto.etiqueta.toLowerCase()}</DialogTitle>
           <DialogDescription>
-            Solo afecta a lo que se registre desde que entre en vigor. Los procesos ya registrados conservan la tarifa con la que se cobraron.
+            Solo afecta a lo que se registre desde que entre en vigor. Lo ya registrado conserva el valor con el que se guardó.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
