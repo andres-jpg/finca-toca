@@ -23,6 +23,8 @@ export const cafeManifest: ModuleManifest = {
     { href: "/dashboard/cafe/inventario", label: "Producto terminado", icon: "Package", modulo: "cafe.inventario", roles: TODOS, grupo: "Inventario", orden: 10 },
     // Insumos de empaque: todos lo ven (Gerencia solo lee); la página y las actions limitan compras y maestro.
     { href: "/dashboard/cafe/insumos", label: "Insumos", icon: "Package", modulo: "cafe.inventario", roles: TODOS, grupo: "Inventario", orden: 20 },
+    // Panel de gerencia (FIN-115): solo lectura, lo ven todos; es la página de inicio de `viewer` (Gerencia) si el cliente tiene
+    // `cafe.dashboard`, que no es módulo base.
     { href: "/dashboard/cafe", label: "Panel", icon: "LayoutDashboard", modulo: "cafe.dashboard", roles: TODOS, grupo: "Gerencia", orden: 10 },
     // Maestro: lo edita solo owner/admin (Terceros y Tarifas, del núcleo, completan el grupo).
     // Remisiones de entrega (FIN-113): las ven todos (Gerencia consulta y reimprime); se generan desde la ficha del lote.
