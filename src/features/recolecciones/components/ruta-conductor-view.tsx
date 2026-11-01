@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { db, type FincaCacheRecord, type PagoLocalRecord } from "@/lib/offline/db";
-import { addToSyncQueue } from "@/lib/offline/sync";
+import { addToSyncQueue, reconciliarRecoleccionesHoy } from "@/lib/offline/sync";
 import { useOnline } from "@/hooks/useOnline";
 import { useSyncQueue } from "@/hooks/useSyncQueue";
 import { Button } from "@/components/ui/button";
@@ -183,38 +183,21 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
           })
         );
 
-        await db.transaction("rw", [db.fincasCache, db.recoleccionesLocal, db.pagosLocal], async () => {
+        await db.transaction(
+          "rw",
+          [db.fincasCache, db.recoleccionesLocal, db.syncQueue, db.pagosLocal],
+          async () => {
           await db.fincasCache.clear();
           await db.fincasCache.bulkPut(fincasToCache);
 
-          // Reconciliar registros ya sincronizados hoy
-          for (const synced of data.syncedToday as { finca_id: number; serverId: number; litros: number; precio_litro: number; fecha: string }[]) {
-            // Guard: descartar si el servidor devolvió datos de otro día (p.ej. respuesta cacheada)
-            if (synced.fecha && synced.fecha !== today) continue;
-            const existing = await db.recoleccionesLocal
-              .where("[finca_id+fecha]")
-              .equals([synced.finca_id, today])
-              .first();
-            if (!existing) {
-              await db.recoleccionesLocal.add({
-                finca_id: synced.finca_id,
-                fecha: today,
-                litros: synced.litros,
-                precio_litro: synced.precio_litro,
-                serverId: synced.serverId,
-                syncStatus: "synced",
-                createdAt: Date.now(),
-                syncedAt: Date.now(),
-              });
-            } else if (existing.syncStatus === "synced" && existing.litros !== synced.litros) {
-              // Actualizar litros si difieren (p.ej. editado desde otro dispositivo)
-              await db.recoleccionesLocal.update(existing.localId!, {
-                litros: synced.litros,
-                precio_litro: synced.precio_litro,
-                serverId: synced.serverId,
-              });
-            }
-          }
+          // Reconciliar con el servidor: una fila local por finca, y cerrar/reenviar las
+          // que quedaron colgadas. Guard: descartar datos de otro día (p.ej. respuesta cacheada).
+          await reconciliarRecoleccionesHoy(
+            today,
+            (data.syncedToday as { finca_id: number; serverId: number; litros: number; precio_litro: number; fecha: string }[]).filter(
+              (r) => !r.fecha || r.fecha === today
+            )
+          );
 
           // Mergear pagos activos: insertar solo si no existen ya (para no sobreescribir pending)
           for (const pago of (data.pagosActivos ?? []) as { id: number; finca_id: number; fecha_inicio: string; fecha_fin: string; estado: string; responsable: string }[]) {
@@ -233,7 +216,10 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
               });
             }
           }
-        });
+          }
+        );
+        // La reconciliación puede haber devuelto registros a "pending": reenviarlos ya.
+        if (!ignore) syncNow();
       })
       .catch(() => {
         // Silencioso — puede que offline
@@ -245,13 +231,13 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
     return () => {
       ignore = true;
     };
+  // syncNow se llama desde el efecto pero no debe re-disparar la carga
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOnline, today]);
 
-  const fincasRegistradas = new Set(
-    (recoleccionesHoy ?? [])
-      .filter((r) => r.syncStatus !== "failed")
-      .map((r) => r.finca_id)
-  );
+  // Cuenta todas las filas, también las "failed": si no, la finca reaparecería en el
+  // desplegable y el conductor crearía un segundo registro para la misma finca y día.
+  const fincasRegistradas = new Set((recoleccionesHoy ?? []).map((r) => r.finca_id));
 
   const fincasRestantes = (fincas ?? []).filter((f) => !fincasRegistradas.has(f.id));
   const selectedFinca = fincas?.find((f) => f.id === selectedFincaId);
@@ -268,17 +254,33 @@ export function RutaConductorView({ itinerarioNombre, userId }: RutaConductorVie
 
     setIsSubmitting(true);
     try {
-      const localId = await db.recoleccionesLocal.add({
-        finca_id: selectedFincaId,
-        fecha: today,
-        litros: parseFloat(litros),
-        precio_litro: finca.precio_litro,
-        serverId: null,
-        syncStatus: "pending",
-        createdAt: Date.now(),
-        syncedAt: null,
+      // Una sola fila local por (finca, día): si ya existe, se reutiliza en vez de duplicarla.
+      const localId = await db.transaction("rw", db.recoleccionesLocal, async () => {
+        const existente = await db.recoleccionesLocal
+          .where("[finca_id+fecha]")
+          .equals([selectedFincaId, today])
+          .first();
+        if (existente?.localId !== undefined) {
+          await db.recoleccionesLocal.update(existente.localId, {
+            litros: parseFloat(litros),
+            precio_litro: finca.precio_litro,
+            syncStatus: "pending",
+            syncedAt: null,
+          });
+          return existente.localId;
+        }
+        return (await db.recoleccionesLocal.add({
+          finca_id: selectedFincaId,
+          fecha: today,
+          litros: parseFloat(litros),
+          precio_litro: finca.precio_litro,
+          serverId: null,
+          syncStatus: "pending",
+          createdAt: Date.now(),
+          syncedAt: null,
+        })) as number;
       });
-      await addToSyncQueue(localId as number);
+      await addToSyncQueue(localId);
       if (isOnline) syncNow();
 
       // Auto-seleccionar la siguiente finca pendiente
