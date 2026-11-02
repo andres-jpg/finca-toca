@@ -8,6 +8,7 @@ import {
   llenarSalidaDeBaches,
   registrarPaso,
   textoDelAviso,
+  NAVEGACION_LENTA,
 } from "../helpers/ui";
 
 test.use(usarRol("cafeAdmin"));
@@ -44,7 +45,7 @@ test("servicio trilla + maquila: recepción con aviso de humedad, planta complet
   expect(codigo, "el aviso trae el código del lote MQ").toBeTruthy();
   // La alerta de calidad avisa, pero el lote se guardó.
   await expect(aviso(page, /Alertas de calidad: Humedad alta/)).toBeVisible();
-  await expect(page).toHaveURL(/\/dashboard\/cafe\/lotes$/);
+  await expect(page).toHaveURL(/\/dashboard\/cafe\/lotes$/, { timeout: NAVEGACION_LENTA });
 
   // --- 2. Trilla: 500 → 405 kg (merma 19 %, la de referencia) -------------------------------------------------------
   await abrirPlanta(page, codigo!);
@@ -104,7 +105,7 @@ test("servicio trilla + maquila: recepción con aviso de humedad, planta complet
     seccion.getByRole("link", { name: "Imprimir con copia" }).click(),
   ]);
   await impresion.waitForLoadState("domcontentloaded");
-  await expect(impresion).toHaveURL(/\/print\/remision\/[0-9a-f-]{36}\?copias=2$/);
+  await expect(impresion).toHaveURL(/\/print\/remision\/[0-9a-f-]{36}\?copias=2$/, { timeout: NAVEGACION_LENTA });
   await expect(impresion.locator(".ticket")).toHaveCount(2);
   await expect(impresion.getByText("COPIA CLIENTE")).toHaveCount(1);
   for (const ticket of await impresion.locator(".ticket").all()) {

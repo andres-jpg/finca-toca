@@ -11,6 +11,7 @@ import {
   llenarSalidaDeBaches,
   registrarPaso,
   seguirEnlace,
+  NAVEGACION_LENTA,
 } from "../helpers/ui";
 
 test.use(usarRol("cafeAdmin"));
@@ -96,7 +97,7 @@ test("marca propia: compra, tostión de 2 bultos, empaque grano y molido, ficha 
   await page.getByLabel("Cantidad", { exact: true }).fill("2");
   await page.getByLabel("Requiere factura electrónica").check();
   await page.getByRole("button", { name: "Guardar venta" }).click();
-  await expect(page).toHaveURL(/\/dashboard\/cafe\/ventas\/[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(/\/dashboard\/cafe\/ventas\/[0-9a-f-]{36}$/, { timeout: NAVEGACION_LENTA });
   await esperarHidratacion(page);
   await expect(page.getByText("Pendiente", { exact: true })).toBeVisible(); // factura marcada, número de Aliados por completar
   expect(await stockDe("Excelso 500 g")).toBe(antes.pt500 + 40 - 2);

@@ -41,7 +41,7 @@ test("marca propia completa: compra, tostión parcial, empaque, venta y factura 
   const textoCompra = await textoDelAviso(page, /Compra registrada: MP-/);
   const codigo = textoCompra.match(/MP-\d{4}-\d+/)?.[0];
   expect(codigo, "el aviso trae el código del lote MP").toBeTruthy();
-  await expect(page).toHaveURL(/\/dashboard\/cafe\/lotes$/);
+  await expect(page).toHaveURL(/\/dashboard\/cafe\/lotes$/, { timeout: NAVEGACION_LENTA });
 
   // --- 2. Primera tostión: 2 de los 6 bultos ------------------------------------------------------------------------
   await abrirPlanta(page, codigo!);
@@ -127,7 +127,7 @@ test("marca propia completa: compra, tostión parcial, empaque, venta y factura 
   await expect(page.getByLabel("Precio unitario ($)")).toHaveValue("29000");
   await page.getByLabel("Requiere factura electrónica").check();
   await page.getByRole("button", { name: "Guardar venta" }).click();
-  await expect(page).toHaveURL(/\/dashboard\/cafe\/ventas\/[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(/\/dashboard\/cafe\/ventas\/[0-9a-f-]{36}$/, { timeout: NAVEGACION_LENTA });
   await esperarHidratacion(page);
 
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Venta");

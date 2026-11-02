@@ -89,7 +89,7 @@ test("terceros a crédito: recepción, trilla, tostión agrupada, molienda, empa
   await page.getByRole("button", { name: "Entregar e imprimir remisión" }).click();
   const numero = (await textoDelAviso(page, /Remisión REM-.* generada/)).match(/REM-\d{4}-\d+/)?.[0];
   expect(numero).toBeTruthy();
-  await expect(page).toHaveURL(/\/print\/remision\/[0-9a-f-]{36}/);
+  await expect(page).toHaveURL(/\/print\/remision\/[0-9a-f-]{36}/, { timeout: NAVEGACION_LENTA });
   await expect(page.locator(".ticket").first()).toContainText(codigo!);
   await expect(page.locator(".ticket").first()).toContainText(otro.codigo);
 

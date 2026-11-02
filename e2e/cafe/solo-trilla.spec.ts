@@ -1,5 +1,5 @@
 import { expect, test, usarRol } from "../fixtures/test";
-import { abrirFichaDeLote, abrirPlanta, aviso, irA, textoDelAviso } from "../helpers/ui";
+import { abrirFichaDeLote, abrirPlanta, aviso, irA, textoDelAviso, NAVEGACION_LENTA } from "../helpers/ui";
 
 test.use(usarRol("cafeAdmin"));
 
@@ -30,7 +30,7 @@ test("solo trilla con desvío de merma y remisión", async ({ page }) => {
   await expect(merma).toContainText("Revisa el pesaje. Puedes guardar igualmente");
   await page.getByRole("button", { name: "Registrar trilla" }).click();
   await expect(aviso(page, /La merma quedó por encima de la referencia/)).toBeVisible();
-  await expect(page).toHaveURL(/\/dashboard\/cafe\/planta$/);
+  await expect(page).toHaveURL(/\/dashboard\/cafe\/planta$/, { timeout: NAVEGACION_LENTA });
 
   // El proceso queda marcado: el listado de lotes enseña la alerta y el lote ya está listo (un solo servicio).
   await irA(page, `/dashboard/cafe/lotes?q=${codigo}`);

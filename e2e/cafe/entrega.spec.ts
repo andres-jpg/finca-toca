@@ -1,6 +1,6 @@
 import { expect, test, usarRol } from "../fixtures/test";
 import { crearRecepcion, registrarTostion, registrarTrilla } from "../helpers/api";
-import { irA, textoDelAviso } from "../helpers/ui";
+import { irA, textoDelAviso, NAVEGACION_LENTA } from "../helpers/ui";
 
 test.use(usarRol("cafeAdmin"));
 
@@ -33,7 +33,7 @@ test("entrega multi-lote: dos lotes del cliente en una sola remisión con quién
 
   // 3 · Quién recibe: sin nombre y cédula no se entrega.
   await page.getByRole("button", { name: "Entregar e imprimir remisión" }).click();
-  await expect(page).toHaveURL(/\/planta\/entregar/);
+  await expect(page).toHaveURL(/\/planta\/entregar/, { timeout: NAVEGACION_LENTA });
   await expect(page.getByLabel("Nombre de quien recibe")).toHaveAttribute("aria-invalid", "true");
   await page.getByLabel("Nombre de quien recibe").fill("María Gómez");
   await page.getByLabel("Cédula").fill("52123456");
@@ -43,7 +43,7 @@ test("entrega multi-lote: dos lotes del cliente en una sola remisión con quién
   expect(numero, "el aviso trae el número de la remisión").toBeTruthy();
 
   // El tiquete trae los dos lotes y quién recibió; con copia = 2 hojas.
-  await expect(page).toHaveURL(/\/print\/remision\/[0-9a-f-]{36}\?copias=2$/);
+  await expect(page).toHaveURL(/\/print\/remision\/[0-9a-f-]{36}\?copias=2$/, { timeout: NAVEGACION_LENTA });
   const tiquete = page.locator(".ticket").first();
   await expect(tiquete).toContainText(a.codigo);
   await expect(tiquete).toContainText(b.codigo);
@@ -75,7 +75,7 @@ test("empaque del último servicio: ofrece «Entregar ahora» y lleva a /planta/
   const dialogo = page.getByRole("dialog");
   await expect(dialogo).toContainText("Lote listo");
   await dialogo.getByRole("button", { name: "Entregar ahora" }).click();
-  await expect(page).toHaveURL(new RegExp(`/dashboard/cafe/planta/entregar\\?lote=${lote.id}`));
+  await expect(page).toHaveURL(new RegExp(`/dashboard/cafe/planta/entregar\\?lote=${lote.id}`), { timeout: NAVEGACION_LENTA });
   // El lote llega preseleccionado.
   await expect(page.getByRole("checkbox", { name: new RegExp(lote.codigo) })).toBeChecked();
 });

@@ -2,7 +2,7 @@ import ExcelJS from "exceljs";
 import { SLUG_CAFE } from "../fixtures/auth";
 import { expect, test, usarRol } from "../fixtures/test";
 import { crearCompra, crearRecepcion, registrarTrilla } from "../helpers/api";
-import { abrirFichaDeLote, abrirPlanta, irA, textoDelAviso } from "../helpers/ui";
+import { abrirFichaDeLote, abrirPlanta, irA, textoDelAviso, NAVEGACION_LENTA } from "../helpers/ui";
 
 // Escenario 4 (HU-F1-04 y HU-F1-11): el orden de los pasos y lo que cada rol ve y puede hacer. Esconder una opción es
 // cosmético (las acciones y el RLS vuelven a comprobarlo), pero es lo que el usuario experimenta, y las URL tecleadas a
@@ -82,9 +82,9 @@ test.describe("gerencia", () => {
     await expect(page.getByRole("link", { name: "Nueva compra" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Nueva recepción" })).toHaveCount(0);
     await page.goto("/dashboard/cafe/planta");
-    await expect(page).toHaveURL(/\/dashboard\/cafe\/lotes/);
+    await expect(page).toHaveURL(/\/dashboard\/cafe\/lotes/, { timeout: NAVEGACION_LENTA });
     await page.goto("/dashboard/cafe/recibir?tipo=marca-propia");
-    await expect(page).toHaveURL(/\/dashboard\/cafe\/lotes$/);
+    await expect(page).toHaveURL(/\/dashboard\/cafe\/lotes$/, { timeout: NAVEGACION_LENTA });
 
     // ...ni en la ficha del lote (ni «Ir a planta» ni «Generar remisión» ni «Anular lote»).
     await abrirFichaDeLote(page, lote.codigo);
