@@ -21,6 +21,7 @@ export function RemisionesFiltros({ filtros, ruta }: { filtros: FiltrosRemisione
 
   return (
     <form method="get" action={ruta} className="rounded-lg border border-stone-200 bg-white p-3 sm:p-4">
+      <input type="hidden" name="tab" value="todas" />
       {tercero && <input type="hidden" name="tercero" value={tercero} />}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
@@ -32,7 +33,7 @@ export function RemisionesFiltros({ filtros, ruta }: { filtros: FiltrosRemisione
           <Label htmlFor="f-estado">Estado</Label>
           <select id="f-estado" name="estado" defaultValue={filtros.estado ?? ""} className={CAMPO}>
             <option value="">Todas</option>
-            <option value="vigente">Vigentes</option>
+            <option value="entregada">Entregadas</option>
             <option value="anulada">Anuladas</option>
           </select>
         </div>
@@ -62,7 +63,7 @@ export function RemisionesFiltros({ filtros, ruta }: { filtros: FiltrosRemisione
 
       <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
         <Button asChild variant="outline" className="h-11 sm:h-9">
-          <Link href={ruta}>Limpiar</Link>
+          <Link href={`${ruta}?tab=todas`}>Limpiar</Link>
         </Button>
         <Button type="submit" className="h-11 sm:h-9">
           Filtrar

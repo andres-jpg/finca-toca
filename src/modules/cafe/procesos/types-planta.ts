@@ -1,4 +1,5 @@
 import type { AlertaCalidad } from "../recepciones/lib/calidad";
+import type { DestinoDiferencia } from "../empaque/lib/empaque";
 import type { LineaEmpaqueVista } from "../empaque/types";
 import type { LineaLote, NivelTueste, TipoProceso } from "../lotes/types";
 import type { ConfigMerma } from "./lib/resumen";
@@ -19,11 +20,16 @@ export interface TarjetaLotePlanta {
   tipoCafe: string | null;
   /** `YYYY-MM-DD`. */
   fechaRecepcion: string;
+  /** Instante en que se registró el lote (`created_at`): la hora de llegada, que se muestra en la zona del cliente. */
+  llegadaEn: string;
   pesoRecibidoKg: number;
   /** Lo que queda en planta ahora (salida atribuida del último paso de cada bulto). */
   pesoActualKg: number;
   numBultos: number;
   nivelTueste: NivelTueste | null;
+  /** Perfil pedido por el cliente (opcional, solo con tostión). */
+  perfilTempC?: number | null;
+  perfilTiempoMin?: number | null;
   alertasCalidad: AlertaCalidad[];
   tieneDesvio: boolean;
   estado: EstadoLote;
@@ -31,6 +37,14 @@ export interface TarjetaLotePlanta {
   avanceTexto: string;
   /** Primer paso requerido con bultos pendientes; `null` si no queda ninguno. */
   siguiente: SiguientePaso | null;
+  /** Pasos que exige el lote (los contratados, o tostión + empaque en marca propia). */
+  serviciosRequeridos: TipoProceso[];
+  /** Bultos que ya pasaron por cada paso. */
+  procesados: Partial<Record<TipoProceso, number>>;
+  /** Cuántos bultos esperan cada etapa (un lote parcial aparece en varias columnas del tablero). */
+  bultosPorEtapa: Partial<Record<TipoProceso, number>>;
+  /** `YYYY-MM-DD` del último proceso vigente: desde cuándo está listo. Solo en lotes `listo`. */
+  listoDesde: string | null;
 }
 
 /** Un bulto con lo que se necesita para decidir si puede pasar por un paso, y de cuándo es cada uno ya hecho. */
@@ -54,13 +68,20 @@ export interface ProcesoHistorial {
   mermaKg: number;
   mermaPct: number;
   desvio: boolean;
+  /** Referencia y tolerancia congeladas al registrar el proceso; `null` = sin referencia (molienda, empaque). */
+  mermaReferenciaPct: number | null;
+  toleranciaPts: number | null;
   valor: number;
   tarifaKg: number;
   nivelTueste: NivelTueste | null;
   observaciones: string | null;
   numBaches: number;
-  /** Presentaciones empacadas (solo el empaque de marca propia, que mueve inventario); vacío en los demás. */
+  /** Líneas de bolsas del empaque (tamaño × unidades); vacío en los demás procesos. */
   lineasEmpaque: LineaEmpaqueVista[];
+  /** Solo empaque (A-01): lo que llegó y no entró en bolsas. NO es merma. `null` en los demás procesos. */
+  diferenciaKg: number | null;
+  /** A dónde fue esa diferencia; `null` si no hubo (o en los empaques anteriores a A-01). */
+  diferenciaDestino: DestinoDiferencia | null;
   /** Números de los bultos que pasaron (vacío en un proceso anulado: sus bultos se liberan). */
   bultos: number[];
   bultoIds: string[];
@@ -93,6 +114,8 @@ export interface LoteParaProceso {
     servicios: TipoProceso[];
     serviciosRequeridos: TipoProceso[];
     nivelTueste: NivelTueste | null;
+    perfilTempC?: number | null;
+    perfilTiempoMin?: number | null;
     alertasCalidad: AlertaCalidad[];
     estado: EstadoLote;
     avanceTexto: string;

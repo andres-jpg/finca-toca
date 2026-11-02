@@ -21,10 +21,13 @@ describe("definiciones de parámetros de café", () => {
   it("los defectos son los de la especificación", () => {
     expect(PARAMETROS_CAFE.capacidadTostadoraKg.defecto).toBe(13.5);
     expect(PARAMETROS_CAFE.mermaReferenciaTrillaPct.defecto).toBe(19);
-    expect(PARAMETROS_CAFE.mermaReferenciaTostionPct.defecto).toBe(18);
-    expect(PARAMETROS_CAFE.mermaToleranciaPts.defecto).toBe(3);
+    for (const p of [PARAMETROS_CAFE.mermaReferenciaTostionBajoPct, PARAMETROS_CAFE.mermaReferenciaTostionMedioPct, PARAMETROS_CAFE.mermaReferenciaTostionAltoPct]) {
+      expect(p.defecto).toBe(18);
+    }
+    expect(PARAMETROS_CAFE.mermaToleranciaPts.defecto).toBe(2);
     expect(PARAMETROS_CAFE.pesoBultoKg.defecto).toBe(62.5);
   });
+
 
   it("humedad y densidad quedan sin configurar (null) hasta que Cofradía los confirme", () => {
     expect(PARAMETROS_CAFE.humedadRangoPct.defecto).toBeNull();

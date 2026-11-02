@@ -29,37 +29,38 @@ test("reapertura: 40 × 500 g, molienda y empaque en 2.500 g @tablet", async ({ 
   const dialogo = page.getByRole("dialog");
   await dialogo.getByRole("button", { name: /^Excelso 500 g/ }).click();
   await dialogo.getByLabel("Unidades a reabrir").fill("40");
-  await expect(dialogo).toContainText("Equivale a 20,000 kg");
+  await expect(dialogo).toContainText(/Equivale a 20(,0+)? kg/);
   await dialogo.getByLabel("Motivo (opcional)").fill(motivo);
   await dialogo.getByRole("button", { name: "Reabrir", exact: true }).click();
-  await expect(aviso(page, /Reabiertas 40 × Excelso 500 g \(20 kg\)/)).toBeVisible();
+  await expect(aviso(page, /Reabiertas 40 × Excelso 500 g \(20(,0)? kg\)/)).toBeVisible();
 
   // El inventario baja y la reapertura queda pendiente en la ficha.
   expect(await stockDe("Excelso 500 g")).toBe(antes.pt500 - 40);
-  await expect(empacado.getByRole("list", { name: "Reaperturas del lote" })).toContainText("40 × Excelso 500 g (20 kg)");
+  await expect(empacado.getByRole("list", { name: "Reaperturas del lote" })).toContainText(/40 × Excelso 500 g \(20(,0)? kg\)/);
   await expect(empacado.getByRole("list", { name: "Reaperturas del lote" })).toContainText("Pendiente");
   await expect(empacado).toContainText(motivo);
 
   // --- 2. Planta: la reapertura espera en la pestaña de marca propia ---------------------------------------------------------
   await irA(page, "/dashboard/cafe/planta");
-  await page.getByRole("tab", { name: /Marca propia/ }).click();
   await page.getByRole("searchbox", { name: "Buscar por código" }).fill(lote.codigo);
   const tarjeta = page.getByRole("link", { name: new RegExp(`Reapertura de ${lote.codigo}`) });
-  await expect(tarjeta).toContainText("20 kg");
+  await expect(tarjeta).toContainText(/20(,0)? kg/);
   await expect(tarjeta).toContainText("Excelso");
   await seguirEnlace(page, tarjeta);
 
   // --- 3. Moler lo reabierto: 20 kg → 19,8 kg --------------------------------------------------------------------------------------
   await expect(page.getByRole("heading", { name: "Moler lo reabierto" })).toBeVisible();
   await page.getByLabel("Peso de salida (kg)").fill("19,8");
-  await expect(page.getByText("Merma 0,200 kg")).toBeVisible();
+  await expect(page.getByText(/Merma 0,2(00)? kg/)).toBeVisible();
   await page.getByRole("button", { name: "Registrar molienda" }).click();
   await expect(aviso(page, "Molienda registrada")).toBeVisible();
 
   // --- 4. Empacar la molienda en 2.500 g: 7 × 2,5 kg = 17,5 kg ---------------------------------------------------------------
   await page.getByRole("tab", { name: /^Empacar/ }).click();
-  await expect(page.getByLabel("Peso de entrada (kg)")).toHaveValue("19,8");
+  await expect(page.getByText(/^19,8 kg$/).first()).toBeVisible();
   await page.getByLabel("Unidades de 2.500 g").fill("7");
+  // Sobran 2,3 kg de lo molido: la diferencia necesita destino para poder guardar.
+  await page.getByRole("radio", { name: "Muestra", exact: true }).click();
   await registrarPaso(page, "Registrar empaque");
 
   expect(await stockDe("Excelso 2.500 g")).toBe(antes.pt2500 + 7);

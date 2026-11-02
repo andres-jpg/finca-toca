@@ -8,6 +8,7 @@ function remision(parcial: Partial<Remision> = {}): Remision {
     numero: "REM-2026-0001",
     loteId: "l1",
     loteCodigo: "MQ-2026-0007",
+    lotes: [],
     fecha: "2026-11-12",
     terceroId: "t1",
     clienteNombre: "Juan Pérez",
@@ -17,6 +18,8 @@ function remision(parcial: Partial<Remision> = {}): Remision {
     mermaTotalKg: 170,
     detalle: [],
     valorServicios: 1923000,
+    recibeNombre: "Ana Ruiz",
+    recibeDocumento: "1020304050",
     recibidoPor: null,
     observaciones: null,
     forzada: false,
@@ -58,9 +61,9 @@ describe("remisionVigente / estadoRemision", () => {
   });
 
   it("estado y etiqueta", () => {
-    expect(estadoRemision(remision())).toBe("vigente");
+    expect(estadoRemision(remision())).toBe("entregada");
     expect(estadoRemision(anulada)).toBe("anulada");
-    expect(etiquetaEstadoRemision("vigente")).toBe("Vigente");
+    expect(etiquetaEstadoRemision("entregada")).toBe("Entregada");
     expect(etiquetaEstadoRemision("anulada")).toBe("Anulada");
   });
 });

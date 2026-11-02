@@ -15,6 +15,8 @@ export interface SesionNav {
 
 /** Orden de los encabezados del menú. Las entradas sin grupo van primero; un grupo desconocido, al final. */
 export const ORDEN_GRUPOS = [
+  "El recorrido del café",
+  "Consultar",
   "Operación",
   "Inventario",
   "Comercial",
@@ -69,6 +71,7 @@ export function construirNav(
     .flatMap((m) => m.nav)
     .filter(
       (item) =>
+        !item.excluirVerticales?.includes(sesion.tenant.vertical) &&
         tieneModulo(sesion.tenant.modulos, item.modulo) &&
         permiteRol(item, sesion) &&
         !ocultoEnPWA(item, sesion.rolLegacy, pwa)

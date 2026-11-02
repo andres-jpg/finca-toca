@@ -79,7 +79,7 @@ describe("etiquetas", () => {
   it("tipo y estado", () => {
     expect(etiquetaTipoVenta("venta")).toBe("Venta");
     expect(etiquetaTipoVenta("cortesia")).toBe("Cortesía");
-    expect(etiquetaEstadoVenta("vigente")).toBe("Vigente");
+    expect(etiquetaEstadoVenta("vigente")).toBeNull();
     expect(etiquetaEstadoVenta("anulada")).toBe("Anulada");
   });
 

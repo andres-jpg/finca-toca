@@ -27,6 +27,15 @@ export type NavItemDef = {
   hideInPWA?: boolean;
   /** Posición dentro del grupo (menor primero). */
   orden: number;
+  /** Número en círculo que se pinta en lugar del icono (pasos de un recorrido, p. ej. «EL RECORRIDO DEL CAFÉ»). */
+  numero?: number;
+  /**
+   * Prefijos de ruta que también marcan esta entrada como activa (pantallas que viven bajo ella aunque su ruta
+   * no cuelgue de `href`, p. ej. las pestañas de Configuración).
+   */
+  activaEn?: string[];
+  /** Verticales donde la entrada NO se muestra (su pantalla se alcanza por otra entrada, p. ej. una pestaña). */
+  excluirVerticales?: Vertical[];
 } & RolesDeEntrada;
 
 /**

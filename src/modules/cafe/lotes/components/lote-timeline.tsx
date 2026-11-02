@@ -1,7 +1,10 @@
 import { AlertTriangle, ArrowLeftRight, Ban, Cog, FileText, Flame, Package, PackageOpen, Truck, Wheat } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { MermaBadge } from "../../components/merma-badge";
+import { calcularMerma } from "../../procesos/lib/merma";
 import { cn } from "@/lib/utils";
 import { formatearCOP, formatearKg } from "@/modules/cafe/compras/lib/compra";
+import { ETIQUETA_DESTINO, type DestinoDiferencia } from "@/modules/cafe/empaque/lib/empaque";
 import { fechaCorta, fechaHoraZona, formatearKg3, formatearMermaPct, formatearPct } from "../lib/formato";
 import {
   etiquetaMotivoMovimiento,
@@ -61,6 +64,18 @@ function Tarjeta({ config, titulo, fecha, children, quien, atenuada = false }: {
   );
 }
 
+/** Detalle desplegable por toque (`<details>`, sin hover ni JavaScript); el resumen ya mide ≥44 px en tablet. */
+function Detalle({ resumen = "Ver detalle", children }: { resumen?: string; children: React.ReactNode }) {
+  return (
+    <details className="group text-sm">
+      <summary className="flex min-h-11 cursor-pointer items-center text-xs font-medium text-sky-800 underline-offset-2 hover:underline sm:min-h-6">
+        {resumen}
+      </summary>
+      <div className="mt-1 space-y-1.5">{children}</div>
+    </details>
+  );
+}
+
 function Recepcion({ datos }: { datos: RecepcionLinea }) {
   return (
     <Tarjeta config={CONFIG_RECEPCION} titulo={datos.linea === "marca_propia" ? "Compra" : "Recepción"} fecha={fechaCorta(datos.fecha)} quien={datos.creadoPor}>
@@ -76,6 +91,7 @@ function Recepcion({ datos }: { datos: RecepcionLinea }) {
 
 function Proceso({ datos, numBultosLote, reapertura }: { datos: ProcesoLinea; numBultosLote: number; reapertura: ReaperturaLinea | null }) {
   const anulado = datos.anulacion !== null;
+  const mermaProceso = calcularMerma(datos.pesoEntradaKg, datos.pesoSalidaKg);
   return (
     <Tarjeta
       config={CONFIG_PROCESO[datos.tipo]}
@@ -89,41 +105,65 @@ function Proceso({ datos, numBultosLote, reapertura }: { datos: ProcesoLinea; nu
           <span className="tabular-nums">
             {formatearKg3(datos.pesoEntradaKg)} → {formatearKg3(datos.pesoSalidaKg)} kg
           </span>
-          <span className="tabular-nums text-gray-600">
-            {" "}
-            · merma {formatearKg3(datos.mermaKg)} kg ({formatearMermaPct(datos.mermaKg, datos.pesoEntradaKg)})
-          </span>
+          {datos.tipo === "empaque" ? (
+            // El empaque no tiene merma (A-01): lo que llega = bolsas + diferencia, y la diferencia tiene destino.
+            <span className="tabular-nums text-gray-600">
+              {datos.diferenciaKg != null && datos.diferenciaKg > 0 && (
+                <>
+                  {" "}
+                  · diferencia {formatearKg3(datos.diferenciaKg)} kg
+                  {datos.diferenciaDestino && ETIQUETA_DESTINO[datos.diferenciaDestino as DestinoDiferencia]
+                    ? ` (${ETIQUETA_DESTINO[datos.diferenciaDestino as DestinoDiferencia].toLowerCase()})`
+                    : ""}
+                </>
+              )}
+            </span>
+          ) : (
+            <span className="tabular-nums text-gray-600">
+              {" "}
+              · merma {formatearKg3(datos.mermaKg)} kg ({formatearMermaPct(datos.mermaKg, datos.pesoEntradaKg)})
+            </span>
+          )}
         </p>
         {datos.reaperturaId && (
           <p className="text-xs font-medium text-amber-800">
             De la reapertura{reapertura ? ` de ${reapertura.texto}` : ""}
           </p>
         )}
-        <p className="text-xs text-gray-600">
-          {datos.bultos.length > 0 && <>Bultos: {listaBultos(datos.bultos, numBultosLote)}</>}
-          {datos.nivelTueste && <> · Tueste {etiquetaTueste(datos.nivelTueste).toLowerCase()}</>}
-          {datos.valor > 0 && (
-            <>
-              {" "}
-              · Valor <span className="tabular-nums">{formatearCOP(datos.valor)}</span> (tarifa{" "}
-              <span className="tabular-nums">{formatearCOP(datos.tarifaKg)}</span>/kg)
-            </>
-          )}
-        </p>
         {datos.lineasEmpaque && datos.lineasEmpaque.length > 0 && (
           <p className="text-sm font-medium text-gray-800">
             Empacado: {datos.lineasEmpaque.map((l) => `${l.unidades} × ${l.producto}`).join(" · ")}
           </p>
         )}
-        {datos.observaciones && <p className="text-xs italic text-gray-600">{datos.observaciones}</p>}
+        <Detalle>
+          <p className="text-xs text-gray-600">
+            {datos.bultos.length > 0 && <>Bultos: {listaBultos(datos.bultos, numBultosLote)}</>}
+            {datos.nivelTueste && <> · Tueste {etiquetaTueste(datos.nivelTueste).toLowerCase()}</>}
+            {datos.valor > 0 && (
+              <>
+                {" "}
+                · Valor <span className="tabular-nums">{formatearCOP(datos.valor)}</span> (tarifa{" "}
+                <span className="tabular-nums">{formatearCOP(datos.tarifaKg)}</span>/kg)
+              </>
+            )}
+          </p>
+          {datos.creadoPor && <p className="text-xs text-gray-600">Operario: {datos.creadoPor}</p>}
+          {datos.observaciones && <p className="text-xs italic text-gray-600">{datos.observaciones}</p>}
+        </Detalle>
       </div>
 
-      {datos.desvio && !anulado && (
-        <p className="flex flex-wrap items-center gap-1 text-xs font-medium text-amber-700">
-          <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
-          Merma desviada
-          {datos.mermaReferenciaPct !== null &&
-            ` (referencia ${formatearPct(datos.mermaReferenciaPct)}${datos.toleranciaPts !== null ? ` ± ${formatearPct(datos.toleranciaPts).replace(" %", " pts")}` : ""})`}
+      {mermaProceso && !anulado && datos.mermaReferenciaPct !== null && (
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-600">
+          <MermaBadge
+            mermaPct={mermaProceso.mermaPct}
+            referenciaPct={datos.mermaReferenciaPct}
+            toleranciaPts={datos.toleranciaPts}
+            tipo={datos.tipo}
+          />
+          <span>
+            referencia {formatearPct(datos.mermaReferenciaPct)}
+            {datos.toleranciaPts !== null && ` ± ${formatearPct(datos.toleranciaPts).replace(" %", " pts")}`}
+          </span>
         </p>
       )}
 
@@ -137,7 +177,7 @@ function Proceso({ datos, numBultosLote, reapertura }: { datos: ProcesoLinea; nu
 
       {datos.baches.length > 0 && (
         <details className="text-sm">
-          <summary className="min-h-6 cursor-pointer text-xs font-medium text-orange-700 underline-offset-2 hover:underline">
+          <summary className="flex min-h-11 cursor-pointer items-center text-xs font-medium text-orange-700 underline-offset-2 hover:underline sm:min-h-6">
             {datos.baches.length} {datos.baches.length === 1 ? "bache" : "baches"}
           </summary>
           <div className="mt-2 overflow-x-auto rounded-md border border-orange-200 bg-white">
@@ -157,7 +197,20 @@ function Proceso({ datos, numBultosLote, reapertura }: { datos: ProcesoLinea; nu
                     <td className="px-2 py-1">{b.numero}</td>
                     <td className="px-2 py-1 text-right">{formatearKg3(b.pesoEntradaKg)}</td>
                     <td className="px-2 py-1 text-right">{formatearKg3(b.pesoSalidaKg)}</td>
-                    <td className="px-2 py-1 text-right">{formatearPct(mermaPctBache(b))}</td>
+                    <td className="px-2 py-1 text-right">
+                      <span className="inline-flex flex-wrap items-center justify-end gap-1">
+                        {formatearPct(mermaPctBache(b))}
+                        {mermaProceso && (
+                          <MermaBadge
+                            mermaPct={calcularMerma(b.pesoEntradaKg, b.pesoSalidaKg)?.mermaPct ?? Number.NaN}
+                            referenciaPct={datos.mermaReferenciaPct}
+                            toleranciaPts={datos.toleranciaPts}
+                            tipo={datos.tipo}
+                            conAyuda={false}
+                          />
+                        )}
+                      </span>
+                    </td>
                     <td className="px-2 py-1 text-right">{b.temperaturaC ?? "—"}</td>
                   </tr>
                 ))}
@@ -178,7 +231,11 @@ function Movimiento({ datos }: { datos: MovimientoLinea }) {
         {datos.articulo}: <span className="tabular-nums font-medium">{signo}{formatearKg(Math.abs(datos.cantidad))}</span>
         <span className="text-gray-600"> · {etiquetaMotivoMovimiento(datos.motivo)}</span>
       </p>
-      {datos.observaciones && <p className="text-xs italic text-gray-600">{datos.observaciones}</p>}
+      {datos.observaciones && (
+        <Detalle>
+          <p className="text-xs italic text-gray-600">{datos.observaciones}</p>
+        </Detalle>
+      )}
     </Tarjeta>
   );
 }
@@ -191,7 +248,11 @@ function Reapertura({ datos }: { datos: ReaperturaLinea }) {
         <span className="tabular-nums font-medium">{datos.texto}</span>
         <span className="text-gray-600"> · descontado del producto terminado</span>
       </p>
-      {datos.motivo && <p className="text-xs italic text-gray-600">{datos.motivo}</p>}
+      {datos.motivo && (
+        <Detalle resumen="Ver motivo">
+          <p className="text-xs italic text-gray-600">{datos.motivo}</p>
+        </Detalle>
+      )}
     </Tarjeta>
   );
 }
@@ -210,10 +271,12 @@ function Remision({ datos }: { datos: RemisionLinea }) {
             · merma {formatearKg3(datos.mermaTotalKg)} kg ({formatearMermaPct(datos.mermaTotalKg, datos.pesoRecibidoKg)})
           </span>
         </p>
+      </div>
+      <Detalle>
         <p className="text-xs text-gray-600">
           Valor de los servicios <span className="tabular-nums">{formatearCOP(datos.valorServicios)}</span> (referencia)
         </p>
-      </div>
+      </Detalle>
       {datos.forzada && !anulada && (
         <p className="flex flex-wrap items-center gap-1 text-xs font-medium text-amber-700">
           <AlertTriangle className="h-3.5 w-3.5" aria-hidden />

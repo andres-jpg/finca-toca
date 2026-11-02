@@ -1,16 +1,17 @@
 import Link from "next/link";
+import { COPY } from "../../copy";
 import { Fragment } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { calcularAvance } from "../lib/avance";
-import { fechaCorta, formatearKg3, formatearMermaPct } from "../lib/formato";
+import { fechaCorta, formatearKg3, formatearPct, horaLlegada } from "../lib/formato";
 import { hayFiltros, type FiltrosLotes } from "../lib/filtros";
 import type { LoteListado } from "../queries/lotes.queries";
 import { AlertasLote } from "./alertas-lote";
 import { AvanceBarra } from "./avance-barra";
 import { EstadoLoteBadge, TipoLoteBadge } from "./insignias";
 
-const COLUMNAS = 11;
+const COLUMNAS = 12;
 
 /**
  * Listado de lotes: código (enlace a la ficha), tipo, proveedor/cliente, tipo de café, fecha, kg recibidos y
@@ -18,7 +19,7 @@ const COLUMNAS = 11;
  * con un separador visible: el listado llega ordenado por línea y NUNCA se suma ningún peso entre filas, así que
  * los kilos de café propio y de clientes no se mezclan en ningún total.
  */
-export function LotesTable({ lotes, filtros }: { lotes: LoteListado[]; filtros: FiltrosLotes }) {
+export function LotesTable({ lotes, filtros, zonaHoraria }: { lotes: LoteListado[]; filtros: FiltrosLotes; zonaHoraria: string }) {
   if (lotes.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500">
@@ -40,9 +41,10 @@ export function LotesTable({ lotes, filtros }: { lotes: LoteListado[]; filtros: 
             <TableHead>Proveedor / cliente</TableHead>
             <TableHead>Tipo de café</TableHead>
             <TableHead>Fecha</TableHead>
+            <TableHead>Llegada</TableHead>
             <TableHead className="text-right">Kg recibidos</TableHead>
             <TableHead className="text-right">Kg actuales</TableHead>
-            <TableHead className="text-right">Merma total</TableHead>
+            <TableHead className="text-right">Merma procesada</TableHead>
             <TableHead>Avance</TableHead>
             <TableHead>Estado</TableHead>
             <TableHead>Alertas</TableHead>
@@ -66,7 +68,7 @@ export function LotesTable({ lotes, filtros }: { lotes: LoteListado[]; filtros: 
                 {separador && (
                   <TableRow className="bg-stone-100 hover:bg-stone-100">
                     <TableCell colSpan={COLUMNAS} className="py-1.5 text-xs font-semibold uppercase tracking-wide text-stone-600">
-                      {l.linea === "marca_propia" ? "Marca propia (café comprado)" : "Servicios (café de clientes)"}
+                      {l.linea === "marca_propia" ? COPY.marcaPropiaCafeComprado : COPY.serviciosCafeTerceros}
                     </TableCell>
                   </TableRow>
                 )}
@@ -82,9 +84,10 @@ export function LotesTable({ lotes, filtros }: { lotes: LoteListado[]; filtros: 
                   <TableCell>{l.tercero}</TableCell>
                   <TableCell>{l.tipoCafe ?? "—"}</TableCell>
                   <TableCell className="tabular-nums">{fechaCorta(l.fechaRecepcion)}</TableCell>
+                  <TableCell className="whitespace-nowrap tabular-nums">{horaLlegada(l.llegadaEn, zonaHoraria)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatearKg3(l.pesoRecibidoKg)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatearKg3(l.pesoActualKg)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatearMermaPct(l.mermaTotalKg, l.pesoRecibidoKg)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatearPct(l.mermaProcesada?.pct)}</TableCell>
                   <TableCell>
                     <AvanceBarra avance={avance} completo={l.estado === "listo" || l.estado === "entregado"} />
                   </TableCell>

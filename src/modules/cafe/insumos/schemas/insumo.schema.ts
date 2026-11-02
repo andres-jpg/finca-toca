@@ -64,12 +64,12 @@ export const compraInsumoSchema = z.object({
     .int("La cantidad debe ser un número entero")
     .gt(0, "La cantidad debe ser mayor a 0")
     .max(10_000_000, "La cantidad es demasiado grande"),
+  /** Precio unitario (COP), obligatorio desde A-05: con él se calcula el costo promedio ponderado de la bolsa o etiqueta. */
   costoUnitario: z
-    .number({ message: "El costo debe ser un número" })
-    .min(0, "El costo no puede ser negativo")
-    .max(1_000_000_000, "El costo es demasiado grande")
-    .nullish()
-    .transform((v) => v ?? null),
+    .number({ message: "Indica el precio unitario" })
+    .refine(Number.isFinite, { message: "Indica el precio unitario" })
+    .min(0, "El precio no puede ser negativo")
+    .max(1_000_000_000, "El precio es demasiado grande"),
   terceroId: z.uuid({ message: "El proveedor no es válido" }).nullish().transform((v) => v ?? null),
   /** `YYYY-MM-DD` en la zona del cliente. */
   fecha: z.string({ message: "Indica la fecha" }).regex(/^\d{4}-\d{2}-\d{2}$/, "La fecha no es válida"),

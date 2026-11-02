@@ -13,11 +13,9 @@ export function InsigniaTipoVenta({ tipo }: { tipo: TipoVenta }) {
 }
 
 export function InsigniaEstadoVenta({ estado }: { estado: EstadoVenta }) {
-  return (
-    <Badge className={estado === "vigente" ? "bg-teal-100 text-teal-800 hover:bg-teal-100" : "bg-red-100 text-red-700 hover:bg-red-100"}>
-      {etiquetaEstadoVenta(estado)}
-    </Badge>
-  );
+  const texto = etiquetaEstadoVenta(estado);
+  if (!texto) return null;
+  return <Badge className="bg-red-100 text-red-700 hover:bg-red-100">{texto}</Badge>;
 }
 
 /**

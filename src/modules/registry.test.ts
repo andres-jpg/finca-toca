@@ -100,20 +100,19 @@ describe("getNavParaSesion: módulos y verticales", () => {
 
   it("café solo muestra las entradas de los módulos que tiene", () => {
     expect(hrefs(sesion("cafe", ["cafe.procesos"], null, "owner"))).toEqual(["/dashboard/cafe/planta"]);
-    expect(hrefs(sesion("cafe", ["cafe.inventario"], null, "owner"))).toEqual([
-      "/dashboard/cafe/inventario",
-      "/dashboard/cafe/insumos",
-    ]);
+    // Insumos ya no es entrada de menú: es una pestaña de Configuración (A-07).
+    expect(hrefs(sesion("cafe", ["cafe.inventario"], null, "owner"))).toEqual(["/dashboard/cafe/inventario"]);
     expect(hrefs(sesion("cafe", ["cafe.remisiones"], null, "viewer"))).toEqual(["/dashboard/cafe/remisiones"]);
-    // Ventas (CO-31): cualquier rol la ve (Gerencia solo consulta) y va antes que Remisiones en «Comercial».
-    expect(hrefs(sesion("cafe", ["cafe.ventas"], null, "viewer"))).toEqual(["/dashboard/cafe/ventas"]);
+    // Ventas (CO-31): cualquier rol la ve (Gerencia solo consulta); va en el recorrido, antes de «Consultar».
+    expect(hrefs(sesion("cafe", ["cafe.ventas"], null, "viewer"))).toEqual(["/dashboard/cafe/ventas/nueva"]);
     expect(hrefs(sesion("cafe", ["cafe.ventas", "cafe.remisiones"], null, "operativo"))).toEqual([
-      "/dashboard/cafe/ventas",
+      "/dashboard/cafe/ventas/nueva",
       "/dashboard/cafe/remisiones",
     ]);
     expect(hrefs(sesion("cafe", ["cafe.recepcion"], null, "owner"))).toEqual([
+      "/dashboard/cafe/recibir",
       "/dashboard/cafe/lotes",
-      "/dashboard/cafe/maestros/tipos",
+      "/dashboard/cafe/configuracion",
     ]);
   });
 });
@@ -126,8 +125,8 @@ describe("getNavParaSesion: entradas del núcleo (core.terceros)", () => {
     expect(hrefs(sesion("cafe", [], null, "owner"))).toEqual([]);
   });
 
-  it("con el módulo activo, owner y admin ven Terceros y Tarifas en cualquier vertical", () => {
-    expect(hrefs(sesion("cafe", ["core.terceros"], null, "owner"))).toEqual(["/dashboard/terceros", "/dashboard/tarifas"]);
+  it("con el módulo activo, owner y admin ven Terceros y Tarifas (salvo en café, donde son pestañas de Configuración)", () => {
+    expect(hrefs(sesion("ganaderia", ["core.terceros"], null, "owner"))).toEqual(["/dashboard/terceros", "/dashboard/tarifas"]);
     expect(hrefs(sesion("cooperativa", ["core.terceros"], null, "admin"))).toEqual([
       "/dashboard/terceros",
       "/dashboard/tarifas",
@@ -135,7 +134,8 @@ describe("getNavParaSesion: entradas del núcleo (core.terceros)", () => {
   });
 
   it("un viewer ve Terceros pero no Tarifas (solo owner/admin configuran)", () => {
-    expect(hrefs(sesion("cafe", ["core.terceros"], null, "viewer"))).toEqual(["/dashboard/terceros"]);
+    expect(hrefs(sesion("cooperativa", ["core.terceros"], null, "viewer"))).toEqual(["/dashboard/terceros"]);
+    expect(hrefs(sesion("cafe", ["core.terceros"], null, "owner"))).toEqual([]);
   });
 
   it("se agregan a las pantallas legacy después de ellas y agrupados (Maestros, luego Configuración)", () => {
@@ -158,45 +158,71 @@ describe("getNavParaSesion: tenant de café (CO-21)", () => {
     "core.auditoria",
   ];
 
-  it("admin: menú agrupado Operación (lotes, planta), Inventario (producto terminado, insumos), Comercial (remisiones), Gerencia y Maestros (tipos, terceros, tarifas)", () => {
-    expect(resumen(sesion("cafe", MODULOS_CAFE, null, "admin"))).toEqual([
-      { href: "/dashboard/cafe/lotes", label: "Lotes", icon: "Boxes" },
-      { href: "/dashboard/cafe/planta", label: "Planta", icon: "Factory" },
-      { href: "/dashboard/cafe/inventario", label: "Producto terminado", icon: "Package" },
-      { href: "/dashboard/cafe/insumos", label: "Insumos", icon: "Package" },
-      { href: "/dashboard/cafe/remisiones", label: "Remisiones", icon: "FileText" },
+  const MODULOS_COFRADIA = [...MODULOS_CAFE, "cafe.ventas", "core.equipo"];
+  const resumenCafe = (rol: "owner" | "admin" | "operativo" | "viewer") =>
+    resumen(sesion("cafe", MODULOS_COFRADIA, null, rol));
+
+  it("admin (A-07): 8 opciones — Panel, el recorrido ①–④, Consultar y Configuración", () => {
+    const r = resumenCafe("admin")!;
+    expect(r).toHaveLength(8);
+    expect(r).toEqual([
       { href: "/dashboard/cafe", label: "Panel", icon: "LayoutDashboard" },
-      { href: "/dashboard/cafe/maestros/tipos", label: "Tipos de café", icon: "Coffee" },
-      { href: "/dashboard/terceros", label: "Terceros", icon: "Handshake" },
-      { href: "/dashboard/tarifas", label: "Tarifas y parámetros", icon: "SlidersHorizontal" },
+      { href: "/dashboard/cafe/recibir", label: "Recibir café", icon: "ArrowDownCircle" },
+      { href: "/dashboard/cafe/planta", label: "Planta", icon: "Factory" },
+      { href: "/dashboard/cafe/inventario", label: "Inventario", icon: "Package" },
+      { href: "/dashboard/cafe/ventas/nueva", label: "Ventas marca propia", icon: "ArrowUpCircle" },
+      { href: "/dashboard/cafe/lotes", label: "Lotes", icon: "Boxes" },
+      { href: "/dashboard/cafe/remisiones", label: "Remisiones a terceros", icon: "FileText" },
+      { href: "/dashboard/cafe/configuracion", label: "Configuración", icon: "Settings" },
+    ]);
+  });
+
+  it("los pasos del recorrido van numerados 1–4 en orden", () => {
+    const nav = getNavParaSesion(sesion("cafe", MODULOS_COFRADIA, null, "admin"));
+    expect(nav.filter((i) => i.grupo === "El recorrido del café").map((i) => [i.numero, i.label])).toEqual([
+      [1, "Recibir café"],
+      [2, "Planta"],
+      [3, "Inventario"],
+      [4, "Ventas marca propia"],
     ]);
   });
 
   it("owner ve lo mismo que admin", () => {
-    expect(hrefs(sesion("cafe", MODULOS_CAFE, null, "owner"))).toEqual(hrefs(sesion("cafe", MODULOS_CAFE, null, "admin")));
+    expect(hrefs(sesion("cafe", MODULOS_COFRADIA, null, "owner"))).toEqual(hrefs(sesion("cafe", MODULOS_COFRADIA, null, "admin")));
   });
 
-  it("operativo: lotes, planta, producto terminado, insumos, remisiones, panel y terceros (sin tipos de café ni tarifas)", () => {
-    expect(resumen(sesion("cafe", MODULOS_CAFE, null, "operativo"))).toEqual([
-      { href: "/dashboard/cafe/lotes", label: "Lotes", icon: "Boxes" },
-      { href: "/dashboard/cafe/planta", label: "Planta", icon: "Factory" },
-      { href: "/dashboard/cafe/inventario", label: "Producto terminado", icon: "Package" },
-      { href: "/dashboard/cafe/insumos", label: "Insumos", icon: "Package" },
-      { href: "/dashboard/cafe/remisiones", label: "Remisiones", icon: "FileText" },
-      { href: "/dashboard/cafe", label: "Panel", icon: "LayoutDashboard" },
-      { href: "/dashboard/terceros", label: "Terceros", icon: "Handshake" },
+  it("operativo (A-07): 6 opciones, sin Panel ni Configuración", () => {
+    const r = resumenCafe("operativo")!;
+    expect(r.map((i) => i.href)).toEqual([
+      "/dashboard/cafe/recibir",
+      "/dashboard/cafe/planta",
+      "/dashboard/cafe/inventario",
+      "/dashboard/cafe/ventas/nueva",
+      "/dashboard/cafe/lotes",
+      "/dashboard/cafe/remisiones",
     ]);
   });
 
-  it("viewer (gerencia): consulta lotes, producto terminado, insumos, remisiones, panel y terceros, pero no ve Planta", () => {
-    expect(resumen(sesion("cafe", MODULOS_CAFE, null, "viewer"))).toEqual([
-      { href: "/dashboard/cafe/lotes", label: "Lotes", icon: "Boxes" },
-      { href: "/dashboard/cafe/inventario", label: "Producto terminado", icon: "Package" },
-      { href: "/dashboard/cafe/insumos", label: "Insumos", icon: "Package" },
-      { href: "/dashboard/cafe/remisiones", label: "Remisiones", icon: "FileText" },
-      { href: "/dashboard/cafe", label: "Panel", icon: "LayoutDashboard" },
-      { href: "/dashboard/terceros", label: "Terceros", icon: "Handshake" },
+  it("viewer (gerencia, no se asigna en Cofradía): Panel y lo que consulta, sin Recibir ni Planta ni Configuración", () => {
+    expect(resumenCafe("viewer")!.map((i) => i.href)).toEqual([
+      "/dashboard/cafe",
+      "/dashboard/cafe/inventario",
+      "/dashboard/cafe/ventas/nueva",
+      "/dashboard/cafe/lotes",
+      "/dashboard/cafe/remisiones",
     ]);
+  });
+
+  it("Tipos de café, Terceros, Tarifas, Insumos (ahora pestaña de Inventario) y Equipo ya no son entradas de menú en café (viven en Configuración)", () => {
+    const h = hrefs(sesion("cafe", MODULOS_COFRADIA, null, "admin"));
+    for (const ruta of ["/dashboard/cafe/maestros/tipos", "/dashboard/terceros", "/dashboard/tarifas", "/dashboard/cafe/insumos", "/dashboard/equipo"]) {
+      expect(h).not.toContain(ruta);
+    }
+  });
+
+  it("Configuración se resalta en las pantallas que agrupa", () => {
+    const conf = getNavParaSesion(sesion("cafe", MODULOS_COFRADIA, null, "admin")).find((i) => i.label === "Configuración");
+    expect(conf?.activaEn).toEqual(expect.arrayContaining(["/dashboard/terceros", "/dashboard/tarifas", "/dashboard/equipo", "/dashboard/cafe/maestros"]));
   });
 
   it("sin cafe.dashboard no hay Panel (no es módulo base)", () => {
@@ -215,18 +241,20 @@ describe("getNavParaSesion: tenant de café (CO-21)", () => {
 describe("getNavParaSesion: Equipo (core.equipo)", () => {
   it("sin el módulo no hay entrada: ganadería y cooperativa no lo tienen de serie", () => {
     expect(hrefs(sesion("ganaderia", BASE_GANADERIA, "admin"))).not.toContain("/dashboard/equipo");
-    expect(hrefs(sesion("cafe", ["core.terceros"], null, "owner"))).not.toContain("/dashboard/equipo");
+    expect(hrefs(sesion("cooperativa", ["core.terceros"], null, "admin"))).not.toContain("/dashboard/equipo");
   });
 
   it("owner y admin lo ven; un operativo y la gerencia (viewer) no", () => {
-    expect(hrefs(sesion("cafe", ["core.equipo"], null, "owner"))).toEqual(["/dashboard/equipo"]);
-    expect(hrefs(sesion("cafe", ["core.equipo"], null, "admin"))).toEqual(["/dashboard/equipo"]);
-    expect(hrefs(sesion("cafe", ["core.equipo"], null, "operativo"))).toEqual([]);
-    expect(hrefs(sesion("cafe", ["core.equipo"], null, "viewer"))).toEqual([]);
+    expect(hrefs(sesion("cooperativa", ["core.equipo"], null, "owner"))).toEqual(["/dashboard/equipo"]);
+    expect(hrefs(sesion("cooperativa", ["core.equipo"], null, "admin"))).toEqual(["/dashboard/equipo"]);
+    expect(hrefs(sesion("cooperativa", ["core.equipo"], null, "operativo"))).toEqual([]);
+    expect(hrefs(sesion("cooperativa", ["core.equipo"], null, "viewer"))).toEqual([]);
+    // En café es una pestaña de Configuración, no una entrada.
+    expect(hrefs(sesion("cafe", ["core.equipo"], null, "owner"))).toEqual([]);
   });
 
   it("va en Maestros, después de Terceros y de Tarifas y parámetros", () => {
-    expect(hrefs(sesion("cafe", ["core.terceros", "core.equipo"], null, "admin"))).toEqual([
+    expect(hrefs(sesion("cooperativa", ["core.terceros", "core.equipo"], null, "admin"))).toEqual([
       "/dashboard/terceros",
       "/dashboard/tarifas",
       "/dashboard/equipo",

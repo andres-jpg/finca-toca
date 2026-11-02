@@ -25,8 +25,26 @@ describe("empaqueSchema", () => {
       bultos: [BULTO],
       peso_entrada_kg: 81,
       lineas: [{ presentacion_g: 500, unidades: 120 }, { presentacion_g: 2500, unidades: 8 }],
+      diferencia_destino: null,
       observaciones: null,
     });
+  });
+
+  it("el destino de la diferencia y la bolsa del cliente viajan al payload", () => {
+    const r = empaqueSchema.parse({
+      ...base,
+      diferenciaDestino: "suelto",
+      lineas: [{ presentacionG: 5000, unidades: 10, bolsaCliente: true }, { presentacionG: 2500, unidades: 5 }],
+    });
+    expect(payloadEmpaque(r)).toMatchObject({
+      diferencia_destino: "suelto",
+      lineas: [{ presentacion_g: 5000, unidades: 10, bolsa_cliente: true }, { presentacion_g: 2500, unidades: 5 }],
+    });
+  });
+
+  it("un destino desconocido es un error", () => {
+    expect(empaqueSchema.safeParse({ ...base, diferenciaDestino: "regalo" }).success).toBe(false);
+    expect(empaqueSchema.safeParse({ ...base, diferenciaDestino: "granel" }).success).toBe(true);
   });
 
   it("el peso de entrada es opcional (la base toma el disponible) y acepta coma decimal", () => {
@@ -109,3 +127,46 @@ describe("salidaPtSchema", () => {
     }
   });
 });
+
+describe("forma y molienda (A-02)", () => {
+  const baseMolido = {
+    loteId: "11111111-1111-4111-8111-111111111111",
+    fecha: "2026-11-10",
+    bultoIds: [],
+    lineas: [
+      { presentacionG: 500, unidades: 40 },
+      { presentacionG: 2500, unidades: 8, forma: "molido" },
+    ],
+  };
+
+  it("la forma por defecto es grano y el molido viaja al payload junto con la molienda (coma decimal)", () => {
+    const r = empaqueSchema.parse({ ...baseMolido, molienda: { entradaKg: "22", salidaKg: "20,4" } });
+    expect(r.lineas.map((l) => l.forma)).toEqual(["grano", "molido"]);
+    const p = payloadEmpaque(r) as Record<string, unknown>;
+    expect(p.lineas).toEqual([
+      { presentacion_g: 500, unidades: 40 },
+      { presentacion_g: 2500, unidades: 8, forma: "molido" },
+    ]);
+    expect(p.molienda).toEqual({ peso_entrada_kg: 22, peso_salida_kg: 20.4 });
+  });
+
+  it("la misma presentación puede ir en grano y en molido; repetir la misma forma no", () => {
+    const dos = [
+      { presentacionG: 500, unidades: 4, forma: "grano" },
+      { presentacionG: 500, unidades: 6, forma: "molido" },
+    ];
+    expect(empaqueSchema.safeParse({ ...baseMolido, lineas: dos }).success).toBe(true);
+    expect(empaqueSchema.safeParse({ ...baseMolido, lineas: [...dos, { presentacionG: 500, unidades: 1, forma: "molido" }] }).success).toBe(false);
+  });
+
+  it("la molienda no puede sacar más de lo que entra y la forma desconocida se rechaza", () => {
+    expect(empaqueSchema.safeParse({ ...baseMolido, molienda: { entradaKg: 10, salidaKg: 11 } }).success).toBe(false);
+    expect(empaqueSchema.safeParse({ ...baseMolido, molienda: { entradaKg: 0, salidaKg: 0 } }).success).toBe(false);
+    expect(empaqueSchema.safeParse({ ...baseMolido, lineas: [{ presentacionG: 500, unidades: 1, forma: "tostado" }] }).success).toBe(false);
+  });
+
+  it("sin molienda no se manda el bloque", () => {
+    expect(payloadEmpaque(empaqueSchema.parse(baseMolido))).not.toHaveProperty("molienda");
+  });
+});
+

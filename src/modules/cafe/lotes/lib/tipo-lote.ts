@@ -33,13 +33,16 @@ export function etiquetaTipoLote(tipo: TipoVisibleLote): string {
   return ETIQUETA[tipo];
 }
 
-/** Clases de la insignia de cada tipo. */
+/**
+ * Clases de la insignia de cada tipo. Marca propia va en verde (FIN-139, como `LineaBadge`); los servicios a
+ * terceros conservan un color propio por subtipo (HU-12) para distinguir trilla, maquila y ambos.
+ */
 export function colorTipoLote(tipo: TipoVisibleLote): string {
   switch (tipo) {
     case "marca_propia":
-      return "bg-amber-100 text-amber-800 hover:bg-amber-100";
+      return "bg-emerald-100 text-emerald-800 hover:bg-emerald-100";
     case "trilla":
-      return "bg-stone-200 text-stone-800 hover:bg-stone-200";
+      return "bg-amber-100 text-amber-800 hover:bg-amber-100";
     case "maquila":
       return "bg-sky-100 text-sky-800 hover:bg-sky-100";
     case "trilla_maquila":

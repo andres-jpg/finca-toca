@@ -8,11 +8,12 @@ import { listarRemisiones } from "@/modules/cafe/remisiones/queries/remisiones.q
 const RUTA = "/dashboard/cafe/remisiones";
 
 /**
- * Remisiones de entrega (HU-F1-13): las de trilla y maquila entregadas a clientes, con filtro por fecha, cliente y
- * estado y reimpresión del tiquete (original o con copia). Las remisiones se generan desde la ficha del lote. La ven
- * todos los miembros (Gerencia incluida); anular es de owner/admin y vive en la ficha. Los filtros viajan por query
- * string para poder compartir la URL.
+ * Remisiones a terceros (HU-F1-13): listado con filtros (fecha, cliente, estado) y reimpresión del tiquete. Las remisiones
+ * se generan desde «Entregar». Las ven todos los miembros (Gerencia incluida); anular es solo de owner/admin (en la ficha
+ * del lote). Los filtros viajan por query string para poder compartir la URL. No se maneja estado de pago.
  */
+export const metadata = { title: "Remisiones a terceros" };
+
 export default async function RemisionesPage({
   searchParams,
 }: {
@@ -25,7 +26,7 @@ export default async function RemisionesPage({
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-gray-800">Remisiones</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-800">Remisiones a terceros</h1>
         <p className="mt-0.5 text-sm text-gray-500">
           Entregas de café de trilla y maquila a clientes. Documento de control interno: no es una factura.
         </p>

@@ -1,4 +1,4 @@
-import type { RolLegacy, RolTenant } from "../auth/sesion";
+import type { PantallaInicio, RolLegacy, RolTenant } from "../auth/sesion";
 import { tieneModulo } from "../tenants/modulos";
 import type { Vertical } from "../tenants/tenant.queries";
 
@@ -30,16 +30,33 @@ export const PAGINA_INICIAL_POR_VERTICAL: Record<Vertical, string> = {
  */
 export const PAGINA_INICIAL_GERENCIA_CAFE = "/dashboard/cafe";
 
+/** Pantallas de inicio configurables de un operativo de café (A-07) y su ruta. `recibir` la crea A-08. */
+export const RUTA_PANTALLA_INICIO: Record<PantallaInicio, string> = {
+  planta: "/dashboard/cafe/planta",
+  recibir: "/dashboard/cafe/recibir",
+};
+
 export function paginaInicial(sesion: {
   rolLegacy: RolLegacy | null;
   /** Rol de la membresía; solo cambia la página de inicio de Gerencia de café. */
   rolTenant?: RolTenant | null;
+  /** Pantalla de inicio elegida para el usuario en Configuración › Equipo (solo operativos de café). */
+  pantallaInicio?: PantallaInicio | null;
   tenant: { vertical: Vertical; modulos?: readonly string[] } | null;
 }): string {
   if (sesion.rolLegacy) return PAGINA_INICIAL_POR_ROL[sesion.rolLegacy];
   if (!sesion.tenant) return "/dashboard";
-  if (sesion.tenant.vertical === "cafe" && sesion.rolTenant === "viewer" && tieneModulo(sesion.tenant.modulos, "cafe.dashboard")) {
-    return PAGINA_INICIAL_GERENCIA_CAFE;
+  if (sesion.tenant.vertical === "cafe") {
+    const tienePanel = tieneModulo(sesion.tenant.modulos, "cafe.dashboard");
+    // Propietario, administrador y Gerencia aterrizan en el Panel (si el cliente lo tiene).
+    if ((sesion.rolTenant === "viewer" || sesion.rolTenant === "owner" || sesion.rolTenant === "admin") && tienePanel) {
+      return PAGINA_INICIAL_GERENCIA_CAFE;
+    }
+    // El operativo, en la que tenga configurada; por defecto Planta (si el cliente tiene el módulo).
+    if (sesion.rolTenant === "operativo") {
+      if (sesion.pantallaInicio) return RUTA_PANTALLA_INICIO[sesion.pantallaInicio];
+      if (tieneModulo(sesion.tenant.modulos, "cafe.procesos")) return RUTA_PANTALLA_INICIO.planta;
+    }
   }
   return PAGINA_INICIAL_POR_VERTICAL[sesion.tenant.vertical];
 }

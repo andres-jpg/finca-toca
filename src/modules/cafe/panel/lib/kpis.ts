@@ -1,3 +1,4 @@
+import { COPY } from "../../copy";
 import type { LineaLote, TipoProceso } from "../../lotes/types";
 import type {
   ClienteEnPlanta,
@@ -65,7 +66,7 @@ export const DEFINICIONES = {
   merma: {
     titulo: "Merma promedio",
     texto:
-      "Ponderada por peso: merma en kg ÷ kilos de entrada de los procesos no anulados del periodo, por tipo de proceso (trilla, tostión, molienda, empaque). Nunca es un promedio simple de porcentajes: un bache grande pesa más que uno pequeño.",
+      "Ponderada por peso: merma en kg ÷ kilos de entrada de los procesos no anulados del periodo, por tipo de proceso (trilla, tostión, molienda). El empaque no genera merma: la diferencia se clasifica por destino. Nunca es un promedio simple de porcentajes: un bache grande pesa más que uno pequeño.",
   },
   desvios: {
     titulo: "Procesos con desvío",
@@ -78,14 +79,14 @@ export const DEFINICIONES = {
       "Suma del total de las ventas (tipo venta, no anuladas) del periodo. Las cortesías no suman: se muestran aparte, en unidades. Esta aplicación no emite facturas; la factura electrónica se emite en Aliados.",
   },
   ingresoServicios: {
-    titulo: "Ingreso servicios",
+    titulo: `Ingreso ${COPY.serviciosATerceros.toLowerCase()}`,
     texto:
       "Suma del valor de los procesos de lotes de servicio del periodo. Cada proceso guarda su valor con la tarifa vigente en su fecha, así que cambiar una tarifa no altera lo ya registrado. El empaque de maquila va incluido sin costo.",
   },
   inventarioPropio: {
-    titulo: "Inventario propio",
+    titulo: COPY.inventarioMarcaPropia,
     texto:
-      "Foto de ahora (no depende del periodo). Producto terminado por tipo de café y presentación (unidades y su equivalente en kg), más los kg de café de marca propia que siguen en planta sin empacar. Nunca hay un total que mezcle tipos o presentaciones.",
+      "Foto de ahora (no depende del periodo). Marca propia empacada por tipo de café y presentación (unidades y su equivalente en kg), más los kg de café de marca propia que siguen en planta sin empacar. Nunca hay un total que mezcle tipos o presentaciones.",
   },
   inventarioTerceros: {
     titulo: "Inventario de terceros",
@@ -155,8 +156,9 @@ function leerTerceros(v: unknown): InventarioTerceros | null {
  */
 export function leerKpis(json: unknown): KpisPanel {
   if (!esObjeto(json)) throw new Error("Respuesta inesperada del panel");
+  // El empaque no genera merma (A-01): lo que sobra se clasifica por destino y no entra en los promedios.
   const mermas = lista(json.mermas).flatMap((m): MermaTipo[] =>
-    esTipo(m.tipo)
+    esTipo(m.tipo) && m.tipo !== "empaque"
       ? [{ tipo: m.tipo, procesos: num(m.procesos), kgEntrada: num(m.kg_entrada), kgSalida: num(m.kg_salida), mermaKg: num(m.merma_kg), mermaPct: numONull(m.merma_pct), desvios: num(m.desvios) }]
       : [],
   );

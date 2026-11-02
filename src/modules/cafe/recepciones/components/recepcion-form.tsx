@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { formatKgNum } from "@/modules/core/formato/numeros";
 import { cn } from "@/lib/utils";
 import { TerceroCombobox } from "@/modules/core/terceros/components/tercero-combobox";
 import type { RolTercero } from "@/modules/core/terceros/lib/roles";
@@ -112,6 +113,8 @@ export function RecepcionForm({ config, fechaHoy, puedeAdministrar }: RecepcionF
       fecha: fechaHoy,
       servicios: [],
       nivelTueste: null,
+      perfilTempC: null,
+      perfilTiempoMin: null,
       humedadPct: null,
       densidad: null,
       pesosBultos: null,
@@ -135,8 +138,8 @@ export function RecepcionForm({ config, fechaHoy, puedeAdministrar }: RecepcionF
   const hayTostion = servicios.includes("tostion");
 
   const estimacion = useMemo(
-    () => estimarServicios({ pesoKg, servicios, tarifas: config.tarifas, mermasRef: config.mermasRef }),
-    [pesoKg, servicios, config.tarifas, config.mermasRef],
+    () => estimarServicios({ pesoKg, servicios, tarifas: config.tarifas, mermasRef: config.mermasRef, nivelTueste }),
+    [pesoKg, servicios, config.tarifas, config.mermasRef, nivelTueste],
   );
 
   const repartido = useMemo(() => {
@@ -175,6 +178,8 @@ export function RecepcionForm({ config, fechaHoy, puedeAdministrar }: RecepcionF
     if (!siguiente.includes("tostion")) {
       siguiente = siguiente.filter((s) => s !== "molienda");
       setValue("nivelTueste", null);
+      setValue("perfilTempC", null);
+      setValue("perfilTiempoMin", null);
     }
     return SERVICIOS_RECEPCION.filter((s) => siguiente.includes(s));
   }
@@ -262,6 +267,134 @@ export function RecepcionForm({ config, fechaHoy, puedeAdministrar }: RecepcionF
           </div>
         </section>
 
+        {/* Servicios contratados y tueste */}
+        <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+          <div>
+            <h2 className="text-base font-semibold text-gray-800">Servicios contratados y tueste</h2>
+            <p className="text-xs text-gray-500">Si contrata trilla y maquila, se asigna un solo lote con ambos servicios.</p>
+          </div>
+
+          <Controller
+            control={control}
+            name="servicios"
+            render={({ field }) => (
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Servicios contratados">
+                {SERVICIOS_RECEPCION.map((s) => {
+                  const marcado = field.value.includes(s);
+                  const deshabilitado = s === "molienda" && !hayTostion;
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      aria-pressed={marcado}
+                      disabled={deshabilitado}
+                      title={deshabilitado ? "Requiere tostión" : AYUDA_SERVICIO[s]}
+                      onClick={() => field.onChange(alternarServicio(field.value, s))}
+                      className={cn(
+                        "min-h-12 rounded-full border px-5 text-base font-medium transition-colors",
+                        marcado ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50",
+                        deshabilitado && "cursor-not-allowed opacity-50 hover:bg-white",
+                      )}
+                    >
+                      {etiquetaServicio(s)}
+                    </button>
+                  );
+                })}
+                {/* El empaque no se elige: va incluido con la tostión y la bolsa la trae el cliente. */}
+                <button
+                  type="button"
+                  disabled
+                  aria-pressed={hayTostion}
+                  title="Se incluye al contratar tostión; la bolsa la trae el cliente"
+                  className={cn(
+                    "min-h-12 rounded-full border border-dashed px-5 text-base font-medium opacity-60",
+                    hayTostion ? "border-gray-900 bg-gray-100 text-gray-900" : "border-gray-300 text-gray-500",
+                  )}
+                >
+                  {etiquetaServicio("empaque")}
+                </button>
+              </div>
+            )}
+          />
+          <p className="text-xs text-gray-500">
+            {hayTostion
+              ? "Empaque incluido sin coste: la bolsa la trae el cliente."
+              : "La molienda y el empaque se incluyen al contratar tostión."}
+          </p>
+          {errors.servicios && <p className="text-xs text-red-500">{errors.servicios.message}</p>}
+
+          {hayTostion && (
+            <div className="space-y-4 rounded-md border border-gray-200 p-3">
+              <div className="space-y-1.5">
+                <Label id="rec-tueste-label">Nivel de tueste</Label>
+                <Controller
+                  control={control}
+                  name="nivelTueste"
+                  render={({ field }) => (
+                    <div role="radiogroup" aria-labelledby="rec-tueste-label" className="grid grid-cols-3 gap-2">
+                      {NIVELES_TUESTE.map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          role="radio"
+                          aria-checked={field.value === n}
+                          onClick={() => field.onChange(n)}
+                          className={cn(
+                            "min-h-12 rounded-md border px-3 text-base font-medium transition-colors",
+                            field.value === n
+                              ? "border-gray-900 bg-gray-900 text-white"
+                              : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50",
+                          )}
+                        >
+                          {etiquetaTueste(n)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                />
+                {errors.nivelTueste && <p className="text-xs text-red-500">{errors.nivelTueste.message}</p>}
+                {!nivelTueste && !errors.nivelTueste && (
+                  <p className="text-xs text-gray-500">Obligatorio con tostión: define la merma de referencia y la planta lo ve al tostar.</p>
+                )}
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="rec-temp">Temperatura pedida (°C) · opcional</Label>
+                  <Input
+                    id="rec-temp"
+                    type="number"
+                    inputMode="decimal"
+                    min={1}
+                    max={400}
+                    step="any"
+                    placeholder="Ej: 205"
+                    className={CAMPO}
+                    {...register("perfilTempC", { setValueAs: numeroOpcional })}
+                  />
+                  {errors.perfilTempC && <p className="text-xs text-red-500">{errors.perfilTempC.message}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="rec-tiempo">Tiempo pedido (min) · opcional</Label>
+                  <Input
+                    id="rec-tiempo"
+                    type="number"
+                    inputMode="decimal"
+                    min={1}
+                    max={120}
+                    step="any"
+                    placeholder="Ej: 12"
+                    className={CAMPO}
+                    {...register("perfilTiempoMin", { setValueAs: numeroOpcional })}
+                  />
+                  {errors.perfilTiempoMin && <p className="text-xs text-red-500">{errors.perfilTiempoMin.message}</p>}
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">Si el cliente indicó un perfil, la planta lo ve como objetivo de la tostión.</p>
+            </div>
+          )}
+        </section>
+
         {/* Bultos y peso */}
         <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -309,7 +442,7 @@ export function RecepcionForm({ config, fechaHoy, puedeAdministrar }: RecepcionF
               />
               {errors.pesoKg && <p className="text-xs text-red-500">{errors.pesoKg.message}</p>}
               <p className="text-xs text-gray-500">
-                Se sugiere {config.pesoBultoKg.toLocaleString("es-CO")} kg por bulto; puedes cambiarlo.
+                Se sugiere {formatKgNum(config.pesoBultoKg)} kg por bulto; puedes cambiarlo.
               </p>
             </div>
           </div>
@@ -345,7 +478,7 @@ export function RecepcionForm({ config, fechaHoy, puedeAdministrar }: RecepcionF
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                     <p className="text-gray-600">
-                      Suma: <span className="font-semibold tabular-nums">{sumaBultos.toLocaleString("es-CO", { maximumFractionDigits: 3 })} kg</span>
+                      Suma: <span className="font-semibold tabular-nums">{formatKgNum(sumaBultos)} kg</span>
                     </p>
                     {textosBultos && (
                       <Button type="button" variant="outline" className="h-11" onClick={restablecerBultos}>
@@ -401,98 +534,6 @@ export function RecepcionForm({ config, fechaHoy, puedeAdministrar }: RecepcionF
           </div>
         </section>
 
-        {/* Servicios */}
-        <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <div>
-            <h2 className="text-base font-semibold text-gray-800">Servicios contratados</h2>
-            <p className="text-xs text-gray-500">Si contrata trilla y maquila, se asigna un solo lote con ambos servicios.</p>
-          </div>
-
-          <Controller
-            control={control}
-            name="servicios"
-            render={({ field }) => (
-              <div className="space-y-2" role="group" aria-label="Servicios contratados">
-                {SERVICIOS_RECEPCION.map((s) => {
-                  const marcado = field.value.includes(s);
-                  const deshabilitado = s === "molienda" && !hayTostion;
-                  return (
-                    <label
-                      key={s}
-                      className={cn(
-                        "flex min-h-14 cursor-pointer items-center gap-3 rounded-md border px-3 py-2",
-                        marcado ? "border-gray-800 bg-gray-50" : "border-gray-200",
-                        deshabilitado && "cursor-not-allowed opacity-60",
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        className="h-6 w-6 shrink-0 accent-gray-800"
-                        checked={marcado}
-                        disabled={deshabilitado}
-                        onChange={() => field.onChange(alternarServicio(field.value, s))}
-                      />
-                      <span className="min-w-0">
-                        <span className="block text-base font-medium text-gray-800">{etiquetaServicio(s)}</span>
-                        <span className="block text-xs text-gray-500">
-                          {deshabilitado ? "Requiere tostión" : AYUDA_SERVICIO[s]}
-                        </span>
-                      </span>
-                    </label>
-                  );
-                })}
-
-                {/* El empaque no se elige: va incluido con la tostión y la bolsa la trae el cliente. */}
-                <label className="flex min-h-14 cursor-not-allowed items-center gap-3 rounded-md border border-dashed border-gray-200 bg-gray-50 px-3 py-2 opacity-80">
-                  <input type="checkbox" className="h-6 w-6 shrink-0" checked={hayTostion} disabled readOnly />
-                  <span className="min-w-0">
-                    <span className="block text-base font-medium text-gray-800">{etiquetaServicio("empaque")}</span>
-                    <span className="block text-xs text-gray-500">
-                      {hayTostion ? "Incluido sin coste — la bolsa la trae el cliente" : "Se incluye al contratar tostión"}
-                    </span>
-                  </span>
-                </label>
-              </div>
-            )}
-          />
-          {errors.servicios && <p className="text-xs text-red-500">{errors.servicios.message}</p>}
-
-          {hayTostion && (
-            <div className="space-y-1.5">
-              <Label id="rec-tueste-label">Nivel de tueste</Label>
-              <Controller
-                control={control}
-                name="nivelTueste"
-                render={({ field }) => (
-                  <div role="radiogroup" aria-labelledby="rec-tueste-label" className="grid grid-cols-3 gap-2">
-                    {NIVELES_TUESTE.map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        role="radio"
-                        aria-checked={field.value === n}
-                        onClick={() => field.onChange(n)}
-                        className={cn(
-                          "min-h-12 rounded-md border px-3 text-base font-medium transition-colors",
-                          field.value === n
-                            ? "border-gray-900 bg-gray-900 text-white"
-                            : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50",
-                        )}
-                      >
-                        {etiquetaTueste(n)}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              />
-              {errors.nivelTueste && <p className="text-xs text-red-500">{errors.nivelTueste.message}</p>}
-              {!nivelTueste && !errors.nivelTueste && (
-                <p className="text-xs text-gray-500">Obligatorio con tostión: la planta lo ve al tostar.</p>
-              )}
-            </div>
-          )}
-        </section>
-
         <section className="space-y-1.5 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
           <Label htmlFor="rec-obs">Observaciones (opcional)</Label>
           <Textarea id="rec-obs" rows={3} className="text-base" placeholder="Ej: viene en costales de fique" {...register("observaciones")} />
@@ -503,7 +544,7 @@ export function RecepcionForm({ config, fechaHoy, puedeAdministrar }: RecepcionF
       <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
         <EstimacionPanel estimacion={estimacion} puedeConfigurar={puedeAdministrar} />
         <Button type="submit" className="h-12 w-full text-base" disabled={isSubmitting || sinRolServicio}>
-          {isSubmitting ? "Guardando…" : "Registrar recepción"}
+          {isSubmitting ? "Guardando…" : "Guardar y enviar a planta"}
         </Button>
         <Button asChild type="button" variant="outline" className="h-11 w-full">
           <Link href="/dashboard/cafe/lotes">Cancelar</Link>

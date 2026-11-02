@@ -21,12 +21,14 @@ export interface ConfigRecepcion {
 }
 
 export async function getConfigRecepcion(): Promise<ConfigRecepcion> {
-  const [rangoHumedad, rangoDensidad, pesoBultoKg, mermaTrilla, mermaTostion, vigentes] = await Promise.all([
+  const [rangoHumedad, rangoDensidad, pesoBultoKg, mermaTrilla, tostionBajo, tostionMedio, tostionAlto, vigentes] = await Promise.all([
     getParametro(PARAMETROS_CAFE.humedadRangoPct),
     getParametro(PARAMETROS_CAFE.densidadRango),
     getParametro(PARAMETROS_CAFE.pesoBultoKg),
     getParametro(PARAMETROS_CAFE.mermaReferenciaTrillaPct),
-    getParametro(PARAMETROS_CAFE.mermaReferenciaTostionPct),
+    getParametro(PARAMETROS_CAFE.mermaReferenciaTostionBajoPct),
+    getParametro(PARAMETROS_CAFE.mermaReferenciaTostionMedioPct),
+    getParametro(PARAMETROS_CAFE.mermaReferenciaTostionAltoPct),
     getTarifasVigentes(),
   ]);
 
@@ -36,7 +38,7 @@ export async function getConfigRecepcion(): Promise<ConfigRecepcion> {
     rangoHumedad,
     rangoDensidad,
     pesoBultoKg,
-    mermasRef: { trilla: mermaTrilla, tostion: mermaTostion },
+    mermasRef: { trilla: mermaTrilla, tostion: { bajo: tostionBajo, medio: tostionMedio, alto: tostionAlto } },
     tarifas: {
       trilla: tarifa("cafe.trilla"),
       tostion: tarifa("cafe.tostion"),

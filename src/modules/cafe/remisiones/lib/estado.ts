@@ -1,4 +1,5 @@
 import type { RemisionLinea } from "@/modules/cafe/lotes/lib/linea-tiempo";
+import { COPY } from "../../copy";
 import type { Remision } from "../types";
 
 // Reglas de pantalla de la remisión (qué botón se ofrece). La frontera real son la RPC y el RLS; esto solo evita
@@ -36,14 +37,20 @@ export function remisionVigente(remisiones: readonly Remision[]): Remision | nul
 }
 
 /** Estado de una remisión para insignias y filtros. */
-export type EstadoRemision = "vigente" | "anulada";
+/** «Entregada» = no anulada (antes «vigente»; ya no existe ese término en la app). */
+export type EstadoRemision = "entregada" | "anulada";
 
 export function estadoRemision(r: Pick<Remision, "anulacion">): EstadoRemision {
-  return r.anulacion ? "anulada" : "vigente";
+  return r.anulacion ? "anulada" : "entregada";
 }
 
 export function etiquetaEstadoRemision(estado: EstadoRemision): string {
-  return estado === "vigente" ? "Vigente" : "Anulada";
+  return estado === "entregada" ? COPY.remisionEntregada : COPY.anulada;
+}
+
+/** Ruta de la pantalla «Entregar» (A-14), con el lote (y su cliente) preseleccionado. */
+export function rutaEntregar(loteId?: string): string {
+  return loteId ? `/dashboard/cafe/planta/entregar?lote=${loteId}` : "/dashboard/cafe/planta/entregar";
 }
 
 /** Ruta del tiquete; `copias` = tiquetes en total (2 = original + «COPIA CLIENTE»). */

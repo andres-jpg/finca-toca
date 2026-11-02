@@ -106,7 +106,31 @@ describe("payloadRecepcion", () => {
       densidad: 680,
       servicios: ["trilla", "tostion", "molienda"],
       nivel_tueste: "medio",
+      perfil_temp_c: null,
+      perfil_tiempo_min: null,
       observaciones: null,
     });
+  });
+
+  it("incluye el perfil de tueste pedido por el cliente", () => {
+    const v = recepcionSchema.parse({ ...base, servicios: ["tostion"], nivelTueste: "medio", perfilTempC: 205, perfilTiempoMin: 12 });
+    expect(payloadRecepcion(v)).toMatchObject({ nivel_tueste: "medio", perfil_temp_c: 205, perfil_tiempo_min: 12 });
+  });
+});
+
+describe("perfil de tueste", () => {
+  const tostion = { ...base, servicios: ["tostion"], nivelTueste: "medio" };
+  it("temperatura y tiempo son opcionales", () => {
+    expect(recepcionSchema.parse(tostion)).toMatchObject({ perfilTempC: null, perfilTiempoMin: null });
+    expect(recepcionSchema.parse({ ...tostion, perfilTempC: 205 })).toMatchObject({ perfilTempC: 205, perfilTiempoMin: null });
+  });
+  it("rechaza valores fuera de rango", () => {
+    expect(error({ ...tostion, perfilTempC: 0 })).toBe("La temperatura debe estar entre 1 y 400 °C");
+    expect(error({ ...tostion, perfilTempC: 500 })).toBe("La temperatura debe estar entre 1 y 400 °C");
+    expect(error({ ...tostion, perfilTiempoMin: 200 })).toBe("El tiempo debe estar entre 1 y 120 minutos");
+  });
+  it("sin tostión se descarta", () => {
+    const r = recepcionSchema.parse({ ...base, servicios: ["trilla"], perfilTempC: 205, perfilTiempoMin: 12 });
+    expect(r).toMatchObject({ perfilTempC: null, perfilTiempoMin: null });
   });
 });

@@ -16,6 +16,8 @@ export interface PresentacionEmpaque {
   etiqueta: InsumoPresentacion | null;
   /** El producto terminado de ESE tipo de café y presentación; `null` si aún no existe (lo crea el alta de la bolsa). */
   producto: { id: string; nombre: string; stock: number } | null;
+  /** El producto MOLIDO de esa presentación (A-02); `null` mientras no se haya empacado ninguno (se crea al empacar el primero). */
+  productoMolido: { id: string; nombre: string; stock: number } | null;
 }
 
 /** Lo que el formulario de empaque necesita además del lote y sus bultos. */
@@ -28,8 +30,14 @@ export interface ConfigEmpaque {
 export interface LineaEmpaqueVista {
   presentacionG: number;
   unidades: number;
-  /** Nombre del producto terminado: «Excelso 500 g». */
+  /** Nombre del producto terminado («Excelso 500 g»); en servicios a terceros, el tamaño de la bolsa («5 kg»). */
   producto: string;
+  /** Marca propia: la línea movió inventario (bolsas, etiquetas, producto terminado) y el empaque no se anula. */
+  mueveInventario: boolean;
+  /** Servicios: la bolsa la trajo el cliente. */
+  bolsaCliente: boolean;
+  /** Marca propia: grano o molido. */
+  forma: "grano" | "molido";
 }
 
 /** Lo que devuelve `cafe.registrar_empaque`. */
@@ -37,13 +45,32 @@ export interface ResultadoEmpaque {
   proceso_id: string;
   merma_kg: number;
   merma_pct: number;
+  /** Lo que llegó a empaque y no entró en bolsas (0 si cuadra). NO es merma: va a `diferencia_destino`. */
+  diferencia_kg: number;
+  diferencia_destino: "suelto" | "granel" | "muestra" | "perdida" | null;
   peso_entrada_kg: number;
   peso_salida_kg: number;
   lote_estado: string;
   avance_texto: string;
-  lineas: { presentacion_g: number; unidades: number; kg: number; producto_id: string; producto: string }[];
+  /** En servicios a terceros `producto_id` y `producto` son null (no mueven inventario propio). */
+  lineas: { presentacion_g: number; unidades: number; kg: number; forma?: "grano" | "molido"; producto_id: string | null; producto: string | null }[];
+  /** La molienda registrada en el mismo paso (A-02); `null` si no hubo. */
+  molienda?: { proceso_id: string; merma_kg: number; merma_pct: number; peso_entrada_kg: number; peso_salida_kg: number } | null;
   stocks: { articulo_id: string; stock: number; bajo_minimo: boolean }[];
   /** Insumos que quedaron en negativo: se avisa, no se bloquea (decisión 14 de CO-20). */
+  advertencias: { articulo_id: string; articulo: string | null; stock_resultante: number }[];
+}
+
+/** Lo que devuelve `cafe.convertir_presentacion` (A-15). */
+export interface ResultadoConversion {
+  id: string;
+  lote_id: string;
+  kg_origen: number;
+  kg_destino: number;
+  /** destino − origen, en kg. */
+  diferencia_kg: number;
+  cuadra: boolean;
+  stocks: { articulo_id: string; stock: number; bajo_minimo: boolean }[];
   advertencias: { articulo_id: string; articulo: string | null; stock_resultante: number }[];
 }
 
@@ -69,5 +96,7 @@ export interface KardexProducto {
 export const REF_PROCESO = "cafe.proceso";
 /** `ref_tipo` de la reapertura de un lote (CO-33): `ref_id` = el lote. */
 export const REF_LOTE = "cafe.lote";
+/** `ref_tipo` de una conversión de presentación (A-15): `ref_id` = la conversión. */
+export const REF_CONVERSION = "cafe.conversion";
 /** `ref_tipo` de una venta (CO-31): `ref_id` = la venta. */
 export const REF_VENTA = "cafe.venta";

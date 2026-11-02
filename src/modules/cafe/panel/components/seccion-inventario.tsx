@@ -35,7 +35,7 @@ export async function SeccionInventario({ desde, hasta, linea }: Props) {
             </Detalle>
           </div>
           <MatrizProductoCompacta matriz={pt.matriz} />
-          <Detalle>Producto terminado en existencia ≈ {kgTexto(k.inventarioPropio.productoTerminadoKg)}</Detalle>
+          <Detalle>Marca propia en existencia ≈ {kgTexto(k.inventarioPropio.productoTerminadoKg)}</Detalle>
         </TarjetaKpi>
       )}
 

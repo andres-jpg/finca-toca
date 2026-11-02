@@ -8,10 +8,16 @@ import {
   textoFaltante,
   textoKgLinea,
   totalKgEmpacados,
-  vistaPreviaEmpaque,
+  destinosDeLinea,
+  DESTINOS_DIFERENCIA,
+  ETIQUETA_DESTINO,
+  resumenEmpaque,
+  cuadreMolienda,
+  kgDeForma,
+  llegaConMolienda,
 } from "./empaque";
 
-// Los casos numéricos son los de `92_cafe_empaque.test.sql` (81 kg → 120 × 500 g + 8 × 2.500 g).
+// Los casos numéricos son los de `92_cafe_empaque*.test.sql` (81 kg → 120 × 500 g + 8 × 2.500 g) y los de FIN-119.
 
 describe("kgPorUnidades", () => {
   it("unidades × presentación en kilos", () => {
@@ -37,36 +43,52 @@ describe("totalKgEmpacados", () => {
   });
 });
 
-describe("vistaPreviaEmpaque", () => {
+describe("resumenEmpaque", () => {
   const lineas = [{ presentacionG: 500, unidades: 120 }, { presentacionG: 2500, unidades: 8 }];
 
-  it("81 kg → 80 kg: merma 1 kg (1,23 %)", () => {
-    expect(vistaPreviaEmpaque(81, lineas)).toEqual({ kgEmpacados: 80, mermaKg: 1, mermaPct: 1.23, supera: false, excesoKg: 0 });
+  it("81 kg llegan y 80 kg van en bolsas: sobra 1 kg y hay que decir adónde fue", () => {
+    expect(resumenEmpaque(81, lineas)).toEqual({ llegaKg: 81, usadoKg: 80, diferenciaKg: 1, haySobrante: true, supera: false, excesoKg: 0 });
   });
 
-  it("empacar todo lo que hay: merma cero", () => {
-    expect(vistaPreviaEmpaque(80, lineas)).toMatchObject({ mermaKg: 0, mermaPct: 0, supera: false });
+  it("el caso del ticket: 145,6 kg con 12 × 10 kg + 5 × 5 kg → usado 145,0 y diferencia 0,6", () => {
+    const r = resumenEmpaque(145.6, [{ presentacionG: 10_000, unidades: 12 }, { presentacionG: 5000, unidades: 5 }]);
+    expect(r).toMatchObject({ usadoKg: 145, diferenciaKg: 0.6, haySobrante: true, supera: false });
   });
 
-  it("170 × 500 g (85 kg) con 81 kg disponibles: supera por 4 kg y no hay merma que mostrar", () => {
-    expect(vistaPreviaEmpaque(81, [{ presentacionG: 500, unidades: 170 }])).toEqual({
-      kgEmpacados: 85,
-      mermaKg: -4,
-      mermaPct: null,
+  it("empacar todo lo que llega: diferencia cero y nada que clasificar", () => {
+    expect(resumenEmpaque(80, lineas)).toMatchObject({ diferenciaKg: 0, haySobrante: false, supera: false });
+  });
+
+  it("170 × 500 g (85 kg) con 81 kg: las bolsas superan por 4 kg", () => {
+    expect(resumenEmpaque(81, [{ presentacionG: 500, unidades: 170 }])).toEqual({
+      llegaKg: 81,
+      usadoKg: 85,
+      diferenciaKg: -4,
+      haySobrante: false,
       supera: true,
       excesoKg: 4,
     });
   });
 
-  it("40,5 kg → 40 kg: merma 0,5 kg (1,23 %)", () => {
-    expect(vistaPreviaEmpaque(40.5, [{ presentacionG: 500, unidades: 80 }])).toMatchObject({ mermaKg: 0.5, mermaPct: 1.23 });
+  it("sin café que llegue o con un peso inválido no hay resumen", () => {
+    expect(resumenEmpaque(null, lineas)).toBeNull();
+    expect(resumenEmpaque(0, lineas)).toBeNull();
+    expect(resumenEmpaque(Number.NaN, lineas)).toBeNull();
   });
 
-  it("sin entrada, sin entrada válida o sin líneas no hay vista previa", () => {
-    expect(vistaPreviaEmpaque(null, lineas)).toBeNull();
-    expect(vistaPreviaEmpaque(0, lineas)).toBeNull();
-    expect(vistaPreviaEmpaque(Number.NaN, lineas)).toBeNull();
-    expect(vistaPreviaEmpaque(81, [])).toBeNull();
+  it("sin líneas todo el café es diferencia", () => {
+    expect(resumenEmpaque(81, [])).toMatchObject({ usadoKg: 0, diferenciaKg: 81, haySobrante: true });
+  });
+});
+
+describe("destinosDeLinea", () => {
+  it("marca propia: granel, muestra y pérdida; terceros: suelto, muestra y pérdida", () => {
+    expect(destinosDeLinea("marca_propia")).toEqual(["granel", "muestra", "perdida"]);
+    expect(destinosDeLinea("servicio")).toEqual(["suelto", "muestra", "perdida"]);
+  });
+
+  it("todos los destinos tienen etiqueta", () => {
+    for (const d of DESTINOS_DIFERENCIA) expect(ETIQUETA_DESTINO[d]).toBeTruthy();
   });
 });
 
@@ -149,13 +171,44 @@ describe("textoFaltante", () => {
 
 describe("formato", () => {
   it("textoKgLinea con tres decimales", () => {
-    expect(textoKgLinea(500, 120)).toBe("60,000");
-    expect(textoKgLinea(2500, 8)).toBe("20,000");
+    expect(textoKgLinea(500, 120)).toBe("60,0");
+    expect(textoKgLinea(2500, 8)).toBe("20,0");
   });
 
   it("enteroConMiles", () => {
     expect(enteroConMiles(999)).toBe("999");
     expect(enteroConMiles(1000)).toBe("1.000");
     expect(enteroConMiles(1234567)).toBe("1.234.567");
+  });
+});
+
+describe("molienda junto con el empaque (A-02)", () => {
+  const lineas = [
+    { presentacionG: 500, unidades: 40, forma: "grano" as const },
+    { presentacionG: 2500, unidades: 8, forma: "molido" as const },
+  ];
+
+  it("kilos por forma; sin forma es grano", () => {
+    expect(kgDeForma(lineas, "grano")).toBe(20);
+    expect(kgDeForma(lineas, "molido")).toBe(20);
+    expect(kgDeForma([{ presentacionG: 500, unidades: 2 }], "grano")).toBe(1);
+  });
+
+  it("a empaque llega lo que no se molió más lo que salió de la molienda (igual que la base)", () => {
+    expect(llegaConMolienda(81, { entradaKg: 22, salidaKg: 20.4 })).toBe(79.4);
+    const r = resumenEmpaque(llegaConMolienda(81, { entradaKg: 22, salidaKg: 20.4 }), lineas);
+    expect(r).toMatchObject({ llegaKg: 79.4, usadoKg: 40, diferenciaKg: 39.4, haySobrante: true, supera: false });
+  });
+
+  it("lo molido en bolsas no puede pasar de lo que salió de la molienda, ni el grano de lo no molido", () => {
+    expect(cuadreMolienda(81, { entradaKg: 22, salidaKg: 20.4 }, lineas)).toMatchObject({ molidoSupera: false, granoSupera: false, sinMolerKg: 59 });
+    expect(cuadreMolienda(81, { entradaKg: 22, salidaKg: 10 }, lineas)?.molidoSupera).toBe(true);
+    expect(cuadreMolienda(81, { entradaKg: 70, salidaKg: 60 }, lineas)?.granoSupera).toBe(true);
+  });
+
+  it("sin molienda válida no hay cuadre", () => {
+    expect(cuadreMolienda(81, null, lineas)).toBeNull();
+    expect(cuadreMolienda(81, { entradaKg: 22, salidaKg: 30 }, lineas)).toBeNull();
+    expect(cuadreMolienda(81, { entradaKg: 0, salidaKg: 0 }, lineas)).toBeNull();
   });
 });

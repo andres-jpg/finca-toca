@@ -163,7 +163,6 @@ select ok(
   and not has_column_privilege('authenticated', 'cafe.procesos', 'valor', 'insert')
   and not has_column_privilege('authenticated', 'cafe.procesos', 'desvio', 'insert')
   and not has_column_privilege('authenticated', 'cafe.procesos', 'anulado_at', 'insert')
-  and not has_column_privilege('authenticated', 'cafe.procesos', 'peso_entrada_kg', 'update')
   and has_column_privilege('authenticated', 'cafe.procesos', 'anulado_at', 'update'),
   'lo calculado y la anulación no se insertan; de un proceso solo se anula o se anotan observaciones'
 );
@@ -264,8 +263,8 @@ select is(
 select is(
   (select row(p.tarifa_kg, p.merma_referencia_pct, p.tolerancia_pts, p.nivel_tueste, p.fecha)::text
      from cafe.procesos p where p.id = (select (r ->> 'id')::uuid from res where k = 'L1_trilla')),
-  row(1400.00::numeric, 19.000::numeric, 3.000::numeric, null::cafe.nivel_tueste, current_date)::text,
-  'se guardan la tarifa vigente (1.400), la merma de referencia (19) y la tolerancia (3) como snapshot'
+  row(1400.00::numeric, 19.000::numeric, 2.000::numeric, null::cafe.nivel_tueste, current_date)::text,
+  'se guardan la tarifa vigente (1.400), la merma de referencia (19) y la tolerancia (2) como snapshot'
 );
 select is(cafe.peso_disponible(pg_temp.lid('L1'), 'tostion', pg_temp.barr('L1', array[1, 2, 3, 4, 5, 6, 7, 8])), 405.000,
   'el peso final de la trilla (405) pasa como peso inicial de la tostión');
@@ -299,7 +298,7 @@ select is(
 select is(
   (select row(p.nivel_tueste, p.peso_salida_kg, p.merma_referencia_pct, p.tolerancia_pts)::text
      from cafe.procesos p where p.id = (select (r ->> 'id')::uuid from res where k = 'L1_tostion')),
-  row('medio'::cafe.nivel_tueste, 332.000::numeric, 18.000::numeric, 3.000::numeric)::text,
+  row('medio'::cafe.nivel_tueste, 332.000::numeric, 18.000::numeric, 2.000::numeric)::text,
   'la tostión toma el nivel de tueste del lote (medio) y la referencia de 18 %'
 );
 select is(
@@ -536,12 +535,12 @@ select pg_temp.recibir('L3', 100, 2, array['trilla']);
 select pg_temp.reg('L3_b1', 'L3', 'trilla', array[1], '{"peso_salida_kg": 39}');
 select is(
   (select row(r ->> 'merma_pct', r ->> 'desvio')::text from res where k = 'L3_b1'),
-  row('22.000', 'false')::text, 'merma de 22 % con referencia 19 y tolerancia 3: justo en el límite, sin desvío'
+  row('22.000', 'true')::text, 'merma de 22 % con referencia 19 y tolerancia 2 (A-03: ±2 por defecto): desvío'
 );
 select lives_ok($$select pg_temp.reg('L3_b2', 'L3', 'trilla', array[2], '{"peso_salida_kg": 37.5}')$$, 'una merma desviada se guarda igual');
 select is(
   (select row(r ->> 'merma_pct', r ->> 'desvio', r ->> 'valor')::text from res where k = 'L3_b2'),
-  row('25.000', 'true', '70000.00')::text, 'merma de 25 % (referencia 19 ± 3): desvio = true, valor $70.000'
+  row('25.000', 'true', '70000.00')::text, 'merma de 25 % (referencia 19 ± 2): desvio = true, valor $70.000'
 );
 select is(
   (select desvio from cafe.procesos where id = (select (r ->> 'id')::uuid from res where k = 'L3_b2')), true,
@@ -549,7 +548,7 @@ select is(
 );
 select is(
   (select row(desvios, num_procesos, bultos_procesados, completo, merma_pct)::text from cafe.v_lote_etapas where lote_id = pg_temp.lid('L3') and tipo = 'trilla'),
-  row(1, 2, 2, true, 23.500::numeric)::text, 'v_lote_etapas cuenta 1 desvío en la trilla (2 procesos, merma ponderada 23,5 %)'
+  row(2, 2, 2, true, 23.500::numeric)::text, 'v_lote_etapas cuenta 2 desvíos en la trilla (2 procesos, merma ponderada 23,5 %)'
 );
 select is(
   (select row(estado, tiene_desvio)::text from cafe.v_lotes where id = pg_temp.lid('L3')),
@@ -800,7 +799,7 @@ select throws_ok(
 );
 select throws_ok(
   format($$update cafe.procesos set peso_salida_kg = 1 where id = %L$$, (select r ->> 'id' from res where k = 'L7_t1')),
-  '42501', null, 'a mano no se puede cambiar el peso (privilegio de columna)'
+  'P0001', 'edicion_directa', 'a mano no se puede cambiar el peso (A-18: solo desde editar_lote, con motivo)'
 );
 select throws_ok(
   format($$delete from cafe.proceso_bultos where proceso_id = %L$$, (select r ->> 'id' from res where k = 'L7_t1')),

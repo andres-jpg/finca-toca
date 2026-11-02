@@ -55,12 +55,12 @@ describe("formatearCOP", () => {
 });
 
 describe("formatearKg", () => {
-  it("usa coma decimal y punto de miles, sin ceros sobrantes", () => {
+  it("1 decimal con coma y punto de miles (FIN-122)", () => {
     expect(formatearKg(62.5)).toBe("62,5");
-    expect(formatearKg(375)).toBe("375");
+    expect(formatearKg(375)).toBe("375,0");
     expect(formatearKg(1234.5)).toBe("1.234,5");
-    expect(formatearKg(33.334)).toBe("33,334");
-    expect(formatearKg(NaN)).toBe("0");
+    expect(formatearKg(33.334)).toBe("33,3");
+    expect(formatearKg(NaN)).toBe("0,0");
   });
 });
 

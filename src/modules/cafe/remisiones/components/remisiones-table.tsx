@@ -14,7 +14,7 @@ import type { Remision } from "../types";
 /**
  * Listado de remisiones: número, fecha de entrega, lote (enlace a la ficha), cliente, kilos entregados, merma, valor de
  * los servicios (referencia: no es una factura), estado y reimpresión (original o con copia). Las anuladas se
- * muestran tachadas, sin reimpresión: son historial. Los kilos de cada fila son de un solo lote: no hay totales.
+ * muestran tachadas, sin reimpresión: son historial. Una remisión puede llevar varios lotes: los kilos y el valor de cada fila son la suma de los suyos.
  */
 export function RemisionesTable({ remisiones, filtros }: { remisiones: Remision[]; filtros: FiltrosRemisiones }) {
   if (remisiones.length === 0) {
@@ -32,8 +32,9 @@ export function RemisionesTable({ remisiones, filtros }: { remisiones: Remision[
           <TableRow>
             <TableHead>Número</TableHead>
             <TableHead>Entrega</TableHead>
-            <TableHead>Lote</TableHead>
+            <TableHead>Lotes</TableHead>
             <TableHead>Cliente</TableHead>
+            <TableHead>Recibió</TableHead>
             <TableHead className="text-right">Kg entregados</TableHead>
             <TableHead className="text-right">Merma</TableHead>
             <TableHead className="text-right">Valor servicios</TableHead>
@@ -52,11 +53,19 @@ export function RemisionesTable({ remisiones, filtros }: { remisiones: Remision[
                 </TableCell>
                 <TableCell className="tabular-nums">{fechaCorta(r.fecha)}</TableCell>
                 <TableCell>
-                  <Link href={`/dashboard/cafe/lotes/${r.loteId}`} className="tabular-nums text-sky-700 underline underline-offset-2">
-                    {r.loteCodigo}
-                  </Link>
+                  <div className="flex flex-col gap-0.5">
+                    {(r.lotes.length ? r.lotes : [{ loteId: r.loteId, loteCodigo: r.loteCodigo }]).map((l) => (
+                      <Link key={l.loteId} href={`/dashboard/cafe/lotes/${l.loteId}`} className="tabular-nums text-sky-700 underline underline-offset-2">
+                        {l.loteCodigo}
+                      </Link>
+                    ))}
+                  </div>
                 </TableCell>
                 <TableCell>{r.clienteNombre}</TableCell>
+                <TableCell>
+                  {r.recibeNombre}
+                  <span className="block text-xs text-gray-500 tabular-nums">{r.recibeDocumento}</span>
+                </TableCell>
                 <TableCell className="text-right tabular-nums">{formatearKg3(r.pesoEntregadoKg)}</TableCell>
                 <TableCell className="text-right tabular-nums">
                   {formatearKg3(r.mermaTotalKg)} <span className="text-xs text-gray-500">({resumen.mermaPct})</span>
@@ -66,7 +75,7 @@ export function RemisionesTable({ remisiones, filtros }: { remisiones: Remision[
                   <div className="flex flex-wrap items-center gap-1">
                     <Badge
                       className={
-                        estado === "vigente"
+                        estado === "entregada"
                           ? "bg-teal-100 text-teal-800 hover:bg-teal-100"
                           : "bg-red-100 text-red-700 hover:bg-red-100"
                       }
@@ -77,7 +86,7 @@ export function RemisionesTable({ remisiones, filtros }: { remisiones: Remision[
                   </div>
                 </TableCell>
                 <TableCell>
-                  {estado === "vigente" ? (
+                  {estado === "entregada" ? (
                     <div className="flex gap-1">
                       <Button asChild variant="outline" size="sm" className="h-11 sm:h-8">
                         <a href={rutaTiquete(r.id)} target="_blank" rel="noopener noreferrer">

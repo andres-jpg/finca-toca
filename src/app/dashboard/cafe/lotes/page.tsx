@@ -21,13 +21,15 @@ const RUTA = "/dashboard/cafe/lotes";
  * quien no tiene rol legacy, así que un cliente al que se le quitara `cafe.recepcion` entraría en un bucle
  * de redirecciones. Sin el módulo se muestra un aviso (y no se lee ningún dato).
  */
+export const metadata = { title: "Lotes" };
+
 export default async function LotesPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const activo = await tenantTieneModulo("cafe.recepcion");
-  const { rolTenant } = await requireSesion();
+  const { rolTenant, tenant } = await requireSesion();
   const filtros = parsearFiltros(await searchParams);
   // Gerencia (`viewer`) consulta; registrar lo hacen owner, admin y operativo. Esconder el botón es cosmético:
   // la página de destino, la action y la RPC lo vuelven a exigir.
@@ -51,15 +53,9 @@ export default async function LotesPage({
             {puedeRegistrar && (
               <>
                 <Button asChild className="h-11 w-full sm:h-9 sm:w-auto">
-                  <Link href="/dashboard/cafe/lotes/nueva-compra">
+                  <Link href="/dashboard/cafe/recibir">
                     <Plus className="mr-2 h-4 w-4" />
-                    Nueva compra
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="h-11 w-full sm:h-9 sm:w-auto">
-                  <Link href="/dashboard/cafe/lotes/nueva-recepcion">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Nueva recepción
+                    Recibir café
                   </Link>
                 </Button>
               </>
@@ -80,7 +76,7 @@ export default async function LotesPage({
         <>
           <LotesPestanas filtros={filtros} ruta={RUTA} />
           <LotesFiltros key={JSON.stringify(filtros)} filtros={filtros} ruta={RUTA} />
-          <LotesTable lotes={pagina.filas} filtros={filtros} />
+          <LotesTable lotes={pagina.filas} filtros={filtros} zonaHoraria={tenant.zonaHoraria} />
           <LotesPaginacion filtros={filtros} ruta={RUTA} total={pagina.total} totalPaginas={pagina.totalPaginas} />
         </>
       )}

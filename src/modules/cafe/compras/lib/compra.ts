@@ -1,3 +1,5 @@
+import { formatCOP, formatKgNum } from "@/modules/core/formato/numeros";
+
 // Cálculos puros de la compra de café para marca propia. Lo que el operario ve en pantalla (valor total, suma
 // de los bultos) sale de aquí; la base lo recalcula por su cuenta (`valor_compra` es columna generada), y estas
 // funciones dan lo mismo que ella: `round(peso_kg * precio_kg, 0)`.
@@ -20,24 +22,9 @@ export function calcularValorCompra(pesoKg: number, precioKg: number): number {
   return Number((gramos * centavos + escala / BigInt(2)) / escala);
 }
 
-/**
- * Pesos colombianos sin decimales: `6937500` → `$6.937.500`. A mano y no con `Intl`: el agrupado de `es` cambia
- * según la versión de ICU del servidor y del navegador (un 4.000 sale a veces «4000») y el valor se renderiza
- * en los dos.
- */
-export function formatearCOP(valor: number): string {
-  if (!Number.isFinite(valor)) return "$0";
-  const entero = Math.round(Math.abs(valor)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  return `${valor < 0 ? "-" : ""}$${entero}`;
-}
-
-/** Kilos con hasta 3 decimales y coma decimal: `62.5` → `62,5`, `375` → `375`, `1234.5` → `1.234,5`. */
-export function formatearKg(kg: number): string {
-  if (!Number.isFinite(kg)) return "0";
-  const [entero, decimales] = (Math.round(kg * 1000) / 1000).toString().split(".");
-  const miles = entero.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  return decimales ? `${miles},${decimales}` : miles;
-}
+/** Pesos colombianos sin decimales (`$6.937.500`) y kilos con 1 decimal (`62,5`, sin unidad): ver `core/formato`. */
+export const formatearCOP = formatCOP;
+export const formatearKg = formatKgNum;
 
 /** Peso total a partir de «peso por bulto × número de bultos» (ayuda con `cafe.peso_bulto_kg`), a gramos. */
 export function pesoDesdeBultos(numBultos: number, pesoPorBultoKg: number): number {

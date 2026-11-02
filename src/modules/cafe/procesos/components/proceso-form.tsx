@@ -14,10 +14,10 @@ import { cn } from "@/lib/utils";
 import { etiquetaServicio, etiquetaTueste } from "../../lotes/lib/servicios";
 import type { TipoProceso } from "../../lotes/types";
 import { consultarPesoDisponible, registrarProceso } from "../actions/procesos.actions";
-import { estadoBaches, filasSugeridas, type BacheFila } from "../lib/baches-form";
+import { bachesSinTocar, estadoBaches, filasSugeridas, type BacheFila } from "../lib/baches-form";
 import { aTextoDecimal, fechaCorta, formatearPeso, formatearPorcentaje, parsearDecimal } from "../lib/numero";
 import { ARTICULO_PASO, evaluarPasos, origenPeso, type LotePasos } from "../lib/pasos";
-import { mermaEnVivo, textoEstadoLote, textoProcesoRegistrado, valorDelServicio } from "../lib/resumen";
+import { mermaEnVivo, referenciaDelPaso, textoEstadoLote, textoProcesoRegistrado, valorDelServicio } from "../lib/resumen";
 import {
   NIVELES_TUESTE,
   procesoSchema,
@@ -30,6 +30,7 @@ import type { ConfigEmpaque } from "../../empaque/types";
 import { CLASES_TUESTE } from "./nivel-tueste-chip";
 import { ResumenMerma } from "./resumen-merma";
 import { SelectorBultos } from "./selector-bultos";
+import { MermaBadge } from "../../components/merma-badge";
 import { TablaBaches } from "./tabla-baches";
 
 // Formulario de la planta, pensado para tablet: campos y botones de 44 px como mínimo, teclado decimal
@@ -50,7 +51,7 @@ interface ProcesoPlantaFormProps {
   tipoInicial: TipoProceso | null;
   bultoIdsIniciales: string[];
   pesoDisponibleInicial: number | null;
-  /** Presentaciones, bolsas y etiquetas: solo lo pide el empaque de marca propia (CO-30). */
+  /** Presentaciones, bolsas y etiquetas del empaque (en servicios a terceros va sin presentaciones: tamaños libres). */
   empaque?: ConfigEmpaque;
 }
 
@@ -135,8 +136,8 @@ export function ProcesoPlantaForm({
         )}
       </section>
 
-      {/* El empaque de marca propia mueve inventario (bolsas, etiquetas, producto terminado): otro formulario. */}
-      {paso && paso.tipo === "empaque" && lote.linea === "marca_propia" && empaque && (
+      {/* El empaque (A-01) tiene su propio formulario: líneas de bolsas y destino de la diferencia, sin bultos ni merma. */}
+      {paso && paso.tipo === "empaque" && empaque && (
         <EmpaqueForm
           key={paso.tipo}
           lote={lote}
@@ -148,7 +149,7 @@ export function ProcesoPlantaForm({
         />
       )}
 
-      {paso && !(paso.tipo === "empaque" && lote.linea === "marca_propia") && (
+      {paso && !(paso.tipo === "empaque" && empaque) && (
         <FormularioPaso
           key={paso.tipo}
           lote={lote}
@@ -202,6 +203,7 @@ function FormularioPaso({
     handleSubmit,
     control,
     setValue,
+    getValues,
     setError,
     clearErrors,
     formState: { errors, isSubmitting },
@@ -216,7 +218,8 @@ function FormularioPaso({
       pesoSalidaKg: "",
       // En maquila el lote ya trae su nivel de tueste; en marca propia lo decide el operario.
       nivelTueste: esTostion && esMaquila ? lote.nivelTueste : null,
-      baches: [],
+      // A-12: la tostión abre con los baches ya sugeridos (capacidad de la tostadora, partes iguales) sobre los bultos pendientes.
+      baches: esTostion ? filasSugeridas(pesoDisponibleInicial, config.capacidadTostadoraKg) : [],
       observaciones: "",
     },
   });
@@ -255,6 +258,10 @@ function FormularioPaso({
     }
     setPesoDisp(r.data);
     setValue("pesoEntradaKg", aTextoDecimal(r.data));
+    // Cambió la selección: se vuelven a sugerir los baches salvo que el operario ya haya empezado a pesar.
+    if (esTostion && bachesSinTocar((getValues("baches") ?? []) as BacheFila[])) {
+      setValue("baches", filasSugeridas(r.data, config.capacidadTostadoraKg), { shouldDirty: true });
+    }
   }
 
   const entradaKg = parsearDecimal(pesoEntradaTxt ?? "");
@@ -262,7 +269,7 @@ function FormularioPaso({
   const bachesConSalida = baches.length > 0 && baches.every((f) => parsearDecimal(f.pesoSalidaKg) !== null);
   const salidaKg = esTostion ? (bachesConSalida ? estadoDeBaches.sumaSalidaKg : null) : parsearDecimal(pesoSalidaTxt ?? "");
 
-  const merma = mermaEnVivo(tipo, entradaKg, salidaKg, config.merma);
+  const merma = mermaEnVivo(tipo, entradaKg, salidaKg, config.merma, nivelTueste);
   const valor = valorDelServicio(lote.linea, tipo, entradaKg, tipo === "empaque" ? null : config.tarifas[tipo]);
   const salidaSupera = entradaKg !== null && salidaKg !== null && salidaKg > entradaKg;
   const entradaSupera = entradaKg !== null && pesoDisp !== null && entradaKg > pesoDisp * 1.005;
@@ -307,10 +314,17 @@ function FormularioPaso({
     toast.success(textoProcesoRegistrado(tipo, r.data.merma_pct, r.data.merma_kg), {
       description: textoEstadoLote(r.data.lote_estado, r.data.avance_texto, { tipo, procesados, total: bultos.length }),
     });
-    if (r.data.desvio) toast.warning("La merma se desvió de la referencia: el proceso quedó marcado para revisión.");
+    if (r.data.desvio) {
+      toast.warning(
+        r.data.desvio_sentido === "baja"
+          ? "La merma quedó por debajo de la referencia: verifica el peso y el desarrollo del tueste."
+          : "La merma quedó por encima de la referencia: revisa el pesaje.",
+      );
+    }
     router.push("/dashboard/cafe/planta");
     router.refresh();
   };
+  const textoBoton = esTostion ? "Registrar tostión → Por empacar" : `Registrar ${etiquetaServicio(tipo).toLowerCase()}`;
   const onInvalid = () => toast.error("Revisa los campos marcados en rojo.");
 
   return (
@@ -429,6 +443,18 @@ function FormularioPaso({
                   error={errorBaches}
                   erroresFila={erroresFila}
                   disabled={isSubmitting}
+                  referenciaPct={referenciaDelPaso("tostion", config.merma, nivelTueste)}
+                  toleranciaPts={config.merma.toleranciaPts}
+                  pedido={
+                    esMaquila && (lote.perfilTempC != null || lote.perfilTiempoMin != null)
+                      ? {
+                          nivelEtiqueta: lote.nivelTueste ? etiquetaTueste(lote.nivelTueste) : null,
+                          tempC: lote.perfilTempC ?? null,
+                          tiempoMin: lote.perfilTiempoMin ?? null,
+                          esCliente: true,
+                        }
+                      : undefined
+                  }
                 />
               )}
             />
@@ -470,7 +496,7 @@ function FormularioPaso({
         {/* En pantalla ancha el botón vive aquí; en tablet va en la barra fija de abajo (a la izquierda: los avisos salen a la derecha). */}
         <div className="hidden space-y-4 xl:block">
           <Button type="submit" className="h-12 w-full text-base" disabled={isSubmitting || cargandoPeso}>
-            {isSubmitting ? "Guardando…" : `Registrar ${etiquetaServicio(tipo).toLowerCase()}`}
+            {isSubmitting ? "Guardando…" : textoBoton}
           </Button>
           <Button asChild type="button" variant="outline" className="h-11 w-full">
             <Link href="/dashboard/cafe/planta">Cancelar</Link>
@@ -485,14 +511,21 @@ function FormularioPaso({
             <>
               <span className="text-xl font-bold tabular-nums text-gray-900">{formatearPorcentaje(merma.mermaPct)} %</span>{" "}
               <span className="tabular-nums">{formatearPeso(merma.mermaKg)} kg</span>
-              {merma.desvio && <span className="ml-2 rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">Merma desviada</span>}
+              <MermaBadge
+                mermaPct={merma.mermaPct}
+                referenciaPct={merma.referenciaPct}
+                toleranciaPts={merma.toleranciaPts}
+                tipo={tipo}
+                conAyuda={false}
+                className="ml-2"
+              />
             </>
           ) : (
             "Merma: —"
           )}
         </p>
         <Button type="submit" className="h-12 shrink-0 px-6 text-base" disabled={isSubmitting || cargandoPeso}>
-          {isSubmitting ? "Guardando…" : `Registrar ${etiquetaServicio(tipo).toLowerCase()}`}
+          {isSubmitting ? "Guardando…" : textoBoton}
         </Button>
       </div>
     </form>

@@ -47,16 +47,16 @@ describe("aTextoDecimal", () => {
 });
 
 describe("formatos", () => {
-  it("formatearPeso: 3 decimales con coma y miles con punto", () => {
-    expect(formatearPeso(405)).toBe("405,000");
-    expect(formatearPeso(332.125)).toBe("332,125");
-    expect(formatearPeso(1234.5)).toBe("1.234,500");
-    expect(formatearPeso(0)).toBe("0,000");
+  it("formatearPeso: 1 decimal con coma y miles con punto (FIN-122)", () => {
+    expect(formatearPeso(405)).toBe("405,0");
+    expect(formatearPeso(332.125)).toBe("332,1");
+    expect(formatearPeso(1234.5)).toBe("1.234,5");
+    expect(formatearPeso(0)).toBe("0,0");
   });
 
   it("formatearPorcentaje: 1 decimal por defecto", () => {
     expect(formatearPorcentaje(25)).toBe("25,0");
-    expect(formatearPorcentaje(18.025, 2)).toBe("18,02"); // «18,02», como en el informe
+    expect(formatearPorcentaje(13.33333)).toBe("13,3");
     expect(formatearPorcentaje(100)).toBe("100,0");
   });
 

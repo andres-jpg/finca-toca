@@ -1,6 +1,7 @@
 import { calcularValor } from "@/modules/core/tarifas/lib/calcular-valor";
 import { ordenarServicios } from "../../lotes/lib/servicios";
-import type { TipoProceso } from "../../lotes/types";
+import type { NivelTueste, TipoProceso } from "../../lotes/types";
+import { referenciaDelPaso } from "../../procesos/lib/resumen";
 import type { ServicioTarifado } from "../types";
 
 /**
@@ -18,8 +19,8 @@ import type { ServicioTarifado } from "../types";
 export interface MermasReferencia {
   /** % de merma de referencia en trilla (19 por defecto en `PARAMETROS_CAFE`). */
   trilla?: number | null;
-  /** % de merma de referencia en tostión (18 por defecto). */
-  tostion?: number | null;
+  /** % de merma de referencia en tostión por nivel de tueste (A-03). */
+  tostion?: Readonly<Record<NivelTueste, number>> | null;
 }
 
 export interface EntradaEstimacion {
@@ -28,6 +29,8 @@ export interface EntradaEstimacion {
   /** Tarifa vigente por kilo de cada servicio; `null`/ausente = sin tarifa. */
   tarifas: Partial<Record<ServicioTarifado, number | null>>;
   mermasRef: MermasReferencia;
+  /** Nivel de tueste elegido; sin él la merma de la tostión se toma del nivel medio. */
+  nivelTueste?: NivelTueste | null;
 }
 
 export interface LineaEstimacion {
@@ -37,6 +40,11 @@ export interface LineaEstimacion {
   tarifaKg: number | null;
   /** `null` si no hay tarifa para el servicio. */
   valor: number | null;
+  /**
+   * `false` solo en el primer proceso contratado (peso recibido × tarifa vigente); los siguientes parten de un
+   * peso estimado con la merma de referencia (A-10).
+   */
+  estimado: boolean;
 }
 
 export interface Estimacion {
@@ -47,6 +55,8 @@ export interface Estimacion {
   incompleta: boolean;
   /** Hay tostión, así que el empaque va incluido sin coste. */
   conEmpaque: boolean;
+  /** Hay al menos una línea estimada: es cuando se muestra la nota «el valor real se calcula al finalizar». */
+  hayEstimadas: boolean;
 }
 
 const redondear3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -55,12 +65,23 @@ function mermaValida(m: number | null | undefined): number {
   return typeof m === "number" && Number.isFinite(m) && m >= 0 && m <= 100 ? m : 0;
 }
 
-export function estimarServicios({ pesoKg, servicios, tarifas, mermasRef }: EntradaEstimacion): Estimacion {
+/** Merma de referencia del paso (A-03, vía `referenciaDelPaso`); la tostión sin nivel elegido usa el medio. */
+function mermaDelPaso(servicio: TipoProceso, mermasRef: MermasReferencia, nivel?: NivelTueste | null): number | null {
+  if (!mermasRef.tostion && servicio === "tostion") return null;
+  const cfg = {
+    referenciaTrillaPct: mermasRef.trilla ?? 0,
+    referenciaTostionPct: mermasRef.tostion ?? { bajo: 0, medio: 0, alto: 0 },
+    toleranciaPts: 0,
+  };
+  return referenciaDelPaso(servicio, cfg, servicio === "tostion" ? (nivel ?? "medio") : null);
+}
+
+export function estimarServicios({ pesoKg, servicios, tarifas, mermasRef, nivelTueste }: EntradaEstimacion): Estimacion {
   const ordenados = ordenarServicios(servicios);
   const conEmpaque = ordenados.includes("tostion");
 
   if (!Number.isFinite(pesoKg) || pesoKg <= 0) {
-    return { lineas: [], total: 0, incompleta: false, conEmpaque };
+    return { lineas: [], total: 0, incompleta: false, conEmpaque, hayEstimadas: false };
   }
 
   const lineas: LineaEstimacion[] = [];
@@ -75,9 +96,10 @@ export function estimarServicios({ pesoKg, servicios, tarifas, mermasRef }: Entr
       pesoKg: pesoPaso,
       tarifaKg,
       valor: tarifaKg === null ? null : calcularValor(pesoPaso, tarifaKg),
+      estimado: lineas.length > 0,
     });
 
-    const merma = servicio === "trilla" ? mermasRef.trilla : servicio === "tostion" ? mermasRef.tostion : null;
+    const merma = mermaDelPaso(servicio, mermasRef, nivelTueste);
     pesoPaso = redondear3(pesoPaso * (1 - mermaValida(merma) / 100));
   }
 
@@ -86,5 +108,6 @@ export function estimarServicios({ pesoKg, servicios, tarifas, mermasRef }: Entr
     total: lineas.reduce((suma, l) => suma + (l.valor ?? 0), 0),
     incompleta: lineas.some((l) => l.valor === null),
     conEmpaque,
+    hayEstimadas: lineas.some((l) => l.estimado),
   };
 }

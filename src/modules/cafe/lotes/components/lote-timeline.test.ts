@@ -86,16 +86,16 @@ describe("LoteTimeline", () => {
   it("muestra la recepción, los procesos en orden y sus kilos, mermas y valor", () => {
     const salida = html([tostion, trilla]);
     expect(salida).toContain("Recepción");
-    expect(salida).toContain("500,000 kg</span> en 8 bultos");
+    expect(salida).toContain("500,0 kg</span> en 8 bultos");
     expect(salida).toContain("cliente: Juan Pérez");
     // en orden cronológico: recepción, trilla, tostión
     expect(salida.indexOf("Recepción")).toBeLessThan(salida.indexOf("Trilla"));
     expect(salida.indexOf("Trilla")).toBeLessThan(salida.indexOf("Tostión"));
     // 500 → 405 kg con 19 % y 405 → 332 kg con 18,02 %
-    expect(salida).toContain("500,000 → 405,000 kg");
-    expect(salida).toContain("merma 95,000 kg (19 %)");
-    expect(salida).toContain("405,000 → 332,000 kg");
-    expect(salida).toContain("merma 73,000 kg (18,02 %)");
+    expect(salida).toContain("500,0 → 405,0 kg");
+    expect(salida).toContain("merma 95,0 kg (19,0 %)");
+    expect(salida).toContain("405,0 → 332,0 kg");
+    expect(salida).toContain("merma 73,0 kg (18,0 %)");
     expect(salida).toContain("$891.000");
     expect(salida).toContain("Tueste medio");
     expect(salida).toContain("todos (8)");
@@ -109,9 +109,10 @@ describe("LoteTimeline", () => {
     expect(salida).toContain("205");
   });
 
-  it("avisa de una merma desviada con su referencia", () => {
+  it("avisa de una merma alta con su referencia", () => {
     const salida = html([{ ...trilla, desvio: true, pesoSalidaKg: 375, mermaKg: 125 }]);
-    expect(salida).toContain("Merma desviada (referencia 19 % ± 3 pts)");
+    expect(salida).toContain("Revisar · alta");
+    expect(salida).toContain("referencia 19,0 % ± 3,0 pts");
   });
 
   it("un proceso anulado se conserva, con su motivo", () => {

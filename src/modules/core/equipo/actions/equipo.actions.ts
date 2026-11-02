@@ -9,6 +9,7 @@ import { requireRolTenant } from "../../auth/guards";
 import { requireModulo } from "../../tenants/tenant.guards";
 import {
   invitarMiembroSchema,
+  pantallaInicioSchema,
   rolSchema,
   userIdSchema,
   type InvitarMiembroInput,
@@ -110,6 +111,19 @@ export async function cambiarEstadoMiembro(userId: string, activo: boolean): Pro
   if (!usuario.success || typeof activo !== "boolean") return datosInvalidos(undefined);
 
   const r = await callRpc("public", "cambiar_estado_miembro_tenant", { p_user: usuario.data, p_activo: activo });
+  if (!r.ok) return r;
+  revalidatePath("/dashboard/equipo");
+  return { ok: true, data: null };
+}
+
+/** Fija la pantalla de inicio de un miembro (A-07): `null` = la de por defecto de su rol. */
+export async function cambiarPantallaInicioMiembro(userId: string, pantalla: string | null): Promise<Result<null>> {
+  await autorizar();
+  const usuario = userIdSchema.safeParse(userId);
+  const destino = pantallaInicioSchema.safeParse(pantalla);
+  if (!usuario.success || !destino.success) return datosInvalidos(undefined);
+
+  const r = await callRpc("public", "cambiar_pantalla_inicio_miembro", { p_user: usuario.data, p_pantalla: destino.data as string });
   if (!r.ok) return r;
   revalidatePath("/dashboard/equipo");
   return { ok: true, data: null };

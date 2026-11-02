@@ -1,8 +1,8 @@
 import ExcelJS from "exceljs";
 import { SLUG_CAFE } from "../fixtures/auth";
 import { expect, test, usarRol } from "../fixtures/test";
-import { crearCompra, crearRecepcion } from "../helpers/api";
-import { abrirFichaDeLote, abrirPlanta, irA } from "../helpers/ui";
+import { crearCompra, crearRecepcion, registrarTrilla } from "../helpers/api";
+import { abrirFichaDeLote, abrirPlanta, irA, textoDelAviso } from "../helpers/ui";
 
 // Escenario 4 (HU-F1-04 y HU-F1-11): el orden de los pasos y lo que cada rol ve y puede hacer. Esconder una opción es
 // cosmético (las acciones y el RLS vuelven a comprobarlo), pero es lo que el usuario experimenta, y las URL tecleadas a
@@ -31,18 +31,34 @@ test.describe("operativo", () => {
   test("no ve Tipos de café, Tarifas ni Equipo, y las URL a mano lo devuelven a su inicio", async ({ page }) => {
     await irA(page, "/dashboard/cafe/lotes");
     const menu = page.getByRole("navigation");
-    for (const visible of ["Lotes", "Planta", "Producto terminado", "Insumos", "Ventas", "Remisiones", "Panel", "Terceros"]) {
+    for (const visible of ["Recibir café", "Planta", "Inventario", "Ventas marca propia", "Lotes", "Remisiones a terceros"]) {
       await expect(menu.getByRole("link", { name: visible, exact: true }), `ve «${visible}»`).toBeVisible();
     }
-    for (const oculto of ["Tipos de café", "Tarifas y parámetros", "Equipo"]) {
+    for (const oculto of ["Panel", "Configuración", "Tipos de café", "Tarifas y parámetros", "Equipo"]) {
       await expect(menu.getByRole("link", { name: oculto, exact: true }), `no ve «${oculto}»`).toHaveCount(0);
     }
 
     for (const ruta of ["/dashboard/cafe/maestros/tipos", "/dashboard/tarifas", "/dashboard/equipo"]) {
       await page.goto(ruta);
       await page.waitForURL((url) => !url.pathname.startsWith(ruta));
-      await expect(page).toHaveURL(/\/dashboard\/cafe\/lotes/);
+      // La pantalla de inicio del operativo es Planta (configurable en Equipo).
+      await expect(page).toHaveURL(/\/dashboard\/cafe\/planta/);
     }
+  });
+
+  test("entrega pero no anula la remisión", async ({ page }) => {
+    const lote = await crearRecepcion({ servicios: ["trilla"], bultos: 1, pesoKg: 62.5 });
+    await registrarTrilla(lote, 62.5, 50.625);
+    await irA(page, `/dashboard/cafe/planta/entregar?lote=${lote.id}`);
+    await page.getByLabel("Nombre de quien recibe").fill("Luis Mora");
+    await page.getByLabel("Cédula").fill("7000111");
+    await page.getByRole("button", { name: "Entregar e imprimir remisión" }).click();
+    const numero = (await textoDelAviso(page, /Remisión REM-.* generada/)).match(/REM-\d{4}-\d+/)?.[0];
+    await irA(page, "/dashboard/cafe/remisiones");
+    await expect(page.getByRole("row").filter({ hasText: numero! })).toBeVisible();
+    // Anular es solo de owner/admin: la ficha del lote no ofrece el botón al operativo.
+    await irA(page, `/dashboard/cafe/lotes/${lote.id}`);
+    await expect(page.getByRole("button", { name: "Anular remisión" })).toHaveCount(0);
   });
 });
 
@@ -55,10 +71,10 @@ test.describe("gerencia", () => {
     // Menú: ve lo que consulta, no la Planta ni los maestros.
     await irA(page, "/dashboard/cafe/lotes");
     const menu = page.getByRole("navigation");
-    for (const visible of ["Lotes", "Producto terminado", "Insumos", "Ventas", "Remisiones", "Panel", "Terceros"]) {
+    for (const visible of ["Panel", "Inventario", "Ventas marca propia", "Lotes", "Remisiones a terceros"]) {
       await expect(menu.getByRole("link", { name: visible, exact: true }), `ve «${visible}»`).toBeVisible();
     }
-    for (const oculto of ["Planta", "Tipos de café", "Tarifas y parámetros", "Equipo"]) {
+    for (const oculto of ["Recibir café", "Planta", "Configuración", "Tipos de café", "Tarifas y parámetros", "Equipo"]) {
       await expect(menu.getByRole("link", { name: oculto, exact: true }), `no ve «${oculto}»`).toHaveCount(0);
     }
 
@@ -67,13 +83,14 @@ test.describe("gerencia", () => {
     await expect(page.getByRole("link", { name: "Nueva recepción" })).toHaveCount(0);
     await page.goto("/dashboard/cafe/planta");
     await expect(page).toHaveURL(/\/dashboard\/cafe\/lotes/);
-    await page.goto("/dashboard/cafe/lotes/nueva-compra");
+    await page.goto("/dashboard/cafe/recibir?tipo=marca-propia");
     await expect(page).toHaveURL(/\/dashboard\/cafe\/lotes$/);
 
     // ...ni en la ficha del lote (ni «Ir a planta» ni «Generar remisión» ni «Anular lote»).
     await abrirFichaDeLote(page, lote.codigo);
     await expect(page.getByRole("link", { name: "Ir a planta" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /Generar remisión|Anular lote/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Anular lote/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Entregar" })).toHaveCount(0);
     await expect(page.getByRole("heading", { level: 1 })).toContainText(lote.codigo);
 
     // Exportar sí: el Excel respeta el filtro de la pantalla (solo el lote buscado).
@@ -89,5 +106,11 @@ test.describe("gerencia", () => {
     hoja.eachRow((fila) => fila.eachCell((c) => celdas.push(String(c.text))));
     expect(celdas, "el cliente va en el encabezado").toContain("Cofradía (E2E)");
     expect(celdas, "el lote filtrado va en la hoja").toContain(lote.codigo);
+  });
+
+  test("remisiones: consulta la lista", async ({ page }) => {
+    await irA(page, "/dashboard/cafe/remisiones");
+    await expect(page.getByRole("heading", { level: 1, name: "Remisiones a terceros" })).toBeVisible();
+    await expect(page.getByRole("table")).toBeVisible();
   });
 });

@@ -123,6 +123,6 @@ describe("formatearCantidad", () => {
 
   it("conserva el signo y recorta a 3 decimales", () => {
     expect(formatearCantidad(-3)).toBe("-3 u");
-    expect(formatearCantidad(1.23456, "kg")).toBe("1,235 kg");
+    expect(formatearCantidad(1.23456, "kg")).toBe("1,2 kg");
   });
 });

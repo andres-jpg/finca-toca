@@ -1,5 +1,5 @@
 import { callRpc } from "../../rpc/call-rpc";
-import type { RolTenant } from "../../auth/sesion";
+import type { PantallaInicio, RolTenant } from "../../auth/sesion";
 import type { MiembroEquipo } from "../types";
 
 // Fila de `listar_miembros_tenant()`. Los tipos generados no marcan como nulo el `ultimo_acceso` de una
@@ -12,6 +12,7 @@ interface FilaMiembro {
   activo: boolean;
   ultimo_acceso: string | null;
   created_at: string;
+  pantalla_inicio: PantallaInicio | null;
 }
 
 /**
@@ -30,5 +31,6 @@ export async function listarMiembros(): Promise<MiembroEquipo[]> {
     activo: f.activo,
     ultimoAcceso: f.ultimo_acceso,
     creadoEn: f.created_at,
+    pantallaInicio: f.pantalla_inicio ?? null,
   }));
 }

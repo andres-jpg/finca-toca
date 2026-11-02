@@ -18,3 +18,6 @@ export type InvitarMiembroInput = z.input<typeof invitarMiembroSchema>;
 export const userIdSchema = z.string({ message: "Miembro no válido" }).uuid("Miembro no válido");
 
 export const rolSchema = rol;
+
+/** Pantalla de inicio configurable (A-07); `null` vuelve a la de por defecto. La base repite la lista. */
+export const pantallaInicioSchema = z.enum(["planta", "recibir"], { message: "Elige una pantalla de inicio" }).nullable();

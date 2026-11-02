@@ -3,19 +3,53 @@ import { createClient } from "@/lib/supabase/server";
 import { leerDetalle } from "../lib/detalle";
 import { escaparLike } from "@/modules/cafe/lotes/lib/filtros";
 import { REMISIONES_POR_PAGINA, type FiltrosRemisiones } from "../lib/filtros";
-import type { Remision } from "../types";
-import { createClienteRemisiones, type RemisionRow } from "./cliente";
+import type { LoteRemisionado, Remision } from "../types";
+import { createClienteRemisiones, type ClienteRemisiones, type RemisionLoteRow, type RemisionRow } from "./cliente";
 
 // Módulo plano (no "use server"): solo lo llama código de servidor. La autorización es el RLS de `cafe.remisiones`:
 // sin el módulo `cafe.remisiones` activo, o sin membresía en el cliente actual, todo sale vacío.
 
 const num = (n: number | null | undefined): number => (n === null || n === undefined ? 0 : Number(n));
 
-function aRemision(r: RemisionRow): Remision {
+function aLote(l: RemisionLoteRow): LoteRemisionado {
+  return {
+    loteId: l.lote_id,
+    loteCodigo: l.lote_codigo,
+    pesoRecibidoKg: num(l.peso_recibido_kg),
+    pesoEntregadoKg: num(l.peso_entregado_kg),
+    detalle: leerDetalle(l.detalle),
+    valorServicios: num(l.valor_servicios),
+  };
+}
+
+/** Los lotes de cada remisión, por `remision_id`, en orden de código (una sola consulta). */
+async function lotesDe(supabase: ClienteRemisiones, remisionIds: readonly string[]): Promise<Map<string, RemisionLoteRow[]>> {
+  const mapa = new Map<string, RemisionLoteRow[]>();
+  if (remisionIds.length === 0) return mapa;
+  const { data, error } = await supabase
+    .from("remisiones_lotes")
+    .select("*")
+    .in("remision_id", [...remisionIds])
+    .order("lote_codigo", { ascending: true });
+  if (error) throw new Error("No se pudieron cargar los lotes de las remisiones");
+  for (const fila of (data ?? []) as unknown as RemisionLoteRow[]) {
+    mapa.set(fila.remision_id, [...(mapa.get(fila.remision_id) ?? []), fila]);
+  }
+  return mapa;
+}
+
+function aRemision(r: RemisionRow, links: readonly RemisionLoteRow[] = []): Remision {
+  // Una remisión sin relación (no debería existir tras la migración) se muestra con su único lote.
+  const lotes: LoteRemisionado[] = links.length
+    ? links.map(aLote)
+    : r.lote_id
+      ? [{ loteId: r.lote_id, loteCodigo: r.lote_codigo, pesoRecibidoKg: num(r.peso_recibido_kg), pesoEntregadoKg: num(r.peso_entregado_kg), detalle: leerDetalle(r.detalle), valorServicios: num(r.valor_servicios) }]
+      : [];
   return {
     id: r.id,
     numero: r.numero,
-    loteId: r.lote_id,
+    loteId: r.lote_id ?? lotes[0]?.loteId ?? "",
+    lotes,
     loteCodigo: r.lote_codigo,
     fecha: r.fecha,
     terceroId: r.tercero_id,
@@ -26,6 +60,8 @@ function aRemision(r: RemisionRow): Remision {
     mermaTotalKg: num(r.merma_total_kg),
     detalle: leerDetalle(r.detalle),
     valorServicios: num(r.valor_servicios),
+    recibeNombre: r.recibe_nombre,
+    recibeDocumento: r.recibe_documento,
     recibidoPor: r.recibido_por,
     observaciones: r.observaciones,
     forzada: r.forzada === true,
@@ -61,7 +97,7 @@ export async function listarRemisiones(filtros: FiltrosRemisiones): Promise<Pagi
     if (filtros.desde) q = q.gte("fecha", filtros.desde);
     if (filtros.hasta) q = q.lte("fecha", filtros.hasta);
     if (filtros.tercero) q = q.eq("tercero_id", filtros.tercero);
-    if (filtros.estado === "vigente") q = q.is("anulada_at", null);
+    if (filtros.estado === "entregada") q = q.is("anulada_at", null);
     if (filtros.estado === "anulada") q = q.not("anulada_at", "is", null);
     if (filtros.q) {
       // Dentro de `.or()` la coma, los paréntesis y las comillas son sintaxis del filtro: un número REM o un código
@@ -84,7 +120,9 @@ export async function listarRemisiones(filtros: FiltrosRemisiones): Promise<Pagi
     return paginar([], total ?? 0, filtros.pagina);
   }
   if (error) throw new Error("No se pudieron cargar las remisiones");
-  const filas = ((data ?? []) as unknown as RemisionRow[]).map(aRemision);
+  const rows = (data ?? []) as unknown as RemisionRow[];
+  const lotes = await lotesDe(supabase, rows.map((r) => r.id));
+  const filas = rows.map((r) => aRemision(r, lotes.get(r.id)));
   return paginar(filas, count ?? filas.length, filtros.pagina);
 }
 
@@ -93,19 +131,23 @@ export const getRemision = cache(async (id: string): Promise<Remision | null> =>
   const supabase = await createClienteRemisiones();
   const { data, error } = await supabase.from("remisiones").select("*").eq("id", id).maybeSingle();
   if (error) throw new Error("No se pudo cargar la remisión");
-  return data ? aRemision(data) : null;
+  if (!data) return null;
+  const fila = data as unknown as RemisionRow;
+  return aRemision(fila, (await lotesDe(supabase, [fila.id])).get(fila.id));
 });
 
-/** Todas las remisiones de un lote (la vigente y las anuladas), de la más reciente a la más antigua. */
+/** Todas las remisiones que incluyen el lote (la entregada y las anuladas), de la más reciente a la más antigua. */
 export async function getRemisionesDeLote(loteId: string): Promise<Remision[]> {
   const supabase = await createClienteRemisiones();
-  const { data, error } = await supabase
-    .from("remisiones")
-    .select("*")
-    .eq("lote_id", loteId)
-    .order("created_at", { ascending: false });
+  const { data: enlaces, error: errorEnlaces } = await supabase.from("remisiones_lotes").select("remision_id").eq("lote_id", loteId);
+  if (errorEnlaces) throw new Error("No se pudieron cargar las remisiones del lote");
+  const ids = [...new Set(((enlaces ?? []) as { remision_id: string }[]).map((e) => e.remision_id))];
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase.from("remisiones").select("*").in("id", ids).order("created_at", { ascending: false });
   if (error) throw new Error("No se pudieron cargar las remisiones del lote");
-  return (data ?? []).map(aRemision);
+  const rows = (data ?? []) as unknown as RemisionRow[];
+  const lotes = await lotesDe(supabase, rows.map((r) => r.id));
+  return rows.map((r) => aRemision(r, lotes.get(r.id)));
 }
 
 /** NIT del cliente (emisor del tiquete): `tenants.nit`, que la sesión no trae. `null` si no está registrado. */

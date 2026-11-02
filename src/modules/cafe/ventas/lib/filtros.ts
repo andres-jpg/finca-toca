@@ -4,7 +4,7 @@ import type { TipoVenta } from "../types";
 // Filtros del listado de ventas: viven en la URL (se pueden compartir). `parsearFiltrosVentas` es la única lectura de
 // esos parámetros; lo inválido se descarta en silencio. Mismas reglas que las remisiones. Pura.
 
-export const ESTADOS_FILTRO_VENTA = ["vigente", "anulada"] as const;
+export const ESTADOS_FILTRO_VENTA = ["anulada"] as const;
 export type EstadoFiltroVenta = (typeof ESTADOS_FILTRO_VENTA)[number];
 export const TIPOS_FILTRO_VENTA: readonly TipoVenta[] = ["venta", "cortesia"];
 

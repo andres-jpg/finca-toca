@@ -13,7 +13,7 @@ import {
 import { parsearAncho } from "@/modules/core/print/lib/ancho";
 import { formatearFechaHoraImpresion, parsearCopias } from "@/modules/core/print/lib/opciones";
 import { PARAMETRO_IMPRESORA_ANCHO } from "@/modules/core/print/parametros";
-import { formatearPesos } from "@/modules/core/tarifas/lib/formato";
+import { formatCOP, formatKgNum } from "@/modules/core/formato/numeros";
 
 interface PruebaPageProps {
   searchParams: Promise<{ ancho?: string | string[]; copias?: string | string[] }>;
@@ -66,11 +66,11 @@ export default async function PruebaImpresionPage({ searchParams }: PruebaPagePr
         <TicketSeparador />
         <TicketTabla
           columnas={[{ header: "Concepto" }, { header: "Kg", alinear: "derecha" }, { header: "Valor", alinear: "derecha" }]}
-          filas={LINEAS.map((l) => [l.concepto, l.kg.toLocaleString("es-CO", { minimumFractionDigits: 2 }), formatearPesos(Math.round(l.kg * l.valor))])}
+          filas={LINEAS.map((l) => [l.concepto, formatKgNum(l.kg), formatCOP(Math.round(l.kg * l.valor))])}
         />
         <TicketSeparador />
-        <TicketLinea etiqueta="Total kg" valor={LINEAS.reduce((s, l) => s + l.kg, 0).toLocaleString("es-CO", { minimumFractionDigits: 2 })} />
-        <TicketLinea etiqueta="TOTAL" valor={formatearPesos(Math.round(total))} fuerte />
+        <TicketLinea etiqueta="Total kg" valor={formatKgNum(LINEAS.reduce((s, l) => s + l.kg, 0))} />
+        <TicketLinea etiqueta="TOTAL" valor={formatCOP(Math.round(total))} fuerte />
         <TicketSeparador fuerte />
         <TicketPie impresoEn={impresoEn} mensaje="Datos ficticios: solo para calibrar" />
       </TicketCopias>

@@ -114,6 +114,7 @@ create or replace function pg_temp.pe(p_k text, p_lineas integer[][], p_nums int
 returns jsonb language sql as $$
   select jsonb_build_object('lote_id', pg_temp.lid(p_k), 'fecha', pg_temp.hoy(),
          'bultos', to_jsonb(pg_temp.barr(p_k, coalesce(p_nums, array(select generate_series(1, 200))))),
+         'diferencia_destino', 'perdida',   -- A-01: lo que sobra siempre dice adónde fue (si no sobra, se ignora)
          'lineas', (select jsonb_agg(jsonb_build_object('presentacion_g', p_lineas[i][1], 'unidades', p_lineas[i][2]) order by i)
                       from generate_subscripts(p_lineas, 1) i)) || p_extra
 $$;
@@ -222,7 +223,7 @@ select throws_ok(
 );
 select is(
   pg_temp.detalle($$select cafe.registrar_empaque(pg_temp.pe('MP1', array[[500, 170]]))$$),
-  'Empacarías 85 kg y solo hay 81 kg disponibles en los bultos elegidos. Empaca solo lo que hay o elige más bultos.',
+  'Las bolsas suman 85 kg y a empaque solo llegan 81 kg (los bultos elegidos).',
   'el mensaje dice cuánto se quiso empacar y cuánto hay'
 );
 select is(
@@ -267,9 +268,10 @@ select is(
 insert into res select 'S1', cafe.registrar_recepcion(jsonb_build_object(
   'tercero_id', (select id from ids where clave = 'ca'), 'fecha', pg_temp.hoy(), 'peso_kg', 100, 'num_bultos', 2,
   'servicios', '["tostion"]'::jsonb, 'nivel_tueste', 'medio'));
+-- A-01: un lote de servicio también se empaca con registrar_empaque (sin inventario); lo que sobra pide destino.
 select throws_ok(
   $$select cafe.registrar_empaque(pg_temp.pe('S1', array[[500, 10]]))$$,
-  'P0001', 'usar_registrar_proceso', 'un lote de servicio no mueve inventario: usar_registrar_proceso'
+  'P0001', 'orden_proceso_invalido', 'un lote de servicio sin tostar tampoco se empaca (ya no es usar_registrar_proceso)'
 );
 
 -- 4. El ejemplo del ticket: 81 kg → 120 × 500 g + 8 × 2.500 g ---------------------------------------------------------------

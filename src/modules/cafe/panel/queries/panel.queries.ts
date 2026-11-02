@@ -3,7 +3,8 @@ import { getParametro } from "@/modules/core/parametros/queries/parametros.queri
 import { callRpc } from "@/modules/core/rpc/call-rpc";
 import { PARAMETROS_CAFE } from "../../parametros";
 import { leerKpis, leerProduccion, leerVentasDiarias } from "../lib/kpis";
-import type { FilaProduccion, KpisPanel, LineaPanel, VentaDiaria } from "../types";
+import { leerProveedores } from "../lib/proveedores";
+import type { FilaProduccion, KpisPanel, LineaPanel, ProveedorMarcaPropia, VentaDiaria } from "../types";
 
 // Lectura del panel de gerencia (FIN-115 · CO-34). Módulo plano (no "use server"): solo lo llaman las secciones del
 // servidor de `/dashboard/cafe`. La frontera real es la base: las tres funciones son `SECURITY INVOKER`, exigen
@@ -44,7 +45,31 @@ export const getVentasDiarias = cache(async (desde: string, hasta: string, linea
 export const getReferenciasMerma = cache(async (): Promise<{ trilla: number; tostion: number }> => {
   const [trilla, tostion] = await Promise.all([
     getParametro(PARAMETROS_CAFE.mermaReferenciaTrillaPct),
-    getParametro(PARAMETROS_CAFE.mermaReferenciaTostionPct),
+    getParametro(PARAMETROS_CAFE.mermaReferenciaTostionMedioPct),
   ]);
   return { trilla, tostion };
+});
+
+/**
+ * Referencias y tolerancia para marcar la merma agregada del periodo (A-03). La de tostión solo es una cifra si los
+ * tres niveles de tueste coinciden; si difieren, el agregado mezcla referencias distintas y no se marca (`null`).
+ */
+export const getReferenciasPanel = cache(
+  async (): Promise<{ trilla: number; tostion: number | null; toleranciaPts: number }> => {
+    const [trilla, bajo, medio, alto, toleranciaPts] = await Promise.all([
+      getParametro(PARAMETROS_CAFE.mermaReferenciaTrillaPct),
+      getParametro(PARAMETROS_CAFE.mermaReferenciaTostionBajoPct),
+      getParametro(PARAMETROS_CAFE.mermaReferenciaTostionMedioPct),
+      getParametro(PARAMETROS_CAFE.mermaReferenciaTostionAltoPct),
+      getParametro(PARAMETROS_CAFE.mermaToleranciaPts),
+    ]);
+    return { trilla, tostion: bajo === medio && medio === alto ? medio : null, toleranciaPts };
+  },
+);
+
+/** Proveedores de marca propia con precio/kg, humedad, merma de tostión y costo por kg tostado (`cafe.proveedores_marca_propia`). */
+export const getProveedoresMarcaPropia = cache(async (desde: string, hasta: string): Promise<ProveedorMarcaPropia[]> => {
+  const r = await callRpc("cafe", "proveedores_marca_propia", { p_desde: desde, p_hasta: hasta });
+  if (!r.ok) return fallo("proveedores", r.code);
+  return leerProveedores(r.data);
 });

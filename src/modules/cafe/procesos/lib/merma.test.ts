@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calcularMerma, esDesvio } from "./merma";
+import { calcularMerma, esDesvio, estadoMerma } from "./merma";
 
 // Los casos del ejemplo del informe son los mismos de `94_cafe_procesos.test.sql`.
 describe("calcularMerma", () => {
@@ -85,5 +85,36 @@ describe("esDesvio", () => {
   it("ignora el ruido de coma flotante (19,1 − 16,1 = 3 exacto)", () => {
     expect(esDesvio(19.1, 16.1, 3)).toBe(false);
     expect(esDesvio(Number.NaN, 19, 3)).toBe(false);
+  });
+});
+
+describe("estadoMerma (A-03)", () => {
+  it("bache 13,5 → 11,8 kg (12,6 %) en tueste medio (18 ± 2): baja", () => {
+    const m = calcularMerma(13.5, 11.8);
+    expect(m?.mermaPct).toBe(12.593);
+    expect(estadoMerma(m!.mermaPct, 18, 2)).toBe("baja");
+  });
+
+  it("bache 13,5 → 10,6 kg (21,5 %): alta", () => {
+    expect(estadoMerma(calcularMerma(13.5, 10.6)!.mermaPct, 18, 2)).toBe("alta");
+  });
+
+  it("los límites (16 % y 20 %) están en rango", () => {
+    expect(estadoMerma(20, 18, 2)).toBe("en_rango");
+    expect(estadoMerma(16, 18, 2)).toBe("en_rango");
+    expect(estadoMerma(20.001, 18, 2)).toBe("alta");
+    expect(estadoMerma(15.999, 18, 2)).toBe("baja");
+  });
+
+  it("sin referencia o tolerancia no hay estado", () => {
+    expect(estadoMerma(18, null, 2)).toBeNull();
+    expect(estadoMerma(18, 18, undefined)).toBeNull();
+    expect(estadoMerma(Number.NaN, 18, 2)).toBeNull();
+  });
+
+  it("coincide con esDesvio: desvío = alta o baja", () => {
+    for (const pct of [10, 15.999, 16, 18, 20, 20.001, 25]) {
+      expect(esDesvio(pct, 18, 2)).toBe(estadoMerma(pct, 18, 2) !== "en_rango");
+    }
   });
 });

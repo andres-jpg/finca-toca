@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ToastProvider } from "@/components/layout/toast-provider";
 import { Analytics } from "@vercel/analytics/next";
+import { NOMBRE_PLATAFORMA } from "@/lib/plataforma";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -15,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Toca Lácteos",
+  title: NOMBRE_PLATAFORMA,
   description: "Panel de gestión de finca y recolección de leche",
   manifest: "/manifest.webmanifest",
   appleWebApp: {

@@ -81,3 +81,29 @@ export function quedaDisponible(bultos: readonly BultoPeso[]): Disponible[] {
       pesoKg: gramos / 1000,
     }));
 }
+
+export interface MermaProcesada {
+  /** Σ entrada de los pasos con merma (trilla, tostión, molienda), en kg. */
+  entradaKg: number;
+  mermaKg: number;
+  /** Σ(entrada − salida) / Σ entrada, en %. */
+  pct: number;
+}
+
+/**
+ * Merma del lote SOLO sobre lo procesado (A-03): Σ(entrada − salida) / Σ entrada de las etapas que existen, no
+ * dividida por todo lo recibido (un lote con 4 de 6 bultos tostados mide esos 4). El empaque no se cuenta: es
+ * envasar, no una pérdida de proceso. Se suma en gramos. `null` si aún no hay nada procesado. El detalle por
+ * proceso es cada fila del resumen por etapa.
+ */
+export function mermaProcesada(etapas: readonly Pick<EtapaLote, "tipo" | "pesoEntradaKg" | "mermaKg">[]): MermaProcesada | null {
+  let entrada = 0;
+  let merma = 0;
+  for (const e of etapas) {
+    if (e.tipo === "empaque") continue;
+    entrada += Math.round(e.pesoEntradaKg * 1000);
+    merma += Math.round(e.mermaKg * 1000);
+  }
+  const pct = pctDeMerma(merma / 1000, entrada / 1000);
+  return pct === null ? null : { entradaKg: entrada / 1000, mermaKg: merma / 1000, pct };
+}

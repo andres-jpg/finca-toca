@@ -1,11 +1,12 @@
 import Link from "next/link";
+import { COPY } from "../../copy";
 import { cn } from "@/lib/utils";
 import { serializarFiltros, type FiltrosLotes, type TipoFiltro } from "../lib/filtros";
 
 const PESTANAS: { id: "todos" | "marca_propia" | "servicios"; etiqueta: string; tipo: TipoFiltro | undefined }[] = [
   { id: "todos", etiqueta: "Todos", tipo: undefined },
-  { id: "marca_propia", etiqueta: "Marca propia", tipo: "marca_propia" },
-  { id: "servicios", etiqueta: "Servicios", tipo: "servicios" },
+  { id: "marca_propia", etiqueta: COPY.marcaPropia, tipo: "marca_propia" },
+  { id: "servicios", etiqueta: COPY.serviciosATerceros, tipo: "servicios" },
 ];
 
 /** La pestaña de un filtro de tipo: trilla y maquila viven dentro de «Servicios». */

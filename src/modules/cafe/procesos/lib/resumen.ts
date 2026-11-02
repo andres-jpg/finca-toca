@@ -1,8 +1,8 @@
 import { calcularValor } from "@/modules/core/tarifas/lib/calcular-valor";
 import { etiquetaServicio } from "../../lotes/lib/servicios";
-import type { LineaLote, TipoProceso } from "../../lotes/types";
+import type { LineaLote, NivelTueste, TipoProceso } from "../../lotes/types";
 import type { EstadoLote } from "../types";
-import { calcularMerma, esDesvio } from "./merma";
+import { calcularMerma, esDesvio, estadoMerma, type EstadoMerma } from "./merma";
 import { formatearCompacto, formatearPeso, formatearPorcentaje } from "./numero";
 import { PARTICIPIO_PASO } from "./pasos";
 
@@ -13,14 +13,16 @@ import { PARTICIPIO_PASO } from "./pasos";
 /** Referencias de merma del cliente (snapshot al guardar): solo trilla y tostión (decisión 3 de CO-20). */
 export interface ConfigMerma {
   referenciaTrillaPct: number;
-  referenciaTostionPct: number;
+  /** Referencia de tostión por nivel de tueste (A-03). */
+  referenciaTostionPct: Readonly<Record<NivelTueste, number>>;
   toleranciaPts: number;
 }
 
 /** Merma de referencia de un paso; `null` en molienda y empaque (sin referencia no hay desvío). */
-export function referenciaDelPaso(tipo: TipoProceso, cfg: ConfigMerma): number | null {
+export function referenciaDelPaso(tipo: TipoProceso, cfg: ConfigMerma, nivel?: NivelTueste | null): number | null {
   if (tipo === "trilla") return cfg.referenciaTrillaPct;
-  if (tipo === "tostion") return cfg.referenciaTostionPct;
+  // Sin nivel elegido todavía no hay referencia de tostión que comparar.
+  if (tipo === "tostion") return nivel ? cfg.referenciaTostionPct[nivel] : null;
   return null;
 }
 
@@ -28,6 +30,8 @@ export interface MermaEnVivo {
   mermaKg: number;
   mermaPct: number;
   desvio: boolean;
+  /** `null` = sin referencia (molienda, empaque o tostión sin nivel). */
+  estado: EstadoMerma | null;
   referenciaPct: number | null;
   toleranciaPts: number;
 }
@@ -38,23 +42,27 @@ export function mermaEnVivo(
   entradaKg: number | null,
   salidaKg: number | null,
   cfg: ConfigMerma,
+  nivel?: NivelTueste | null,
 ): MermaEnVivo | null {
   if (entradaKg === null || salidaKg === null) return null;
   const merma = calcularMerma(entradaKg, salidaKg);
   if (!merma) return null;
-  const referenciaPct = referenciaDelPaso(tipo, cfg);
+  const referenciaPct = referenciaDelPaso(tipo, cfg, nivel);
   return {
     ...merma,
     referenciaPct,
     toleranciaPts: cfg.toleranciaPts,
     desvio: esDesvio(merma.mermaPct, referenciaPct, cfg.toleranciaPts),
+    estado: estadoMerma(merma.mermaPct, referenciaPct, cfg.toleranciaPts),
   };
 }
 
-/** «Merma 25,0 % (referencia 19 % ± 3). Revisa el pesaje. Puedes guardar igualmente». */
+/** «Merma 25,0 % (referencia 19 % ± 2). Revisa el pesaje. Puedes guardar igualmente» (alta) / «Verifica…» (baja). */
 export function textoDesvio(m: MermaEnVivo): string | null {
   if (!m.desvio || m.referenciaPct === null) return null;
-  return `Merma ${formatearPorcentaje(m.mermaPct)} % (referencia ${formatearCompacto(m.referenciaPct)} % ± ${formatearCompacto(m.toleranciaPts)}). Revisa el pesaje. Puedes guardar igualmente`;
+  const base = `Merma ${formatearPorcentaje(m.mermaPct)} % (referencia ${formatearCompacto(m.referenciaPct)} % ± ${formatearCompacto(m.toleranciaPts)})`;
+  const consejo = m.estado === "baja" ? "Verifica el peso y el desarrollo del tueste" : "Revisa el pesaje";
+  return `${base}. ${consejo}. Puedes guardar igualmente`;
 }
 
 export interface ValorServicio {

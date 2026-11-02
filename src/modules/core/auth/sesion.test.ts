@@ -57,6 +57,7 @@ describe("getSesion / getSesionBase", () => {
       rolTenant: "admin",
       rolLegacy: "admin",
       esPlatformAdmin: false,
+      pantallaInicio: null,
       membresias: [{ tenantId: "t1", nombre: "Villa Blanca", slug: "villa-blanca", vertical: "ganaderia", rol: "admin" }],
     });
   });

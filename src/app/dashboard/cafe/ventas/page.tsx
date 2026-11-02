@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { requireSesion } from "@/modules/core/auth/guards";
 import { requireModuloPagina } from "@/modules/core/tenants/tenant.guards";
-import { ResumenVentasCards } from "@/modules/cafe/ventas/components/resumen-ventas";
+import { AvisoFacturasPendientes } from "@/modules/cafe/ventas/components/resumen-ventas";
 import { VentasFiltros } from "@/modules/cafe/ventas/components/ventas-filtros";
 import { VentasPaginacion } from "@/modules/cafe/ventas/components/ventas-paginacion";
 import { VentasTable } from "@/modules/cafe/ventas/components/ventas-table";
@@ -18,6 +18,8 @@ const RUTA = "/dashboard/cafe/ventas";
  * todos los miembros (Gerencia incluida); registran owner/admin/operativo y anula owner/admin desde el detalle. Los
  * filtros viajan por query string para poder compartir la URL.
  */
+export const metadata = { title: "Ventas anteriores" };
+
 export default async function VentasPage({
   searchParams,
 }: {
@@ -32,7 +34,7 @@ export default async function VentasPage({
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-800">Ventas</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-800">Ventas anteriores</h1>
           <p className="mt-0.5 text-sm text-gray-500">
             Café de marca propia que sale del inventario: ventas y cortesías. Esta pantalla no emite facturas; la factura electrónica se emite en Aliados.
           </p>
@@ -47,7 +49,7 @@ export default async function VentasPage({
         )}
       </div>
 
-      <ResumenVentasCards resumen={resumen} />
+      <AvisoFacturasPendientes n={resumen.nFacturaPendiente} />
       <VentasFiltros key={JSON.stringify(filtros)} filtros={filtros} ruta={RUTA} />
       <VentasTable ventas={pagina.filas} filtros={filtros} />
       <VentasPaginacion filtros={filtros} ruta={RUTA} total={pagina.total} totalPaginas={pagina.totalPaginas} />

@@ -108,10 +108,8 @@ export async function registrarPaso(page: Page, boton: string | RegExp): Promise
   await expect(page).toHaveURL(/\/dashboard\/cafe\/planta$/, { timeout: NAVEGACION_LENTA });
 }
 
-/** En el formulario de venta, elige el producto de la primera fila por su nombre («Excelso 500 g»). */
+/** En el formulario de venta, agrega el producto tocando su tarjeta («Excelso 500 g»); un segundo toque suma una unidad. */
 export async function elegirProductoDeVenta(page: Page, nombre: string): Promise<void> {
-  const select = page.getByLabel("Producto", { exact: true }).first();
-  const valor = await select.locator("option").filter({ hasText: new RegExp(`^${nombre}`) }).first().getAttribute("value");
-  expect(valor, `el producto «${nombre}» está en la lista`).toBeTruthy();
-  await select.selectOption(valor!);
+  await page.getByRole("button", { name: `Agregar ${nombre}`, exact: true }).click();
+  await expect(page.getByRole("group", { name: `Unidades de ${nombre}` })).toBeVisible();
 }

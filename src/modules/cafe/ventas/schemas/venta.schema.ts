@@ -79,6 +79,11 @@ export const ventaSchema = z
         ctx.addIssue({ code: "custom", path: ["lineas", i, "precio"], message: "Indica el precio de cada producto" });
       }
     }
+    // A-16: la cortesía exige motivo (se guarda en `observaciones`, sin columna nueva). El destinatario es el cliente
+    // elegido y no puede ser el «Consumidor final»: lo comprueban el formulario y el Server Action (el id no viaja aquí).
+    if (v.tipo === "cortesia" && !v.observaciones) {
+      ctx.addIssue({ code: "custom", path: ["observaciones"], message: "Indica el motivo de la cortesía" });
+    }
     if (v.tipo === "cortesia" && v.requiereFactura) {
       ctx.addIssue({ code: "custom", path: ["requiereFactura"], message: "Una cortesía no lleva factura" });
     }

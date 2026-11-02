@@ -1,3 +1,4 @@
+import { COPY } from "@/modules/cafe/copy";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
@@ -18,6 +19,8 @@ import { getVenta } from "@/modules/cafe/ventas/queries/ventas.queries";
  * generó (y la devolución si se anuló), el estado de la factura de Aliados y, para owner/admin, anular. Completar el
  * número de factura lo hace owner/admin/operativo. Los precios son un snapshot: no cambian si cambia la lista.
  */
+export const metadata = { title: "Venta" };
+
 export default async function VentaDetallePage({ params }: { params: Promise<{ id: string }> }) {
   await requireModuloPagina("cafe.ventas");
   const { rolTenant, tenant } = await requireSesion();
@@ -143,7 +146,7 @@ export default async function VentaDetallePage({ params }: { params: Promise<{ i
         <p className="text-xs text-gray-500">
           El kardex de cada producto está en{" "}
           <Link href="/dashboard/cafe/inventario" className="text-sky-700 underline underline-offset-2">
-            Producto terminado
+            {COPY.inventarioMarcaPropia}
           </Link>
           .
         </p>

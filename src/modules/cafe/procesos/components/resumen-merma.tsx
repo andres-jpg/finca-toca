@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
-import { formatearPesos } from "@/modules/core/tarifas/lib/formato";
+import { cn } from "@/lib/utils";
+import { formatCOP } from "@/modules/core/formato/numeros";
+import { MermaBadge } from "../../components/merma-badge";
 import { etiquetaServicio } from "../../lotes/lib/servicios";
 import type { TipoProceso } from "../../lotes/types";
 import { formatearCompacto, formatearPeso, formatearPorcentaje } from "../lib/numero";
@@ -20,7 +22,7 @@ interface ResumenMermaProps {
 }
 
 /**
- * Merma en vivo y valor del servicio. El desvío AVISA en ámbar pero no bloquea (HU-04 c4): el proceso se guarda
+ * Merma en vivo y valor del servicio. El desvío AVISA (rojo si es alto, ámbar si es bajo) pero no bloquea (HU-04 c4): el proceso se guarda
  * igual y queda marcado. El valor es de solo lectura: lo calcula la base con la tarifa vigente en la fecha del
  * proceso (HU-09 c2); aquí es una vista previa con la tarifa de hoy.
  */
@@ -44,8 +46,14 @@ export function ResumenMerma({ tipo, merma, valor, empaqueIncluido, fechaDistint
           ) : (
             <p className="text-sm text-gray-500">Sin merma de referencia en este paso: no se marca desvío.</p>
           )}
+          <MermaBadge mermaPct={merma.mermaPct} referenciaPct={merma.referenciaPct} toleranciaPts={merma.toleranciaPts} tipo={tipo} />
           {aviso && (
-            <p className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
+            <p
+              className={cn(
+                "flex items-start gap-2 rounded-md px-3 py-2 text-sm font-medium",
+                merma.estado === "alta" ? "bg-red-50 text-red-900" : "bg-amber-50 text-amber-900",
+              )}
+            >
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
               {aviso}.
             </p>
@@ -72,11 +80,11 @@ export function ResumenMerma({ tipo, merma, valor, empaqueIncluido, fechaDistint
           ) : (
             <>
               <p className="text-base text-gray-800">
-                Tarifa vigente <span className="font-semibold tabular-nums">{formatearPesos(valor.tarifaKg)}/kg</span>
+                Tarifa vigente <span className="font-semibold tabular-nums">{formatCOP(valor.tarifaKg)}/kg</span>
                 {valor.valor !== null && (
                   <>
                     {" · Valor "}
-                    <span className="text-lg font-bold tabular-nums">{formatearPesos(valor.valor)}</span>
+                    <span className="text-lg font-bold tabular-nums">{formatCOP(valor.valor)}</span>
                   </>
                 )}
               </p>

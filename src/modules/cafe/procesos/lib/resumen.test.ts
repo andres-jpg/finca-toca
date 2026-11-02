@@ -9,7 +9,11 @@ import {
   type ConfigMerma,
 } from "./resumen";
 
-const CFG: ConfigMerma = { referenciaTrillaPct: 19, referenciaTostionPct: 18, toleranciaPts: 3 };
+const CFG: ConfigMerma = {
+  referenciaTrillaPct: 19,
+  referenciaTostionPct: { bajo: 16, medio: 18, alto: 20 },
+  toleranciaPts: 2,
+};
 
 describe("mermaEnVivo: lo mismo que las columnas generadas de cafe.procesos", () => {
   it("trilla 500 → 405: merma 95 kg, 19 %, sin desvío", () => {
@@ -17,27 +21,29 @@ describe("mermaEnVivo: lo mismo que las columnas generadas de cafe.procesos", ()
       mermaKg: 95,
       mermaPct: 19,
       desvio: false,
+      estado: "en_rango",
       referenciaPct: 19,
-      toleranciaPts: 3,
+      toleranciaPts: 2,
     });
   });
 
   it("tostión 405 → 332: 18,025 %, sin desvío", () => {
-    const m = mermaEnVivo("tostion", 405, 332, CFG);
+    const m = mermaEnVivo("tostion", 405, 332, CFG, "medio");
     expect(m?.mermaKg).toBe(73);
     expect(m?.mermaPct).toBe(18.025);
     expect(m?.desvio).toBe(false);
   });
 
-  it("25 % con referencia 19 ± 3 es desvío y avisa en ámbar sin bloquear", () => {
+  it("25 % con referencia 19 ± 2 es desvío alto y avisa sin bloquear", () => {
     const m = mermaEnVivo("trilla", 500, 375, CFG)!;
     expect(m.desvio).toBe(true);
-    expect(textoDesvio(m)).toBe("Merma 25,0 % (referencia 19 % ± 3). Revisa el pesaje. Puedes guardar igualmente");
+    expect(m.estado).toBe("alta");
+    expect(textoDesvio(m)).toBe("Merma 25,0 % (referencia 19 % ± 2). Revisa el pesaje. Puedes guardar igualmente");
   });
 
-  it("justo en la tolerancia (22 %) no es desvío", () => {
-    const m = mermaEnVivo("trilla", 1000, 780, CFG)!;
-    expect(m.mermaPct).toBe(22);
+  it("justo en la tolerancia (21 %) no es desvío", () => {
+    const m = mermaEnVivo("trilla", 1000, 790, CFG)!;
+    expect(m.mermaPct).toBe(21);
     expect(m.desvio).toBe(false);
     expect(textoDesvio(m)).toBeNull();
   });
@@ -90,7 +96,33 @@ describe("textos del resultado", () => {
   });
 
   it("textoProcesoRegistrado", () => {
-    expect(textoProcesoRegistrado("tostion", 18.025, 73)).toBe("Tostión registrada · merma 18,0 % (73,000 kg)");
-    expect(textoProcesoRegistrado("empaque", 0, 0)).toBe("Empaque registrado · merma 0,0 % (0,000 kg)");
+    expect(textoProcesoRegistrado("tostion", 18.025, 73)).toBe("Tostión registrada · merma 18,0 % (73,0 kg)");
+    expect(textoProcesoRegistrado("empaque", 0, 0)).toBe("Empaque registrado · merma 0,0 % (0,0 kg)");
+  });
+});
+
+describe("tostión: referencia por nivel de tueste y desvío por abajo (A-03)", () => {
+  it("bache 13,5 → 11,8 kg en tueste medio (12,6 %): baja, con texto de verificar", () => {
+    const m = mermaEnVivo("tostion", 13.5, 11.8, CFG, "medio")!;
+    expect(m.estado).toBe("baja");
+    expect(m.desvio).toBe(true);
+    expect(textoDesvio(m)).toBe(
+      "Merma 12,6 % (referencia 18 % ± 2). Verifica el peso y el desarrollo del tueste. Puedes guardar igualmente",
+    );
+  });
+
+  it("bache 13,5 → 10,6 kg (21,5 %): alta", () => {
+    expect(mermaEnVivo("tostion", 13.5, 10.6, CFG, "medio")!.estado).toBe("alta");
+  });
+
+  it("cada nivel usa su referencia: 15 % es baja en medio, en rango en bajo (16 ± 2)", () => {
+    expect(mermaEnVivo("tostion", 100, 85, CFG, "medio")!.estado).toBe("baja");
+    expect(mermaEnVivo("tostion", 100, 85, CFG, "bajo")!.estado).toBe("en_rango");
+  });
+
+  it("sin nivel elegido no hay referencia ni estado", () => {
+    const m = mermaEnVivo("tostion", 100, 85, CFG, null)!;
+    expect(m.referenciaPct).toBeNull();
+    expect(m.estado).toBeNull();
   });
 });

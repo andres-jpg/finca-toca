@@ -4,6 +4,7 @@ import { escaparLike } from "@/modules/cafe/lotes/lib/filtros";
 import { getStock } from "@/modules/core/inventario/queries/inventario.queries";
 import { getTarifasVigentes } from "@/modules/core/tarifas/queries/tarifas.queries";
 import { leerAtributosProducto } from "../../empaque/lib/matriz";
+import { COPY } from "../../copy";
 import { conceptoPrecio } from "../lib/precios";
 import { VENTAS_POR_PAGINA, type FiltrosVentas } from "../lib/filtros";
 import {
@@ -165,7 +166,7 @@ export const getVenta = cache(async (id: string): Promise<VentaDetalle | null> =
     .map((l) => ({
       id: l.id,
       articuloId: l.articulo_pt_id,
-      producto: nombres.get(l.articulo_pt_id) ?? "Producto terminado",
+      producto: nombres.get(l.articulo_pt_id) ?? COPY.productoRespaldo,
       cantidad: l.cantidad,
       precioUnitario: num(l.precio_unitario),
       subtotal: num(l.subtotal),

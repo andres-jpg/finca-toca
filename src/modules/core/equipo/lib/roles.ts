@@ -31,8 +31,11 @@ export function etiquetaRolEquipo(rol: string): string {
  * Roles que `llamante` puede asignar al invitar o cambiar un rol: solo un propietario crea propietarios.
  * Es solo la oferta de la interfaz; la regla la aplican las RPC en la base.
  */
-export function rolesAsignables(llamante: RolTenant): RolTenant[] {
-  return llamante === "owner" ? [...ROLES_EQUIPO] : ROLES_EQUIPO.filter((r) => r !== "owner");
+export function rolesAsignables(llamante: RolTenant, vertical?: string | null): RolTenant[] {
+  const base = llamante === "owner" ? [...ROLES_EQUIPO] : ROLES_EQUIPO.filter((r) => r !== "owner");
+  // Gerencia no se asigna en el vertical de café (Cofradía): en la práctica solo hay Propietario/Administrador y
+  // Operativo. Es configuración por vertical, no por cliente; los miembros que ya la tengan siguen mostrándose.
+  return vertical === "cafe" ? base.filter((r) => r !== "viewer") : base;
 }
 
 /**
