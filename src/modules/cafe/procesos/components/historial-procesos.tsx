@@ -2,14 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { MermaBadge } from "../../components/merma-badge";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { formatearPesos } from "@/modules/core/tarifas/lib/formato";
+import { formatCOP, formatKg } from "@/modules/core/formato/numeros";
+import { ETIQUETA_DESTINO } from "../../empaque/lib/empaque";
 import { ORDEN_PROCESO, etiquetaServicio, etiquetaTueste } from "../../lotes/lib/servicios";
 import { anularProceso } from "../actions/procesos.actions";
 import { fechaCorta, formatearPeso, formatearPorcentaje } from "../lib/numero";
@@ -50,7 +51,7 @@ export function HistorialProcesos({ procesos, puedeAnular, mostrarValor }: Histo
   const sePuedeAnular = (p: ProcesoHistorial) =>
     puedeAnular &&
     !p.anulado &&
-    p.lineasEmpaque.length === 0 &&
+    !p.lineasEmpaque.some((l) => l.mueveInventario) &&
     !vigentes.some((o) => ORDEN_PROCESO[o.tipo] > ORDEN_PROCESO[p.tipo] && o.bultoIds.some((id) => p.bultoIds.includes(id)));
 
   async function confirmar() {
@@ -95,24 +96,38 @@ export function HistorialProcesos({ procesos, puedeAnular, mostrarValor }: Histo
                   {fechaCorta(p.fecha, true)} · {p.anulado ? "anulado" : textoBultos(p.bultos)}
                 </span>
               </p>
-              <p className="text-sm tabular-nums text-gray-700">
-                {formatearPeso(p.pesoEntradaKg)} kg → {formatearPeso(p.pesoSalidaKg)} kg · merma {formatearPorcentaje(p.mermaPct)} % (
-                {formatearPeso(p.mermaKg)} kg)
-                {mostrarValor && p.tarifaKg > 0 && <> · {formatearPesos(p.valor)}</>}
-              </p>
+              {p.tipo === "empaque" ? (
+                // El empaque no tiene merma (A-01): lo que llegó = bolsas + diferencia, y la diferencia tiene destino.
+                <p className="text-sm tabular-nums text-gray-700">
+                  Llegaron {formatKg(p.pesoEntradaKg)} · en bolsas {formatKg(p.pesoSalidaKg)}
+                  {p.diferenciaKg !== null && p.diferenciaKg > 0 && (
+                    <>
+                      {" "}
+                      · diferencia {formatKg(p.diferenciaKg)}
+                      {p.diferenciaDestino ? ` (${ETIQUETA_DESTINO[p.diferenciaDestino].toLowerCase()})` : ""}
+                    </>
+                  )}
+                </p>
+              ) : (
+                <p className="text-sm tabular-nums text-gray-700">
+                  {formatearPeso(p.pesoEntradaKg)} kg → {formatearPeso(p.pesoSalidaKg)} kg · merma {formatearPorcentaje(p.mermaPct)} % (
+                  {formatearPeso(p.mermaKg)} kg)
+                  {mostrarValor && p.tarifaKg > 0 && <> · {formatCOP(p.valor)}</>}
+                </p>
+              )}
               <div className="flex flex-wrap gap-2 text-xs text-gray-600">
                 {p.nivelTueste && <span className="rounded bg-gray-100 px-2 py-0.5">Tueste {etiquetaTueste(p.nivelTueste).toLowerCase()}</span>}
                 {p.numBaches > 0 && <span className="rounded bg-gray-100 px-2 py-0.5">{p.numBaches} baches</span>}
-                {p.desvio && !p.anulado && (
-                  <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 font-medium text-amber-800">
-                    <AlertTriangle className="h-3 w-3" aria-hidden /> Merma desviada
-                  </span>
+                {!p.anulado && (
+                  <MermaBadge mermaPct={p.mermaPct} referenciaPct={p.mermaReferenciaPct} toleranciaPts={p.toleranciaPts} tipo={p.tipo} />
                 )}
               </div>
               {p.lineasEmpaque.length > 0 && (
                 <p className="text-sm text-gray-700">
-                  {p.lineasEmpaque.map((l) => `${l.unidades} × ${l.producto}`).join(" · ")}
-                  <span className="block text-xs text-gray-500">Mueve inventario: no se anula, se corrige con un ajuste.</span>
+                  {p.lineasEmpaque.map((l) => `${l.unidades} × ${l.producto}${l.bolsaCliente ? " (bolsa del cliente)" : ""}`).join(" · ")}
+                  {p.lineasEmpaque.some((l) => l.mueveInventario) && (
+                    <span className="block text-xs text-gray-500">Mueve inventario: no se anula, se corrige con un ajuste.</span>
+                  )}
                 </p>
               )}
               {p.observaciones && <p className="text-xs text-gray-500">{p.observaciones}</p>}

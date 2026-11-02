@@ -11,6 +11,8 @@ export const NIVELES_TUESTE = ["bajo", "medio", "alto"] as const;
 const MAX_BULTOS = 200;
 const HUMEDAD_MSG = "La humedad debe estar entre 0 y 100 %";
 const DENSIDAD_MSG = "La densidad debe ser mayor que cero";
+const TEMP_MSG = "La temperatura debe estar entre 1 y 400 °C";
+const TIEMPO_MSG = "El tiempo debe estar entre 1 y 120 minutos";
 
 /** Vacío o ausente = `null` (no se midió). */
 const opcional = <T extends z.ZodType<number>>(schema: T) => schema.nullish().transform((v) => v ?? null);
@@ -46,6 +48,9 @@ export const recepcionSchema = z
       .enum(NIVELES_TUESTE, { message: "Elige el nivel de tueste" })
       .nullish()
       .transform((v) => v ?? null),
+    /** Perfil pedido por el cliente (opcional, solo con tostión). */
+    perfilTempC: opcional(z.number({ message: TEMP_MSG }).min(1, TEMP_MSG).max(400, TEMP_MSG)),
+    perfilTiempoMin: opcional(z.number({ message: TIEMPO_MSG }).min(1, TIEMPO_MSG).max(120, TIEMPO_MSG)),
     observaciones: z
       .string()
       .trim()
@@ -71,7 +76,16 @@ export const recepcionSchema = z
     }
   })
   // Sin tostión no hay nivel de tueste (el CHECK de la tabla lo exige nulo).
-  .transform((v) => ({ ...v, nivelTueste: v.servicios.includes("tostion") ? v.nivelTueste : null }));
+  // Tampoco perfil (temperatura/tiempo): solo cuelga de la tostión.
+  .transform((v) => {
+    const tostion = v.servicios.includes("tostion");
+    return {
+      ...v,
+      nivelTueste: tostion ? v.nivelTueste : null,
+      perfilTempC: tostion ? v.perfilTempC : null,
+      perfilTiempoMin: tostion ? v.perfilTiempoMin : null,
+    };
+  });
 
 export type RecepcionFormInput = z.input<typeof recepcionSchema>;
 export type RecepcionValues = z.output<typeof recepcionSchema>;
@@ -88,6 +102,8 @@ export function payloadRecepcion(v: RecepcionValues): Record<string, Json> {
     densidad: v.densidad,
     servicios: v.servicios,
     nivel_tueste: v.nivelTueste,
+    perfil_temp_c: v.perfilTempC,
+    perfil_tiempo_min: v.perfilTiempoMin,
     observaciones: v.observaciones,
   };
 }

@@ -34,6 +34,8 @@ export interface ResultadoProceso {
   merma_kg: number;
   merma_pct: number;
   desvio: boolean;
+  /** Lado del desvío: `alta` (sobre ref + tol), `baja` (bajo ref - tol) o `null` (en rango o sin referencia). */
+  desvio_sentido: "alta" | "baja" | null;
   valor: number;
   lote_estado: EstadoLote;
   peso_entrada_kg: number;

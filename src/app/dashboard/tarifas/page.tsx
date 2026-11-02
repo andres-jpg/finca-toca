@@ -12,6 +12,8 @@ import { formatearPesos, formatearVigencia } from "@/modules/core/tarifas/lib/fo
 import { TarifasPanel, type ConceptoTarifaVista } from "@/modules/core/tarifas/components/tarifas-panel";
 import { crearTarifa, eliminarTarifa, guardarParametro } from "./actions";
 
+export const metadata = { title: "Tarifas y parámetros" };
+
 export default async function TarifasYParametrosPage() {
   // Visible solo con el módulo activo (`core.terceros`: no hay un módulo propio en el catálogo) y para owner/admin.
   await requireModuloPagina("core.terceros");

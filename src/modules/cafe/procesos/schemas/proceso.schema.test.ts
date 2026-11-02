@@ -122,8 +122,31 @@ describe("procesoSchema: tostión por baches", () => {
     expect(r.pesoSalidaKg).toBeCloseTo(salida, 3);
   });
 
+  it("tiempo real y grupo de pesaje viajan al payload (A-12)", () => {
+    const r = procesoSchema.parse(
+      tostion({
+        baches: [
+          { pesoEntradaKg: "13,5", pesoSalidaKg: "11,05", temperaturaC: "205", tiempoMin: "12", grupo: 1 },
+          { pesoEntradaKg: "13,5", pesoSalidaKg: "11,05", temperaturaC: "212", tiempoMin: "13,5", grupo: 1 },
+        ],
+      }),
+    );
+    expect(payloadProceso(r).baches).toMatchObject([
+      { temperatura_c: 205, tiempo_min: 12, grupo_pesaje: 1 },
+      { temperatura_c: 212, tiempo_min: 13.5, grupo_pesaje: 1 },
+    ]);
+    // Sin tiempo ni grupo: nulos (pesaje individual).
+    expect(payloadProceso(procesoSchema.parse(tostion())).baches).toMatchObject([
+      { tiempo_min: null, grupo_pesaje: null },
+      { tiempo_min: null, grupo_pesaje: null },
+    ]);
+    expect(mensajes(tostion({ baches: [{ pesoEntradaKg: "27", pesoSalidaKg: "22", tiempoMin: "0" }] }))).toContain(
+      "baches.0.tiempoMin: El tiempo no es válido",
+    );
+  });
+
   it("los baches deben sumar la entrada (tolerancia de 1 g)", () => {
-    expect(mensajes(tostion({ pesoEntradaKg: "30" }))[0]).toMatch(/^baches: Los baches suman 27,000 kg de entrada y el peso de entrada es 30,000 kg/);
+    expect(mensajes(tostion({ pesoEntradaKg: "30" }))[0]).toMatch(/^baches: Los baches suman 27,0 kg de entrada y el peso de entrada es 30,0 kg/);
     expect(mensajes(tostion({ pesoEntradaKg: "27,001" }))).toEqual([]);
     expect(mensajes(tostion({ pesoEntradaKg: "27,002" }))[0]).toMatch(/^baches:/);
   });

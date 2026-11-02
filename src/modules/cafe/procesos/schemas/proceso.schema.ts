@@ -62,6 +62,17 @@ export const bacheSchema = z
       (n) => n === null || n <= 999,
       "La temperatura no es válida",
     ),
+    tiempoMin: decimalOpcional("El tiempo debe ser un número").refine(
+      (n) => n === null || (n > 0 && n <= 999),
+      "El tiempo no es válido",
+    ),
+    /** Grupo de pesaje (baches pesados juntos); `null` = individual. La UI ya repartió la salida entre sus miembros. */
+    grupo: z
+      .number()
+      .int()
+      .min(1)
+      .nullish()
+      .transform((v) => v ?? null),
     observaciones: z
       .string()
       .trim()
@@ -166,6 +177,8 @@ export function payloadProceso(v: ProcesoValues): Record<string, Json> {
             peso_entrada_kg: b.pesoEntradaKg,
             peso_salida_kg: b.pesoSalidaKg,
             temperatura_c: b.temperaturaC,
+            tiempo_min: b.tiempoMin,
+            grupo_pesaje: b.grupo,
             observaciones: b.observaciones,
           }))
         : null,

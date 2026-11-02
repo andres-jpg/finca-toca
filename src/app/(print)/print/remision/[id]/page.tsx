@@ -22,11 +22,12 @@ import {
   LEYENDA_REMISION,
   TITULO_REMISION,
   lineaCliente,
-  lineaRecibido,
   resumenEntrega,
   valorReferencia,
 } from "@/modules/cafe/remisiones/lib/tiquete";
-import { getNitDelCliente, getRecepcionDelLote, getRemision } from "@/modules/cafe/remisiones/queries/remisiones.queries";
+import { lineaBolsasCliente, lineaLlegada, lineaPerfil, lineaSuelto } from "@/modules/cafe/remisiones/lib/entregar";
+import { getExtrasTiquete } from "@/modules/cafe/remisiones/queries/entregar.queries";
+import { getNitDelCliente, getRemision } from "@/modules/cafe/remisiones/queries/remisiones.queries";
 
 interface RemisionPageProps {
   params: Promise<{ id: string }>;
@@ -50,9 +51,9 @@ export default async function RemisionTiquetePage({ params, searchParams }: Remi
   const remision = await getRemision(id.data);
   if (!remision) notFound();
 
-  const [nit, recepcion, anchoCliente] = await Promise.all([
+  const [nit, extras, anchoCliente] = await Promise.all([
     getNitDelCliente(tenant.id),
-    getRecepcionDelLote(remision.loteId),
+    getExtrasTiquete(remision.lotes.map((l) => l.loteId)),
     getParametro(PARAMETRO_IMPRESORA_ANCHO),
   ]);
   const ancho = parsearAncho(anchoParam) ?? anchoCliente;
@@ -74,7 +75,7 @@ export default async function RemisionTiquetePage({ params, searchParams }: Remi
         <p>
           <a className="underline" href="?copias=1">solo original</a> · <a className="underline" href="?copias=2">con copia del cliente</a> ·{" "}
           <a className="underline" href={`?copias=${copias}&ancho=80`}>80 mm</a> · <a className="underline" href={`?copias=${copias}&ancho=58`}>58 mm</a>{" "}
-          · <Link className="underline" href={`/dashboard/cafe/lotes/${remision.loteId}`}>volver al lote</Link>
+          · <Link className="underline" href="/dashboard/cafe/planta">volver a Planta</Link>
         </p>
         <ImprimirButton etiqueta={copias > 1 ? "Imprimir con copia" : "Imprimir"} />
       </div>
@@ -90,18 +91,28 @@ export default async function RemisionTiquetePage({ params, searchParams }: Remi
         )}
         <TicketSeparador />
         <TicketLinea etiqueta="Fecha entrega" valor={fechaCorta(remision.fecha)} />
-        <TicketLinea etiqueta="Lote" valor={remision.loteCodigo} />
         <TicketLinea etiqueta="Cliente" valor={lineaCliente(remision)} />
-        {recepcion && (
-          <TicketLinea
-            etiqueta="Recibido"
-            valor={lineaRecibido(recepcion.fechaRecepcion, remision.pesoRecibidoKg, recepcion.numBultos)}
-          />
-        )}
+        {remision.lotes.map((l) => {
+          const e = extras.get(l.loteId);
+          const perfil = e ? lineaPerfil(e) : null;
+          const bolsas = e ? lineaBolsasCliente(e.bolsasCliente) : null;
+          const suelto = e ? lineaSuelto(e.sueltoKg) : null;
+          const r = resumenEntrega({ pesoRecibidoKg: l.pesoRecibidoKg, pesoEntregadoKg: l.pesoEntregadoKg, mermaTotalKg: l.pesoRecibidoKg - l.pesoEntregadoKg });
+          return (
+            <div key={l.loteId}>
+              <TicketSeparador />
+              <TicketLinea etiqueta="Lote" valor={l.loteCodigo} fuerte />
+              {e && <TicketLinea etiqueta="Llegó" valor={lineaLlegada(e, l.pesoRecibidoKg, tenant.zonaHoraria)} />}
+              {perfil && <TicketLinea etiqueta="Perfil pedido" valor={perfil} />}
+              {bolsas && <TicketLinea etiqueta="Bolsas del cliente" valor={bolsas} />}
+              {suelto && <TicketLinea etiqueta="Suelto" valor={suelto} />}
+              <ServiciosTiquete detalle={l.detalle} ancho={ancho} />
+              <TicketLinea etiqueta="Entregado" valor={`${r.entregado} (merma ${r.mermaPct})`} />
+            </div>
+          );
+        })}
         <TicketSeparador />
-        <ServiciosTiquete detalle={remision.detalle} ancho={ancho} />
-        <TicketSeparador />
-        <TicketLinea etiqueta="Peso entregado" valor={resumen.entregado} fuerte />
+        <TicketLinea etiqueta={remision.lotes.length > 1 ? "Total entregado" : "Peso entregado"} valor={resumen.entregado} fuerte />
         <TicketLinea etiqueta="Merma total" valor={`${resumen.mermaKg} (${resumen.mermaPct})`} />
         <TicketLinea etiqueta="Valor servicios (referencia)" valor={valorReferencia(remision.valorServicios)} />
         {remision.forzada && (
@@ -112,7 +123,8 @@ export default async function RemisionTiquetePage({ params, searchParams }: Remi
         )}
         {remision.observaciones && <div className="mt-1 text-[9pt]">Obs.: {remision.observaciones}</div>}
         <TicketSeparador fuerte />
-        {remision.recibidoPor && <TicketLinea etiqueta="Recibe" valor={remision.recibidoPor} />}
+        <TicketLinea etiqueta="Recibe" valor={remision.recibeNombre} fuerte />
+        <TicketLinea etiqueta="Cédula" valor={remision.recibeDocumento} />
         <TicketPie impresoEn={impresoEn} etiquetaFirma="Recibido por" />
       </TicketCopias>
     </>

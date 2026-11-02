@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { esFechaYmd } from "@/modules/cafe/lotes/lib/filtros";
+import { DOCUMENTO_MAX_DIGITOS, DOCUMENTO_MIN_DIGITOS, NOMBRE_RECIBE_MAX, soloDigitos } from "../lib/entregar";
 
 // Validación de las remisiones (Server Actions). Los mismos límites que la base: la RPC los repite.
 
@@ -11,12 +12,23 @@ const textoOpcional = (max: number, mensaje: string) =>
     .optional()
     .transform((v) => (v ? v : undefined));
 
-export const generarRemisionSchema = z
+export const entregarLotesSchema = z
   .object({
-    loteId: z.uuid({ message: "El lote no es válido." }),
+    /** Lotes de UN mismo cliente (la base lo comprueba). */
+    loteIds: z.array(z.uuid({ message: "El lote no es válido." })).min(1, "Elige al menos un lote.").max(20, "Máximo 20 lotes por remisión."),
     /** Fecha de entrega, `YYYY-MM-DD`. */
     fecha: z.string().refine(esFechaYmd, "La fecha de entrega no es válida."),
-    recibidoPor: textoOpcional(120, "El nombre de quien recibe es demasiado largo (máximo 120 caracteres)."),
+    recibeNombre: z.string().trim().min(3, "Escribe el nombre de quien recibe.").max(NOMBRE_RECIBE_MAX, "El nombre de quien recibe es demasiado largo (máximo 120 caracteres)."),
+    /** Cédula: se guarda solo con dígitos. */
+    recibeDocumento: z
+      .string()
+      .transform(soloDigitos)
+      .pipe(
+        z
+          .string()
+          .min(DOCUMENTO_MIN_DIGITOS, `La cédula debe tener entre ${DOCUMENTO_MIN_DIGITOS} y ${DOCUMENTO_MAX_DIGITOS} dígitos.`)
+          .max(DOCUMENTO_MAX_DIGITOS, `La cédula debe tener entre ${DOCUMENTO_MIN_DIGITOS} y ${DOCUMENTO_MAX_DIGITOS} dígitos.`),
+      ),
     observaciones: textoOpcional(500, "Las observaciones son demasiado largas (máximo 500 caracteres)."),
     /** Entregar con servicios pendientes: solo `owner`/`admin`, y con observación. */
     forzar: z.boolean().optional().default(false),
@@ -24,10 +36,11 @@ export const generarRemisionSchema = z
   .refine((v) => !v.forzar || Boolean(v.observaciones), {
     path: ["observaciones"],
     message: "Para entregar con servicios pendientes escribe la observación (por qué se entrega así).",
-  });
+  })
+  .refine((v) => new Set(v.loteIds).size === v.loteIds.length, { path: ["loteIds"], message: "Hay un lote repetido." });
 
-export type GenerarRemisionInput = z.input<typeof generarRemisionSchema>;
-export type GenerarRemisionDatos = z.output<typeof generarRemisionSchema>;
+export type EntregarLotesInput = z.input<typeof entregarLotesSchema>;
+export type EntregarLotesDatos = z.output<typeof entregarLotesSchema>;
 
 export const anularRemisionSchema = z.object({
   remisionId: z.uuid({ message: "La remisión no es válida." }),
@@ -40,13 +53,15 @@ export const anularRemisionSchema = z.object({
 
 export type AnularRemisionInput = z.input<typeof anularRemisionSchema>;
 
-/** Cuerpo de `cafe.generar_remision(p jsonb)` a partir de lo validado. */
-export function payloadRemision(d: GenerarRemisionDatos) {
+/** Cuerpo de `cafe.entregar_lotes(p jsonb)` a partir de lo validado. */
+export function payloadEntrega(d: EntregarLotesDatos) {
   return {
-    lote_id: d.loteId,
+    lote_ids: d.loteIds,
     fecha: d.fecha,
-    recibido_por: d.recibidoPor ?? null,
+    recibe_nombre: d.recibeNombre,
+    recibe_documento: d.recibeDocumento,
     observaciones: d.observaciones ?? null,
     forzar: d.forzar,
   };
 }
+

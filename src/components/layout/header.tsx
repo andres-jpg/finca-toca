@@ -9,6 +9,8 @@ interface HeaderProps {
   tenantSwitcher?: React.ReactNode;
   /** Campana de alertas ya renderizada en el servidor; ausente para roles de cooperativa. */
   alertasSlot?: React.ReactNode;
+  /** Menú fijo (sin botones de plegar/abrir): barra lateral en escritorio y barra inferior en tablet. */
+  menuFijo?: boolean;
   onOpenMobileMenu?: () => void;
   onToggleDesktopSidebar?: () => void;
 }
@@ -17,12 +19,15 @@ export function Header({
   email,
   tenantSwitcher,
   alertasSlot,
+  menuFijo = false,
   onOpenMobileMenu,
   onToggleDesktopSidebar,
 }: HeaderProps) {
 
   return (
     <header className="h-16 flex items-center justify-between px-4 sm:px-6 bg-white border-b border-stone-200 sticky top-0 z-30 text-stone-900">
+      {!menuFijo && (
+      <>
       <button
         onClick={onOpenMobileMenu}
         className="lg:hidden p-2 -ml-1 hover:bg-stone-200 rounded-lg transition-colors text-stone-700"
@@ -37,6 +42,8 @@ export function Header({
       >
         <Menu className="h-5 w-5" />
       </button>
+      </>
+      )}
 
       <div className="flex items-center gap-3 ml-auto">
         {tenantSwitcher && (

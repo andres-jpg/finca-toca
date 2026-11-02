@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Info } from "lucide-react";
 import { Sidebar } from "@/components/layout/sidebar";
+import { BarraInferior } from "@/components/layout/barra-inferior";
 import { Header } from "@/components/layout/header";
 import { TenantSwitcher } from "@/modules/core/tenants/components/tenant-switcher";
 import type { Membresia } from "@/modules/core/auth/sesion";
@@ -31,6 +32,9 @@ interface DashboardLayoutClientProps {
   children: React.ReactNode;
 }
 
+/** Verticales con menú fijo: sin menú plegable; en pantallas menores a `lg`, barra inferior con las opciones del rol. */
+const VERTICALES_CON_BARRA_INFERIOR: readonly Vertical[] = ["cafe"];
+
 export function DashboardLayoutClient({
   email,
   userRole,
@@ -47,13 +51,14 @@ export function DashboardLayoutClient({
 }: DashboardLayoutClientProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
+  const menuFijo = VERTICALES_CON_BARRA_INFERIOR.includes(vertical);
 
   return (
     <div className="flex min-h-screen bg-gray-50">
       <div
         className={cn(
           "shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out",
-          desktopCollapsed ? "w-0" : "w-0 lg:w-52"
+          desktopCollapsed && !menuFijo ? "w-0" : "w-0 lg:w-52"
         )}
       >
         <Sidebar
@@ -85,10 +90,11 @@ export function DashboardLayoutClient({
             ) : undefined
           }
           alertasSlot={alertasSlot}
+          menuFijo={menuFijo}
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
           onToggleDesktopSidebar={() => setDesktopCollapsed((prev) => !prev)}
         />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
+        <main className={cn("flex-1 p-4 sm:p-6 lg:p-8", menuFijo && "pb-24 lg:pb-8")}>
           {soporteLimitado && (
             <div
               role="status"
@@ -105,6 +111,7 @@ export function DashboardLayoutClient({
           {children}
         </main>
       </div>
+      {menuFijo && <BarraInferior items={navItems} role={userRole} />}
     </div>
   );
 }

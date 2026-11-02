@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 import { expect, test, usarRol } from "../fixtures/test";
 import { crearCompra, stockDe, sufijo, tostarYEmpacar } from "../helpers/api";
-import { elegirProductoDeVenta, esperarHidratacion, irA } from "../helpers/ui";
+import { elegirProductoDeVenta, esperarHidratacion, irA, NAVEGACION_LENTA } from "../helpers/ui";
 
 test.use(usarRol("cafeAdmin"));
 
@@ -31,14 +31,17 @@ test("cortesía: no cambia el ingreso del panel y sí baja el stock", async ({ p
   await irA(page, "/dashboard/cafe/ventas/nueva");
   await page.getByRole("radio", { name: "Cortesía" }).click();
   await expect(page.getByText("no suma al ingreso del día")).toBeVisible();
+  // El destinatario es obligatorio y no puede ser el consumidor final: se elige un cliente del maestro.
+  await page.getByText("Selecciona o crea el destinatario").click();
+  await page.getByRole("option", { name: /Cliente marca propia E2E/ }).click();
   await elegirProductoDeVenta(page, "Excelso 500 g");
   await page.getByLabel("Cantidad", { exact: true }).fill("5");
-  await page.getByLabel("Observaciones (opcional)").fill(nota);
+  await page.getByLabel("Motivo de la cortesía").fill(nota);
   // Una cortesía no tiene precio ni pide factura.
   await expect(page.getByLabel("Precio unitario ($)")).toBeDisabled();
-  await expect(page.getByLabel("¿Requiere factura electrónica?")).toHaveCount(0);
+  await expect(page.getByLabel("Requiere factura electrónica")).toHaveCount(0);
   await page.getByRole("button", { name: "Registrar cortesía" }).click();
-  await expect(page).toHaveURL(/\/dashboard\/cafe\/ventas\/[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(/\/dashboard\/cafe\/ventas\/[0-9a-f-]{36}$/, { timeout: NAVEGACION_LENTA });
   await esperarHidratacion(page);
 
   const detalle = page.getByRole("heading", { level: 1 });

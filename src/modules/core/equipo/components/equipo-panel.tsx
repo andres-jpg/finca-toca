@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { HistorialCambios } from "../../auditoria/components/historial-cambios";
 import type { CambioAuditado } from "../../auditoria/actions/historial.actions";
 import type { RolTenant } from "../../auth/sesion";
-import { cambiarEstadoMiembro, cambiarRolMiembro, invitarMiembro } from "../actions/equipo.actions";
+import { cambiarEstadoMiembro, cambiarPantallaInicioMiembro, cambiarRolMiembro, invitarMiembro } from "../actions/equipo.actions";
 import { resumirCambioMiembro } from "../lib/historial";
 import { AYUDA_ROL_EQUIPO, etiquetaRolEquipo, puedeModificarMiembro, rolesAsignables } from "../lib/roles";
 import type { MiembroEquipo } from "../types";
@@ -33,10 +33,12 @@ interface EquipoPanelProps {
   /** Quien mira la pantalla: nadie se modifica a sí mismo. */
   yoId: string;
   rolLlamante: RolTenant;
+  /** Vertical del cliente: decide qué roles se ofrecen (en café no se asigna Gerencia). */
+  vertical?: string | null;
 }
 
-function InvitarForm({ rolLlamante, onSuccess }: { rolLlamante: RolTenant; onSuccess: () => void }) {
-  const roles = rolesAsignables(rolLlamante);
+function InvitarForm({ rolLlamante, vertical, onSuccess }: { rolLlamante: RolTenant; vertical?: string | null; onSuccess: () => void }) {
+  const roles = rolesAsignables(rolLlamante, vertical);
   const [email, setEmail] = useState("");
   const [rol, setRol] = useState<RolTenant>("operativo");
   const [error, setError] = useState<string | null>(null);
@@ -98,13 +100,13 @@ function InvitarForm({ rolLlamante, onSuccess }: { rolLlamante: RolTenant; onSuc
   );
 }
 
-export function EquipoPanel({ miembros, historial, yoId, rolLlamante }: EquipoPanelProps) {
+export function EquipoPanel({ miembros, historial, yoId, rolLlamante, vertical }: EquipoPanelProps) {
   const [vista, setVista] = useState<"equipo" | "historial">("equipo");
   const [invitando, setInvitando] = useState(false);
   const [cambioRol, setCambioRol] = useState<{ miembro: MiembroVista; nuevo: RolTenant } | null>(null);
   const [aDesactivar, setADesactivar] = useState<MiembroVista | null>(null);
 
-  const rolesOferta = useMemo(() => rolesAsignables(rolLlamante), [rolLlamante]);
+  const rolesOferta = useMemo(() => rolesAsignables(rolLlamante, vertical), [rolLlamante, vertical]);
   const emailPorRegistro = useMemo(() => new Map(miembros.map((m) => [m.id, m.email])), [miembros]);
 
   async function confirmarRol() {
@@ -127,6 +129,15 @@ export function EquipoPanel({ miembros, historial, yoId, rolLlamante }: EquipoPa
       return;
     }
     toast.success(activo ? "Miembro reactivado" : "Miembro desactivado");
+  }
+
+  async function cambiarPantalla(m: MiembroVista, valor: string) {
+    const r = await cambiarPantallaInicioMiembro(m.userId, valor === "" ? null : valor);
+    if (!r.ok) {
+      toast.error(r.message);
+      return;
+    }
+    toast.success("Pantalla de inicio actualizada");
   }
 
   const columns: ColumnDef<MiembroVista>[] = useMemo(
@@ -166,6 +177,32 @@ export function EquipoPanel({ miembros, historial, yoId, rolLlamante }: EquipoPa
           );
         },
       },
+      ...(vertical === "cafe"
+        ? [
+            {
+              id: "pantallaInicio",
+              header: "Pantalla de inicio",
+              accessorFn: (m: MiembroVista) => m.pantallaInicio ?? "",
+              cell: ({ row }: { row: { original: MiembroVista } }) => {
+                const m = row.original;
+                // Solo el operativo la necesita: propietario, administrador y gerencia aterrizan en el Panel.
+                if (m.rol !== "operativo") return <span className="text-gray-400">Panel</span>;
+                return (
+                  <select
+                    aria-label={`Pantalla de inicio de ${m.email}`}
+                    className={CLASE_SELECT}
+                    value={m.pantallaInicio ?? ""}
+                    onChange={(e) => void cambiarPantalla(m, e.target.value)}
+                  >
+                    <option value="">Planta (por defecto)</option>
+                    <option value="planta">Planta</option>
+                    <option value="recibir">Recibir café</option>
+                  </select>
+                );
+              },
+            } satisfies ColumnDef<MiembroVista>,
+          ]
+        : []),
       {
         accessorKey: "activo",
         header: "Estado",
@@ -210,7 +247,7 @@ export function EquipoPanel({ miembros, historial, yoId, rolLlamante }: EquipoPa
         },
       },
     ],
-    [rolLlamante, yoId, rolesOferta],
+    [rolLlamante, yoId, rolesOferta, vertical],
   );
 
   return (
@@ -257,7 +294,7 @@ export function EquipoPanel({ miembros, historial, yoId, rolLlamante }: EquipoPa
       )}
 
       <EntityModal open={invitando} onClose={() => setInvitando(false)} title="Invitar al equipo">
-        <InvitarForm key={String(invitando)} rolLlamante={rolLlamante} onSuccess={() => setInvitando(false)} />
+        <InvitarForm key={String(invitando)} rolLlamante={rolLlamante} vertical={vertical} onSuccess={() => setInvitando(false)} />
       </EntityModal>
 
       <DeleteConfirmationDialog

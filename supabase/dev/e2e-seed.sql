@@ -113,6 +113,11 @@ begin
   select 'CC', '1009990020', 'Cliente E2E', 'Vereda La Palma, Salento', '3100000002', array['cliente_servicio']
   where not exists (select 1 from public.terceros where identificacion = '1009990020');
 
+  -- Cliente de marca propia (destinatario de las cortesías, que no admiten el consumidor final).
+  insert into public.terceros (tipo_identificacion, identificacion, nombre, direccion, telefono, roles)
+  select 'CC', '1009990030', 'Cliente marca propia E2E', 'Calle 5 # 6-7, Armenia', '3100000003', array['cliente']
+  where not exists (select 1 from public.terceros where identificacion = '1009990030');
+
   -- Bolsas y etiquetas: stock de sobra para que ningún empaque de los tests dispare avisos de faltante. Se repone hasta
   -- 20.000 si una ejecución anterior lo gastó (los tests miden diferencias, no valores absolutos).
   for v_art in select id from public.articulos where tipo = 'insumo' and (atributos ->> 'clase') in ('bolsa', 'etiqueta') loop

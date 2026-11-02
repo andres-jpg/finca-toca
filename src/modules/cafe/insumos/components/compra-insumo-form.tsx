@@ -21,7 +21,7 @@ interface CompraInsumoFormProps {
   onSuccess: () => void;
 }
 
-/** Compra de un insumo: suma al stock con motivo «compra». Proveedor y costo son opcionales. */
+/** Compra de un insumo: suma al stock con motivo «compra». El precio unitario es obligatorio; el proveedor, opcional. */
 export function CompraInsumoForm({ insumo, fechaHoy, onSuccess }: CompraInsumoFormProps) {
   const {
     register,
@@ -68,15 +68,16 @@ export function CompraInsumoForm({ insumo, fechaHoy, onSuccess }: CompraInsumoFo
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="compra-costo">Costo unitario ($, opcional)</Label>
+        <Label htmlFor="compra-costo">Precio unitario (COP)</Label>
         <Input
           id="compra-costo"
           type="number"
           inputMode="decimal"
           min={0}
           step="any"
+          placeholder="Ej: 700"
           className={CAMPO}
-          {...register("costoUnitario", { setValueAs: (v) => (v === "" || v == null ? null : Number(v)) })}
+          {...register("costoUnitario", { setValueAs: (v) => (v === "" || v == null ? undefined : Number(v)) })}
         />
         {errors.costoUnitario && <p className="text-xs text-red-500">{errors.costoUnitario.message}</p>}
       </div>

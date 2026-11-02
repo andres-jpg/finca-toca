@@ -30,11 +30,11 @@ interface SidebarProps {
 
 const MARCA_VERTICAL: Record<
   Vertical,
-  (nombre: string | null) => { texto: string; fondo: string; Icono: React.ElementType }
+  (nombre: string | null) => { texto: string; subtitulo?: string; fondo: string; Icono: React.ElementType }
 > = {
   ganaderia: (nombre) => ({ texto: nombre ? `Finca ${nombre}` : "Finca", fondo: "bg-green-600", Icono: Leaf }),
   cooperativa: (nombre) => ({ texto: nombre ?? "Toca Lácteos", fondo: "bg-teal-600", Icono: GiCheeseWedge }),
-  cafe: (nombre) => ({ texto: nombre ?? "Café", fondo: "bg-amber-700", Icono: Coffee }),
+  cafe: (nombre) => ({ texto: nombre ?? "Café", subtitulo: "Planta y control", fondo: "bg-amber-700", Icono: Coffee }),
 };
 
 const roleConfig: Record<UserRole, { label: string; classes: string }> = {
@@ -60,6 +60,22 @@ function esPWA() {
   );
 }
 
+/**
+ * Entrada resaltada: la de prefijo más largo que contiene a la ruta actual. Los prefijos de una entrada son su
+ * `href` y sus `activaEn`. Compartida con la barra inferior.
+ */
+export function hrefActivoDe(items: NavItemDef[], pathname: string): string | undefined {
+  const coincide = (prefijo: string) =>
+    prefijo === "/dashboard" ? pathname === prefijo : pathname === prefijo || pathname.startsWith(`${prefijo}/`);
+  let mejor: { href: string; largo: number } | undefined;
+  for (const item of items) {
+    for (const prefijo of [item.href, ...(item.activaEn ?? [])]) {
+      if (coincide(prefijo) && (!mejor || prefijo.length > mejor.largo)) mejor = { href: item.href, largo: prefijo.length };
+    }
+  }
+  return mejor?.href;
+}
+
 export function Sidebar({
   role,
   tenantNombre = null,
@@ -76,10 +92,7 @@ export function Sidebar({
 
   // Entrada resaltada: la de ruta más larga que contiene a la actual. Así «Panel» (`/dashboard/cafe`) no se
   // marca junto a «Lotes» (`/dashboard/cafe/lotes`), y `/dashboard` solo se marca en su propia página.
-  const hrefActivo = allowedItems
-    .map((item) => item.href)
-    .filter((href) => (href === "/dashboard" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`)))
-    .sort((a, b) => b.length - a.length)[0];
+  const hrefActivo = hrefActivoDe(allowedItems, pathname);
 
   const roleMeta = role ? roleConfig[role] : null;
 
@@ -118,9 +131,10 @@ export function Sidebar({
                 <marca.Icono className="h-4 w-4 text-white" />
               </div>
             )}
-            <span className="font-semibold text-white tracking-tight truncate" title={tenantNombre ?? undefined}>
-              {marca.texto}
-            </span>
+            <div className="min-w-0 leading-tight" title={tenantNombre ?? undefined}>
+              <span className="block font-semibold text-white tracking-tight truncate">{marca.texto}</span>
+              {marca.subtitulo && <span className="block truncate text-[11px] text-gray-400">{marca.subtitulo}</span>}
+            </div>
           </div>
           <button
             onClick={onCloseMobileMenu}
@@ -133,11 +147,12 @@ export function Sidebar({
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
-          {allowedItems.map(({ href, label, icon, grupo }, i) => {
+          {allowedItems.map(({ href, label, icon, grupo, numero }, i) => {
             const Icon = ICONOS[icon];
             const isActive = href === hrefActivo;
             // Encabezado del grupo cuando cambia respecto a la entrada anterior (las sin grupo no llevan).
-            const encabezado = grupo && grupo !== allowedItems[i - 1]?.grupo ? grupo : null;
+            // Si el grupo se llama igual que su única entrada («Configuración») el encabezado sobra.
+            const encabezado = grupo && grupo !== allowedItems[i - 1]?.grupo && grupo !== label ? grupo : null;
             return (
               <Fragment key={href}>
                 {encabezado && (
@@ -158,14 +173,26 @@ export function Sidebar({
                   {isActive && (
                     <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 bg-green-400 rounded-r-full" />
                   )}
-                  <Icon
-                    className={cn(
-                      "h-4 w-4 shrink-0 transition-colors",
-                      isActive
-                        ? "text-white"
-                        : "text-gray-400 group-hover:text-white"
-                    )}
-                  />
+                  {numero ? (
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold",
+                        isActive ? "border-white text-white" : "border-gray-500 text-gray-400 group-hover:border-white group-hover:text-white"
+                      )}
+                    >
+                      {numero}
+                    </span>
+                  ) : (
+                    <Icon
+                      className={cn(
+                        "h-4 w-4 shrink-0 transition-colors",
+                        isActive
+                          ? "text-white"
+                          : "text-gray-400 group-hover:text-white"
+                      )}
+                    />
+                  )}
                   {label}
                 </Link>
               </Fragment>

@@ -6,7 +6,9 @@ import { requireSesion } from "@/modules/core/auth/guards";
 import { requireModuloPagina } from "@/modules/core/tenants/tenant.guards";
 import { fechaHoyEnZona } from "@/modules/cafe/insumos/lib/insumos";
 import { ETIQUETA_ALERTA_CALIDAD } from "@/modules/cafe/recepciones/lib/calidad";
-import { getConfigEmpaque } from "@/modules/cafe/empaque/queries/empaque.queries";
+import { getConfigEmpaque, getSaldoGranel } from "@/modules/cafe/empaque/queries/empaque.queries";
+import { formatKg } from "@/modules/core/formato/numeros";
+import { LoteListoDialog } from "@/modules/cafe/empaque/components/lote-listo-dialog";
 import { HistorialProcesos } from "@/modules/cafe/procesos/components/historial-procesos";
 import { NivelTuesteChip } from "@/modules/cafe/procesos/components/nivel-tueste-chip";
 import { ProcesoPlantaForm } from "@/modules/cafe/procesos/components/proceso-form";
@@ -21,7 +23,15 @@ const ETIQUETA_LINEA = { servicio: "Servicio (cliente)", marca_propia: "Marca pr
  * merma en vivo y, debajo, el historial con la anulación para owner/admin. Como la cola, es para owner/admin/
  * operativo; la ficha completa del lote (trazabilidad) es de CO-29.
  */
-export default async function ProcesoLotePage({ params }: { params: Promise<{ loteId: string }> }) {
+export const metadata = { title: "Proceso del lote" };
+
+export default async function ProcesoLotePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ loteId: string }>;
+  searchParams: Promise<{ listo?: string }>;
+}) {
   await requireModuloPagina("cafe.procesos");
   const { rolTenant, tenant } = await requireSesion();
   if (rolTenant === "viewer") redirect("/dashboard/cafe/lotes");
@@ -29,6 +39,7 @@ export default async function ProcesoLotePage({ params }: { params: Promise<{ lo
   const { loteId } = await params;
   if (!z.uuid().safeParse(loteId).success) notFound();
 
+  const { listo } = await searchParams;
   const datos = await getLoteParaProceso(loteId);
   if (!datos) notFound();
   const { lote, bultos, procesos, config } = datos;
@@ -39,15 +50,23 @@ export default async function ProcesoLotePage({ params }: { params: Promise<{ lo
   // El peso de entrada llega precargado: lo que salió del paso previo (HU-03 c5) o la suma de los bultos.
   const pesoInicial = tipoInicial ? await getPesoDisponible(lote.id, tipoInicial, bultoIdsIniciales) : null;
 
-  // El empaque de marca propia pide las presentaciones (bolsas activas) con el stock de bolsas y etiquetas.
-  const empaque = lote.linea === "marca_propia" && !lote.anulado ? await getConfigEmpaque(lote.id) : undefined;
+  // El empaque de marca propia pide las presentaciones (bolsas activas) con el stock de bolsas y etiquetas; el de
+  // servicios a terceros usa tamaños libres y no mueve inventario (A-01).
+  const empaque = lote.anulado ? undefined : lote.linea === "marca_propia" ? await getConfigEmpaque(lote.id) : { presentaciones: [] };
+
+  // Tostado a granel que dejó el empaque de este lote (marca propia); lo consumirá el inventario (A-15).
+  const granelKg = lote.linea === "marca_propia" ? await getSaldoGranel(lote.id) : 0;
 
   const esAdmin = rolTenant === "owner" || rolTenant === "admin";
   // Al registrar o anular, la página se vuelve a pedir: cambiar la clave reinicia el formulario con los datos nuevos.
   const clave = `${lote.estado}:${procesos.map((p) => `${p.id}${p.anulado ? "x" : ""}`).join(",")}`;
 
+  // Tras empacar el último servicio de un lote de terceros (lo marca el formulario con `?listo=1`).
+  const ofrecerEntrega = listo === "1" && lote.linea === "servicio" && lote.estado === "listo";
+
   return (
     <div className="space-y-5">
+      {ofrecerEntrega && <LoteListoDialog loteId={lote.id} />}
       <div className="space-y-3">
         <Link href="/dashboard/cafe/planta" className="inline-flex min-h-11 items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800">
           <ArrowLeft className="h-4 w-4" />
@@ -78,6 +97,12 @@ export default async function ProcesoLotePage({ params }: { params: Promise<{ lo
             </Link>
           </div>
         </div>
+
+        {granelKg > 0 && (
+          <p className="rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-700">
+            Tostado a granel de este lote: <span className="font-semibold tabular-nums">{formatKg(granelKg)}</span>
+          </p>
+        )}
 
         {lote.alertasCalidad.length > 0 && (
           <p className="flex items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">

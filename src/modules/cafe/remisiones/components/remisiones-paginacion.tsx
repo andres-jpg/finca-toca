@@ -17,7 +17,8 @@ export function RemisionesPaginacion({
 }) {
   const hrefDe = (pagina: number) => {
     const qs = serializarFiltrosRemisiones({ ...filtros, pagina }, { conPagina: true });
-    return qs ? `${ruta}?${qs}` : ruta;
+    // Las páginas son de «Todas las remisiones»: la pestaña viaja en la URL.
+    return `${ruta}?tab=todas${qs ? `&${qs}` : ""}`;
   };
   const pagina = Math.min(filtros.pagina, totalPaginas);
 

@@ -9,7 +9,6 @@ import {
   irA,
   llenarSalidaDeBaches,
   NAVEGACION_LENTA,
-  numeroDelCampo,
   registrarPaso,
   seguirEnlace,
   textoDelAviso,
@@ -26,7 +25,7 @@ test("marca propia completa: compra, tostión parcial, empaque, venta y factura 
   const factura = `FE-${sufijo()}`;
 
   // --- 1. Compra: 6 bultos × 62,5 kg = 375 kg a $18.500/kg ----------------------------------------------------------
-  await irA(page, "/dashboard/cafe/lotes/nueva-compra");
+  await irA(page, "/dashboard/cafe/recibir?tipo=marca-propia");
   await page.getByRole("combobox", { name: "Tipo de café" }).click();
   await page.getByRole("option", { name: "Excelso" }).click();
   // El selector de terceros no expone nombre accesible: se abre por su texto.
@@ -34,15 +33,15 @@ test("marca propia completa: compra, tostión parcial, empaque, venta y factura 
   await page.getByRole("option", { name: /Proveedor E2E SAS/ }).click();
   await page.getByLabel("Número de bultos").fill("6");
   await page.getByLabel("Precio por kilo ($)").fill("18500");
-  await expect(page.getByText("Total: 375 kg (6 × 62,5 kg)")).toBeVisible();
+  await expect(page.getByText(/Total: 375(,0)? kg \(6 × 62,5 kg\)/)).toBeVisible();
   // El valor total se calcula en vivo: 375 × 18.500.
   await expect(page.getByText("$6.937.500")).toBeVisible();
-  await page.getByRole("button", { name: "Registrar compra" }).click();
+  await page.getByRole("button", { name: "Guardar y enviar a planta" }).click();
 
   const textoCompra = await textoDelAviso(page, /Compra registrada: MP-/);
   const codigo = textoCompra.match(/MP-\d{4}-\d+/)?.[0];
   expect(codigo, "el aviso trae el código del lote MP").toBeTruthy();
-  await expect(page).toHaveURL(/\/dashboard\/cafe\/lotes$/);
+  await expect(page).toHaveURL(/\/dashboard\/cafe\/lotes$/, { timeout: NAVEGACION_LENTA });
 
   // --- 2. Primera tostión: 2 de los 6 bultos ------------------------------------------------------------------------
   await abrirPlanta(page, codigo!);
@@ -62,22 +61,21 @@ test("marca propia completa: compra, tostión parcial, empaque, venta y factura 
   await expect(page).toHaveURL(/\/dashboard\/cafe\/planta$/, { timeout: NAVEGACION_LENTA });
 
   // El lote queda «parcial» con 2/6 y con 4 bultos pendientes en la cola de marca propia.
-  await page.getByRole("tab", { name: /Marca propia/ }).click();
   await page.getByRole("searchbox", { name: "Buscar por código" }).fill(codigo!);
-  const tarjeta = page.getByRole("link", { name: new RegExp(codigo!) });
+  // Tablero único (A-13): el parcial sale en «Por tostar» (4 de 6 bultos) y en «Por empacar» (los 2 ya tostados).
+  const tarjeta = page.getByRole("region", { name: "Por tostar" }).getByRole("link", { name: new RegExp(codigo!) });
   await expect(tarjeta).toContainText("Parcial");
-  await expect(tarjeta).toContainText("4 de 6 bultos pendientes");
+  await expect(tarjeta).toContainText("4 de 6 bultos");
   // ...y el listado de lotes lo cuenta como «Tostado 2/6 bultos».
   await irA(page, `/dashboard/cafe/lotes?q=${codigo}`);
   const fila = page.getByRole("row").filter({ hasText: codigo! });
   await expect(fila).toContainText("Parcial");
   await expect(fila).toContainText("Tostado 2/6 bultos");
   await irA(page, "/dashboard/cafe/planta");
-  await page.getByRole("tab", { name: /Marca propia/ }).click();
   await page.getByRole("searchbox", { name: "Buscar por código" }).fill(codigo!);
 
   // --- 3. Segunda tostión: los 4 bultos restantes --------------------------------------------------------------------
-  await seguirEnlace(page, page.getByRole("link", { name: new RegExp(codigo!) }));
+  await seguirEnlace(page, page.getByRole("region", { name: "Por tostar" }).getByRole("link", { name: new RegExp(codigo!) }));
   await expect(page.getByLabel("Peso de entrada (kg)")).toHaveValue("250");
   await page.getByRole("button", { name: "Sugerir baches" }).click();
   await expect(page.getByRole("heading", { name: "Baches (19)" })).toBeVisible();
@@ -95,14 +93,17 @@ test("marca propia completa: compra, tostión parcial, empaque, venta y factura 
     etiqueta2500: await stockDe("Etiqueta 2.500 g"),
   };
 
-  await page.getByRole("tab", { name: /Marca propia/ }).click();
   await page.getByRole("searchbox", { name: "Buscar por código" }).fill(codigo!);
-  await seguirEnlace(page, page.getByRole("link", { name: new RegExp(codigo!) }));
+  await seguirEnlace(page, page.getByRole("region", { name: "Por empacar" }).getByRole("link", { name: new RegExp(codigo!) }));
   // Entra todo lo tostado (6 bultos, ~307,5 kg): 200 × 0,5 + 80 × 2,5 = 300 kg.
-  await expect.poll(async () => numeroDelCampo(page.getByLabel("Peso de entrada (kg)"))).toBeGreaterThan(300);
+  await expect(page.getByText("Llega a empaque")).toBeVisible();
+  await expect(page.getByText(/^307,5 kg$/).first()).toBeVisible();
   await page.getByLabel("Unidades de 500 g").fill("200");
   await page.getByLabel("Unidades de 2.500 g").fill("80");
-  await expect(page.getByText("300,000 kg").first()).toBeVisible();
+  // Sobran ~7,5 kg de lo tostado: no es merma, hay que decir adónde fueron para poder guardar (A-01).
+  await expect(page.getByRole("heading", { name: /^Sobran .* kg: ¿qué pasó con ese café\?/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Registrar empaque" })).toBeDisabled();
+  await page.getByRole("radio", { name: "Muestra", exact: true }).click();
   await registrarPaso(page, "Registrar empaque");
 
   // El producto terminado sube y las bolsas y etiquetas bajan, tamaño por tamaño.
@@ -124,9 +125,9 @@ test("marca propia completa: compra, tostión parcial, empaque, venta y factura 
   await elegirProductoDeVenta(page, "Excelso 500 g");
   await page.getByLabel("Cantidad", { exact: true }).fill("3");
   await expect(page.getByLabel("Precio unitario ($)")).toHaveValue("29000");
-  await page.getByLabel("¿Requiere factura electrónica?").check();
+  await page.getByLabel("Requiere factura electrónica").check();
   await page.getByRole("button", { name: "Guardar venta" }).click();
-  await expect(page).toHaveURL(/\/dashboard\/cafe\/ventas\/[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(/\/dashboard\/cafe\/ventas\/[0-9a-f-]{36}$/, { timeout: NAVEGACION_LENTA });
   await esperarHidratacion(page);
 
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Venta");

@@ -95,3 +95,22 @@ export interface VentaDiaria {
   nVentas: number;
   unidadesCortesia: number;
 }
+
+/** Un proveedor de marca propia en el panel (`cafe.proveedores_marca_propia`), de los lotes recibidos en el periodo. */
+export interface ProveedorMarcaPropia {
+  terceroId: string | null;
+  nombre: string;
+  lotes: number;
+  kg: number;
+  valorCompra: number;
+  /** Promedio ponderado por kg. */
+  precioKg: number | null;
+  /** Promedio ponderado por kg de los lotes con humedad medida; `null` si ninguno la tiene. */
+  humedadPct: number | null;
+  kgTostionEntrada: number;
+  kgTostionSalida: number;
+  /** Ponderada, calculada con los kilos; `null` sin tostión. */
+  mermaTostionPct: number | null;
+  /** Precio por kg / (1 − merma de tostión): lo que cuesta un kilo ya tostado. `null` sin tostión. */
+  costoKgTostado: number | null;
+}

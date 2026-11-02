@@ -34,8 +34,13 @@ describe("ventaSchema", () => {
   });
 
   it("una cortesía fuerza el precio a 0 aunque se mande otro (y no lo pide)", () => {
-    const r = ventaSchema.safeParse({ ...base, tipo: "cortesia", lineas: [{ articuloId: P2, cantidad: "2", precio: "29000" }, { articuloId: P1, cantidad: "1" }] });
+    const r = ventaSchema.safeParse({ ...base, tipo: "cortesia", observaciones: "Feria", lineas: [{ articuloId: P2, cantidad: "2", precio: "29000" }, { articuloId: P1, cantidad: "1" }] });
     expect(r.success && r.data.lineas.map((l) => l.precio)).toEqual([0, 0]);
+  });
+
+  it("una cortesía exige el motivo", () => {
+    expect(mensaje(ventaSchema.safeParse({ ...base, tipo: "cortesia" }))).toBe("Indica el motivo de la cortesía");
+    expect(ventaSchema.safeParse({ ...base, tipo: "cortesia", observaciones: "Feria" }).success).toBe(true);
   });
 
   it("cantidad: entero mayor que cero", () => {
@@ -59,7 +64,7 @@ describe("ventaSchema", () => {
 
   it("factura: el número solo con «requiere factura»; una cortesía no se factura", () => {
     expect(mensaje(ventaSchema.safeParse({ ...base, numeroFactura: "FE-1" }))).toMatch(/requiere factura/);
-    expect(mensaje(ventaSchema.safeParse({ ...base, tipo: "cortesia", requiereFactura: true }))).toBe("Una cortesía no lleva factura");
+    expect(mensaje(ventaSchema.safeParse({ ...base, tipo: "cortesia", observaciones: "Feria", requiereFactura: true }))).toBe("Una cortesía no lleva factura");
   });
 
   it("«requiere factura» sin número es válido (queda pendiente)", () => {

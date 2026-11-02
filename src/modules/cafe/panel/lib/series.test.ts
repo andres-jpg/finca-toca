@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FilaProduccion } from "../types";
-import { resumenPorLinea, resumenPorTipo, serieIngresoPorDia, serieKgPorDia, serieMermaPorDia } from "./series";
+import { resumenPorLinea, resumenPorTipo, serieIngresoPorDia, serieKgPorDia, serieMermaPorDia, serieMermaTostion } from "./series";
 
 // El mismo dataset que supabase/tests/87_cafe_kpis.test.sql (cliente A), tal como lo devuelve cafe.produccion_diaria.
 const f = (fecha: string, linea: FilaProduccion["linea"], tipo: FilaProduccion["tipo"], kgEntrada: number, kgSalida: number, valor: number): FilaProduccion => ({
@@ -81,5 +81,43 @@ describe("resumenPorLinea", () => {
   });
   it("una línea sin procesos no aparece", () => {
     expect(resumenPorLinea(FILAS.filter((x) => x.linea === "trilla")).map((l) => l.linea)).toEqual(["trilla"]);
+  });
+});
+
+describe("serieMermaTostion (banda de referencia, A-19)", () => {
+  const dias = ["2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04"];
+  const filas = [
+    f("2026-11-01", "maquila", "tostion", 100, 82, 0), // 18 %: en rango
+    f("2026-11-02", "marca_propia", "tostion", 100, 78, 0), // 22 %: alta (18 ± 2)
+    f("2026-11-03", "maquila", "tostion", 100, 85, 0), // 15 %: baja
+  ];
+
+  it("marca cada día frente a referencia ± tolerancia y deja huecos sin tostión", () => {
+    const serie = serieMermaTostion(filas, dias, 18, 2);
+    expect(serie.map((p) => [p.pct, p.estado])).toEqual([
+      [18, "en_rango"],
+      [22, "alta"],
+      [15, "baja"],
+      [null, null],
+    ]);
+  });
+
+  it("los límites de la banda están en rango", () => {
+    const serie = serieMermaTostion([f("2026-11-01", "maquila", "tostion", 100, 80, 0)], ["2026-11-01"], 18, 2);
+    expect(serie[0].estado).toBe("en_rango");
+  });
+
+  it("suma las líneas del día y recalcula el porcentaje (ponderado)", () => {
+    const serie = serieMermaTostion(
+      [f("2026-11-01", "maquila", "tostion", 100, 80, 0), f("2026-11-01", "marca_propia", "tostion", 300, 246, 0)],
+      ["2026-11-01"],
+      18,
+      2,
+    );
+    expect(serie[0].pct).toBe(18.5); // (20 + 54) / 400
+  });
+
+  it("sin referencia no hay estado", () => {
+    expect(serieMermaTostion(filas, dias, null, 2).every((p) => p.estado === null)).toBe(true);
   });
 });

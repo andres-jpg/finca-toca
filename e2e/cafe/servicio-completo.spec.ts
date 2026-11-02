@@ -8,6 +8,7 @@ import {
   llenarSalidaDeBaches,
   registrarPaso,
   textoDelAviso,
+  NAVEGACION_LENTA,
 } from "../helpers/ui";
 
 test.use(usarRol("cafeAdmin"));
@@ -22,7 +23,7 @@ test("servicio trilla + maquila: recepción con aviso de humedad, planta complet
   context,
 }) => {
   // --- 1. Recepción: 500 kg, 8 bultos, humedad 13 % (rango 10–12 %) ---------------------------------------------------
-  await irA(page, "/dashboard/cafe/lotes/nueva-recepcion");
+  await irA(page, "/dashboard/cafe/recibir?tipo=servicios");
   await page.getByText("Selecciona o crea el cliente").click();
   await page.getByRole("option", { name: /Cliente E2E/ }).click();
   await page.getByLabel("Número de bultos").fill("8"); // 8 × 62,5 kg = 500 kg
@@ -32,17 +33,19 @@ test("servicio trilla + maquila: recepción con aviso de humedad, planta complet
     "Puedes guardar igualmente",
   );
   await page.getByLabel("Densidad").fill("680");
-  await page.getByRole("checkbox", { name: /^Trilla/ }).check();
-  await page.getByRole("checkbox", { name: /^Tostión/ }).check();
-  await page.getByRole("checkbox", { name: /^Molienda/ }).check();
+  // Los servicios son botones de alternancia (A-08): tostión habilita la molienda y trae el empaque incluido.
+  for (const servicio of ["Trilla", "Tostión", "Molienda"]) {
+    await page.getByRole("button", { name: servicio, exact: true }).click();
+    await expect(page.getByRole("button", { name: servicio, exact: true })).toHaveAttribute("aria-pressed", "true");
+  }
   await elegirTueste(page, "Medio");
-  await page.getByRole("button", { name: "Registrar recepción" }).click();
+  await page.getByRole("button", { name: "Guardar y enviar a planta" }).click();
 
   const codigo = (await textoDelAviso(page, /Recepción registrada: MQ-/)).match(/MQ-\d{4}-\d+/)?.[0];
   expect(codigo, "el aviso trae el código del lote MQ").toBeTruthy();
   // La alerta de calidad avisa, pero el lote se guardó.
   await expect(aviso(page, /Alertas de calidad: Humedad alta/)).toBeVisible();
-  await expect(page).toHaveURL(/\/dashboard\/cafe\/lotes$/);
+  await expect(page).toHaveURL(/\/dashboard\/cafe\/lotes$/, { timeout: NAVEGACION_LENTA });
 
   // --- 2. Trilla: 500 → 405 kg (merma 19 %, la de referencia) -------------------------------------------------------
   await abrirPlanta(page, codigo!);
@@ -51,7 +54,7 @@ test("servicio trilla + maquila: recepción con aviso de humedad, planta complet
   await page.getByLabel("Peso de salida (kg)").fill("405");
   const merma = page.getByRole("region", { name: "Merma" });
   await expect(merma).toContainText(/19(,0)? %/);
-  await expect(merma).toContainText("Referencia 19 % ± 3 puntos");
+  await expect(merma).toContainText("Referencia 19 % ± 2 puntos");
   await expect(merma).toContainText("Tarifa vigente"); // trilla: $1.400/kg, se cobra en servicios
   await expect(merma).not.toContainText("Revisa el pesaje"); // en la referencia: sin aviso de desvío
   await registrarPaso(page, "Registrar trilla");
@@ -71,8 +74,12 @@ test("servicio trilla + maquila: recepción con aviso de humedad, planta complet
   await registrarPaso(page, "Registrar molienda");
 
   await abrirPlanta(page, codigo!);
-  await page.getByLabel("Peso de salida (kg)").fill("329");
-  await registrarPaso(page, "Registrar empaque");
+  // Bolsas del cliente (peso libre): 132 × 2,5 kg = 330 kg, todo lo que llega, así que no sobra café que explicar.
+  await page.getByLabel("Peso de la bolsa (kg)").fill("2,5");
+  await page.getByLabel("Cantidad", { exact: true }).fill("132");
+  await page.getByRole("button", { name: "Registrar empaque" }).click();
+  // Era el último servicio. (Aparece el diálogo «Lote listo · ¿Entregar ahora?»; se prueba en entrega.spec.ts, aquí se sigue por la ficha.)
+  await expect(aviso(page, /Todo el café quedó en bolsas/)).toBeVisible();
 
   // El lote queda listo para entregar.
   await irA(page, `/dashboard/cafe/lotes?q=${codigo}`);
@@ -80,16 +87,17 @@ test("servicio trilla + maquila: recepción con aviso de humedad, planta complet
 
   // --- 5. Remisión de entrega ---------------------------------------------------------------------------------------------
   await abrirFichaDeLote(page, codigo!);
-  await page.getByRole("button", { name: "Generar remisión" }).click();
-  const dialogo = page.getByRole("dialog");
-  await dialogo.getByLabel("Recibe (opcional)").fill("Juan Pérez");
-  await dialogo.getByRole("button", { name: "Generar remisión" }).click();
+  await page.getByRole("link", { name: "Entregar" }).click();
+  await page.getByLabel("Nombre de quien recibe").fill("Juan Pérez");
+  await page.getByLabel("Cédula").fill("1020304050");
+  await page.getByRole("button", { name: "Entregar e imprimir remisión" }).click();
   const numeroRemision = (await textoDelAviso(page, /Remisión REM-.* generada/)).match(/REM-\d{4}-\d+/)?.[0];
   expect(numeroRemision, "el aviso trae el número de la remisión").toBeTruthy();
+  await abrirFichaDeLote(page, codigo!);
 
   const seccion = page.getByRole("region", { name: "Remisión de entrega" });
   await expect(seccion).toContainText(numeroRemision!);
-  await expect(seccion).toContainText("Vigente");
+  await expect(seccion).toContainText("Entregada");
 
   // --- 6. Imprimir con copia: el tiquete trae dos hojas (original y COPIA CLIENTE) ----------------------------------------
   const [impresion] = await Promise.all([
@@ -97,7 +105,7 @@ test("servicio trilla + maquila: recepción con aviso de humedad, planta complet
     seccion.getByRole("link", { name: "Imprimir con copia" }).click(),
   ]);
   await impresion.waitForLoadState("domcontentloaded");
-  await expect(impresion).toHaveURL(/\/print\/remision\/[0-9a-f-]{36}\?copias=2$/);
+  await expect(impresion).toHaveURL(/\/print\/remision\/[0-9a-f-]{36}\?copias=2$/, { timeout: NAVEGACION_LENTA });
   await expect(impresion.locator(".ticket")).toHaveCount(2);
   await expect(impresion.getByText("COPIA CLIENTE")).toHaveCount(1);
   for (const ticket of await impresion.locator(".ticket").all()) {

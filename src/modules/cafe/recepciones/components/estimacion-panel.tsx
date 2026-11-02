@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { formatearPesos } from "@/modules/core/tarifas/lib/formato";
+import { formatCOP, formatKgNum } from "@/modules/core/formato/numeros";
 import { etiquetaServicio } from "../../lotes/lib/servicios";
 import type { Estimacion } from "../lib/estimar-servicios";
 
-const KG = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 3 });
 
 interface EstimacionPanelProps {
   estimacion: Estimacion;
@@ -16,13 +15,12 @@ interface EstimacionPanelProps {
  * total. Es solo una estimación (lo dice el rótulo): el valor real se congela al registrar cada proceso.
  */
 export function EstimacionPanel({ estimacion, puedeConfigurar }: EstimacionPanelProps) {
-  const { lineas, total, incompleta, conEmpaque } = estimacion;
+  const { lineas, total, incompleta, conEmpaque, hayEstimadas } = estimacion;
 
   return (
-    <section aria-label="Estimación" className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+    <section aria-label="Valor del servicio" className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-gray-800">Estimación</h2>
-        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">Estimado</span>
+        <h2 className="text-base font-semibold text-gray-800">Valor del servicio</h2>
       </div>
 
       {lineas.length === 0 ? (
@@ -32,18 +30,23 @@ export function EstimacionPanel({ estimacion, puedeConfigurar }: EstimacionPanel
           {lineas.map((l) => (
             <li key={l.servicio} className="flex items-start justify-between gap-3 py-2.5">
               <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-800">{etiquetaServicio(l.servicio)}</p>
+                <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-gray-800">
+                  {etiquetaServicio(l.servicio)}
+                  {l.estimado && (
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">Estimado</span>
+                  )}
+                </p>
                 <p className="text-xs text-gray-500">
-                  {KG.format(l.pesoKg)} kg ×{" "}
+                  {formatKgNum(l.pesoKg)} kg ×{" "}
                   {l.tarifaKg === null ? (
                     <span className="text-amber-700">sin tarifa</span>
                   ) : (
-                    <>{formatearPesos(l.tarifaKg)}/kg</>
+                    <>{formatCOP(l.tarifaKg)}/kg</>
                   )}
                 </p>
               </div>
               <p className="shrink-0 text-sm font-semibold tabular-nums text-gray-800">
-                {l.valor === null ? "—" : formatearPesos(l.valor)}
+                {l.valor === null ? "—" : formatCOP(l.valor)}
               </p>
             </li>
           ))}
@@ -61,8 +64,8 @@ export function EstimacionPanel({ estimacion, puedeConfigurar }: EstimacionPanel
 
       {lineas.length > 0 && (
         <div className="mt-1 flex items-center justify-between gap-3 border-t border-gray-200 pt-3">
-          <p className="text-sm font-semibold text-gray-800">{incompleta ? "Total parcial" : "Total estimado"}</p>
-          <p className="text-lg font-bold tabular-nums text-gray-900">{formatearPesos(total)}</p>
+          <p className="text-sm font-semibold text-gray-800">{incompleta ? "Total parcial" : "Total"}</p>
+          <p className="text-lg font-bold tabular-nums text-gray-900">{formatCOP(total)}</p>
         </div>
       )}
 
@@ -79,9 +82,14 @@ export function EstimacionPanel({ estimacion, puedeConfigurar }: EstimacionPanel
         </p>
       )}
 
-      <p className="mt-3 text-xs leading-relaxed text-gray-500">
-        Con la tarifa de hoy y la merma de referencia. El valor real se fija al registrar cada proceso, con la tarifa
-        de ese día y el peso que realmente entra.
+      {hayEstimadas && (
+        <p className="mt-3 text-xs leading-relaxed text-gray-500">
+          Estimado: el valor real se calcula al finalizar el proceso.
+        </p>
+      )}
+
+      <p className="mt-3 border-t border-gray-100 pt-3 text-xs text-gray-500">
+        Hora de llegada: <span className="text-gray-700">se registrará al guardar</span>
       </p>
     </section>
   );

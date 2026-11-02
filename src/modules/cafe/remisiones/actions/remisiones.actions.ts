@@ -9,14 +9,14 @@ import { requireModulo } from "@/modules/core/tenants/tenant.guards";
 import { fechaHoyEnZona } from "../../insumos/lib/insumos";
 import {
   anularRemisionSchema,
-  generarRemisionSchema,
-  payloadRemision,
+  entregarLotesSchema,
+  payloadEntrega,
   type AnularRemisionInput,
-  type GenerarRemisionInput,
+  type EntregarLotesInput,
 } from "../schemas/remision.schema";
 
-// Server Actions de las remisiones (FIN-113). Cada una: módulo activo → rol de la membresía → Zod → RPC. Son
-// endpoints POST públicos: la frontera real son las RPC `cafe.generar_remision` / `cafe.anular_remision` (repiten
+// Server Actions de las remisiones (FIN-113, FIN-132). Cada una: módulo activo → rol de la membresía → Zod → RPC. Son
+// endpoints POST públicos: la frontera real son las RPC `cafe.entregar_lotes` / `cafe.anular_remision` (repiten
 // permisos, módulo y todas las reglas) y el RLS; esto es defensa en profundidad. La escritura es UNA RPC
 // transaccional (número REM + remisión): nunca inserts sueltos desde aquí.
 
@@ -29,30 +29,32 @@ function datosInvalidos(mensaje: string | undefined): Result<never> {
   return { ok: false, code: "datos_invalidos", message: mensaje ?? mensajeRpc("datos_invalidos") };
 }
 
-function revalidarRemisiones(loteId: string) {
+function revalidarRemisiones(loteIds: readonly string[]) {
   revalidatePath("/dashboard/cafe/remisiones");
   revalidatePath("/dashboard/cafe/lotes");
-  revalidatePath(`/dashboard/cafe/lotes/${loteId}`);
+  for (const id of loteIds) revalidatePath(`/dashboard/cafe/lotes/${id}`);
   revalidatePath("/dashboard/cafe/planta");
+  revalidatePath("/dashboard/cafe/planta/entregar");
 }
 
 export interface RemisionGenerada {
   id: string;
   numero: string;
   forzada: boolean;
+  lote_ids: string[];
 }
 
 /**
- * Genera la remisión de entrega de un lote de trilla o maquila. La base comprueba que sea de servicio, que no esté
- * anulado ni tenga ya una remisión vigente, que tenga procesos y que los servicios contratados estén completos
- * (`servicios_incompletos`: un administrador puede forzar con `forzar` y una observación). El número REM sale de
- * la serie independiente de MP/MQ. Todo o nada.
+ * «Entregar»: genera UNA remisión con todos los lotes elegidos de un cliente (A-14). Quién recibe (nombre y cédula) es
+ * obligatorio. La base comprueba que sean de servicio, de un mismo cliente, sin remisión entregada, con procesos y
+ * con los servicios completos (`servicios_incompletos`; un administrador puede forzar con una observación). El número
+ * REM sale de la serie independiente de MP/MQ. Todo o nada.
  */
-export async function generarRemision(input: GenerarRemisionInput): Promise<Result<RemisionGenerada>> {
+export async function entregarLotes(input: EntregarLotesInput): Promise<Result<RemisionGenerada>> {
   await requireModulo("cafe.remisiones");
   const sesion = await requireRolTenant(ROLES_GENERAR);
 
-  const parsed = generarRemisionSchema.safeParse(input);
+  const parsed = entregarLotesSchema.safeParse(input);
   if (!parsed.success) return datosInvalidos(parsed.error.issues[0]?.message);
 
   // La fecha es un día del calendario del cliente: no se entrega en el futuro. (La base solo la valida como
@@ -61,10 +63,10 @@ export async function generarRemision(input: GenerarRemisionInput): Promise<Resu
     return datosInvalidos("La fecha de entrega no puede ser futura.");
   }
 
-  const r = await callRpc<"cafe", "generar_remision", RemisionGenerada>("cafe", "generar_remision", {
-    p: payloadRemision(parsed.data),
+  const r = await callRpc<"cafe", "entregar_lotes", RemisionGenerada>("cafe", "entregar_lotes", {
+    p: payloadEntrega(parsed.data),
   });
-  if (r.ok) revalidarRemisiones(parsed.data.loteId);
+  if (r.ok) revalidarRemisiones(parsed.data.loteIds);
   return r;
 }
 
@@ -73,6 +75,7 @@ export interface RemisionAnulada {
   numero: string;
   lote_id: string;
   lote_estado: string;
+  lote_ids: string[];
 }
 
 /**
@@ -90,6 +93,6 @@ export async function anularRemision(input: AnularRemisionInput): Promise<Result
     p_remision: parsed.data.remisionId,
     p_motivo: parsed.data.motivo,
   });
-  if (r.ok) revalidarRemisiones(r.data.lote_id);
+  if (r.ok) revalidarRemisiones(r.data.lote_ids?.length ? r.data.lote_ids : [r.data.lote_id]);
   return r;
 }

@@ -1,10 +1,13 @@
+import { COPY } from "../../copy";
 import { createClient } from "@/lib/supabase/server";
 import { getKardex, getStock } from "@/modules/core/inventario/queries/inventario.queries";
 import type { StockArticulo } from "@/modules/core/inventario/types";
 import { callRpc } from "@/modules/core/rpc/call-rpc";
 import { leerAtributosInsumo } from "../../insumos/lib/insumos";
+import { etiquetaPresentacion } from "../../tipos/lib/productos";
 import { construirMatriz, leerAtributosProducto, type MatrizProductoTerminado, type ProductoTerminado, type TipoCafeMatriz } from "../lib/matriz";
 import {
+  REF_CONVERSION,
   REF_LOTE,
   REF_PROCESO,
   REF_VENTA,
@@ -43,9 +46,11 @@ export async function getConfigEmpaque(loteId: string): Promise<ConfigEmpaque> {
   }
 
   const delTipo = new Map<number, StockArticulo>();
+  const molidoDelTipo = new Map<number, StockArticulo>();
   for (const p of productos) {
     const a = leerAtributosProducto(p.atributos);
-    if (a && a.tipoCafeId === lote?.tipo_cafe_id && !delTipo.has(a.presentacionG)) delTipo.set(a.presentacionG, p);
+    const mapa = a?.forma === "molido" ? molidoDelTipo : delTipo;
+    if (a && a.tipoCafeId === lote?.tipo_cafe_id && !mapa.has(a.presentacionG)) mapa.set(a.presentacionG, p);
   }
 
   const presentaciones: PresentacionEmpaque[] = [...bolsas.keys()]
@@ -53,11 +58,13 @@ export async function getConfigEmpaque(loteId: string): Promise<ConfigEmpaque> {
     .map((g) => {
       const etiqueta = etiquetas.get(g);
       const producto = delTipo.get(g);
+      const molido = molidoDelTipo.get(g);
       return {
         presentacionG: g,
         bolsa: aInsumo(bolsas.get(g)!),
         etiqueta: etiqueta ? aInsumo(etiqueta) : null,
         producto: producto ? { id: producto.articulo_id, nombre: producto.nombre, stock: producto.stock } : null,
+        productoMolido: molido ? { id: molido.articulo_id, nombre: molido.nombre, stock: molido.stock } : null,
       };
     });
 
@@ -75,7 +82,7 @@ export async function getMatrizProductoTerminado(): Promise<{ matriz: MatrizProd
 
   const productos = stock.flatMap((s): ProductoTerminado[] => {
     const a = leerAtributosProducto(s.atributos);
-    return a ? [{ articuloId: s.articulo_id, nombre: s.nombre, stock: s.stock, tipoCafeId: a.tipoCafeId, presentacionG: a.presentacionG, activo: s.activo }] : [];
+    return a ? [{ articuloId: s.articulo_id, nombre: s.nombre, stock: s.stock, tipoCafeId: a.tipoCafeId, presentacionG: a.presentacionG, forma: a.forma, activo: s.activo }] : [];
   });
   const tipos: TipoCafeMatriz[] = (tiposRes.data ?? []).map((t) => ({ id: t.id, nombre: t.nombre, activo: t.activo, orden: t.orden }));
   return { matriz: construirMatriz(productos, tipos), productos };
@@ -106,6 +113,9 @@ export async function getKardexProducto(articuloId: string): Promise<KardexProdu
     codigosDeLotes(idsLotes),
   ]);
 
+  const idsConv = [...new Set(movimientos.flatMap((m) => (m.ref_tipo === REF_CONVERSION && m.ref_id ? [m.ref_id] : [])))];
+  const lotesDeConversion = await lotesDeConversiones(idsConv);
+
   const numerosDeVenta = await numerosDeVentas([...new Set(movimientos.flatMap((m) => (m.ref_tipo === REF_VENTA && m.ref_id ? [m.ref_id] : [])))]);
 
   const referencias: Record<string, string> = {};
@@ -123,6 +133,12 @@ export async function getKardexProducto(articuloId: string): Promise<KardexProdu
       if (!codigo) continue;
       referencias[m.ref_id] = codigo;
       enlaces[m.ref_id] = `/dashboard/cafe/lotes/${m.ref_id}`;
+    } else if (m.ref_tipo === REF_CONVERSION) {
+      // Conversión de presentación (A-15): la traza apunta al lote de origen.
+      const lote = lotesDeConversion.get(m.ref_id);
+      if (!lote) continue;
+      referencias[m.ref_id] = lote.codigo;
+      enlaces[m.ref_id] = `/dashboard/cafe/lotes/${lote.id}`;
     } else if (m.ref_tipo === REF_VENTA) {
       // Una venta, una cortesía o su anulación (CO-31): el número (VT-2026-0001) enlaza al detalle.
       referencias[m.ref_id] = numerosDeVenta.get(m.ref_id) ?? "Venta";
@@ -148,6 +164,18 @@ async function codigosDeLotes(loteIds: string[]): Promise<Map<string, string>> {
   return new Map((data ?? []).map((l) => [l.id, l.codigo]));
 }
 
+/** `conversion_id` → lote de origen (id y código) de las conversiones de presentación (A-15). */
+async function lotesDeConversiones(ids: string[]): Promise<Map<string, { id: string; codigo: string }>> {
+  if (ids.length === 0) return new Map();
+  const cafe = (await createClient()).schema("cafe");
+  const { data: conv, error } = await cafe.from("conversiones_presentacion").select("id, lote_id").in("id", ids);
+  if (error || !conv?.length) return new Map();
+  const { data: lotes, error: errLotes } = await cafe.from("lotes").select("id, codigo").in("id", [...new Set(conv.map((c) => c.lote_id))]);
+  if (errLotes) return new Map();
+  const codigo = new Map((lotes ?? []).map((l) => [l.id, l.codigo]));
+  return new Map(conv.flatMap((c) => (codigo.has(c.lote_id) ? [[c.id, { id: c.lote_id, codigo: codigo.get(c.lote_id)! }] as const] : [])));
+}
+
 /** `venta_id` → número (`VT-2026-0001`) de las ventas y cortesías que originaron esos movimientos (CO-31). */
 async function numerosDeVentas(ventaIds: string[]): Promise<Map<string, string>> {
   if (ventaIds.length === 0) return new Map();
@@ -170,9 +198,9 @@ async function lotesDeProcesos(procesoIds: string[]): Promise<Map<string, { id: 
 }
 
 /**
- * Las presentaciones empacadas de esos procesos de empaque (con el nombre del producto), por `proceso_id`. Las usan
- * el historial de la planta y la línea de tiempo del lote para decir «120 × Excelso 500 g». Un proceso sin líneas
- * (empaque de maquila, que no mueve inventario) no aparece en el mapa.
+ * Las líneas de bolsas de esos procesos de empaque, por `proceso_id`. Las usan el historial de la planta y la línea
+ * de tiempo del lote para decir «120 × Excelso 500 g». En marca propia cada línea lleva su producto terminado; en
+ * servicios a terceros (A-01) solo el tamaño de la bolsa y si la trajo el cliente.
  */
 export async function getLineasEmpaque(procesoIds: readonly string[]): Promise<Map<string, LineaEmpaqueVista[]>> {
   const resultado = new Map<string, LineaEmpaqueVista[]>();
@@ -181,24 +209,43 @@ export async function getLineasEmpaque(procesoIds: readonly string[]): Promise<M
   const { data: lineas, error } = await supabase
     .schema("cafe")
     .from("empaque_lineas")
-    .select("proceso_id, presentacion_g, unidades, articulo_pt_id")
+    .select("proceso_id, presentacion_g, unidades, articulo_pt_id, bolsa_cliente, forma")
     .in("proceso_id", [...procesoIds]);
   if (error) throw new Error("No se pudieron cargar las presentaciones empacadas");
   if (!lineas?.length) return resultado;
 
-  const { data: articulos, error: errArticulos } = await supabase
-    .from("articulos")
-    .select("id, nombre")
-    .in("id", [...new Set(lineas.map((l) => l.articulo_pt_id))]);
-  if (errArticulos) throw new Error("No se pudieron cargar los productos empacados");
-  const nombre = new Map((articulos ?? []).map((a) => [a.id, a.nombre]));
+  const idsProductos = [...new Set(lineas.flatMap((l) => (l.articulo_pt_id ? [l.articulo_pt_id] : [])))];
+  const nombre = new Map<string, string>();
+  if (idsProductos.length > 0) {
+    const { data: articulos, error: errArticulos } = await supabase.from("articulos").select("id, nombre").in("id", idsProductos);
+    if (errArticulos) throw new Error("No se pudieron cargar los productos empacados");
+    for (const a of articulos ?? []) nombre.set(a.id, a.nombre);
+  }
 
   for (const l of lineas) {
     resultado.set(l.proceso_id, [
       ...(resultado.get(l.proceso_id) ?? []),
-      { presentacionG: l.presentacion_g, unidades: l.unidades, producto: nombre.get(l.articulo_pt_id) ?? "Producto terminado" },
+      {
+        presentacionG: l.presentacion_g,
+        unidades: l.unidades,
+        producto: l.articulo_pt_id ? (nombre.get(l.articulo_pt_id) ?? COPY.productoRespaldo) : etiquetaPresentacion(l.presentacion_g),
+        mueveInventario: l.articulo_pt_id !== null,
+        bolsaCliente: l.bolsa_cliente,
+        forma: l.forma === "molido" ? "molido" : "grano", // CHECK de la tabla: grano | molido
+      },
     ]);
   }
-  for (const lista of resultado.values()) lista.sort((a, b) => a.presentacionG - b.presentacionG);
+  for (const lista of resultado.values()) lista.sort((a, b) => a.presentacionG - b.presentacionG || a.forma.localeCompare(b.forma));
   return resultado;
+}
+
+/**
+ * Saldo de tostado a granel de un lote de marca propia (kg): lo que «quedó a granel» al empacar (A-01). Sale de los
+ * empaques vigentes (`cafe.v_granel_lote`); 0 si no hay. Lo consumirá el inventario de A-15.
+ */
+export async function getSaldoGranel(loteId: string): Promise<number> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.schema("cafe").from("v_granel_lote").select("kg_granel").eq("lote_id", loteId).maybeSingle();
+  if (error) throw new Error("No se pudo cargar el saldo a granel");
+  return Number(data?.kg_granel ?? 0);
 }

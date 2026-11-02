@@ -410,7 +410,7 @@ export function CompraForm({ tipos, pesoBultoKg, fechaHoy }: CompraFormProps) {
           Cancelar
         </Button>
         <Button type="submit" disabled={enviando} className="h-11 sm:h-10">
-          {enviando ? "Guardando…" : "Registrar compra"}
+          {enviando ? "Guardando…" : "Guardar y enviar a planta"}
         </Button>
       </div>
     </form>

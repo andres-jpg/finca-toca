@@ -14,7 +14,7 @@ export interface RemisionRow {
   id: string;
   tenant_id: string;
   numero: string;
-  lote_id: string;
+  lote_id: string | null;
   lote_codigo: string;
   fecha: string;
   tercero_id: string;
@@ -26,6 +26,8 @@ export interface RemisionRow {
   merma_total_pct: number | null;
   detalle: Json;
   valor_servicios: number;
+  recibe_nombre: string;
+  recibe_documento: string;
   recibido_por: string | null;
   observaciones: string | null;
   forzada: boolean;
@@ -36,11 +38,30 @@ export interface RemisionRow {
   created_by: string | null;
 }
 
+/** Fila de `cafe.remisiones_lotes` (relación remisión-lote, A-14). */
+export interface RemisionLoteRow {
+  id: string;
+  remision_id: string;
+  lote_id: string;
+  lote_codigo: string;
+  peso_recibido_kg: number;
+  peso_entregado_kg: number;
+  detalle: Json;
+  valor_servicios: number;
+  activa: boolean;
+}
+
 type EsquemaRemisiones = {
   cafe: {
     Tables: {
       remisiones: {
         Row: RemisionRow;
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      remisiones_lotes: {
+        Row: RemisionLoteRow;
         Insert: never;
         Update: never;
         Relationships: [];

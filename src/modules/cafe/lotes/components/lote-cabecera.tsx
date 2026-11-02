@@ -4,12 +4,11 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { formatearCOP } from "@/modules/cafe/compras/lib/compra";
 import { formatearMedicion, formatearRango } from "@/modules/cafe/recepciones/lib/calidad";
-import { calcularAvance, type EtapaAvance } from "../lib/avance";
 import { medicionesDeCalidad } from "../lib/calidad-lote";
-import { fechaCorta, fechaHoraZona, formatearKg3, formatearMermaPct } from "../lib/formato";
+import { fechaCorta, fechaHoraZona, formatearKg3, horaLlegada } from "../lib/formato";
+import type { EtapaLote } from "../lib/etapas";
 import { etiquetaServicio, etiquetaTueste } from "../lib/servicios";
 import type { LoteFicha } from "../queries/lotes.queries";
-import { AvanceBarra } from "./avance-barra";
 import { EstadoLoteBadge, TipoLoteBadge } from "./insignias";
 
 function Dato({ etiqueta, children, className }: { etiqueta: string; children: React.ReactNode; className?: string }) {
@@ -23,20 +22,10 @@ function Dato({ etiqueta, children, className }: { etiqueta: string; children: R
 
 /**
  * Cabecera de la ficha: lo que entró (cliente o proveedor, tipo de café, fecha, kilos y bultos), la calidad medida
- * contra los rangos de ese día, los servicios contratados con su check, la compra (marca propia), lo que queda en
- * planta y el estado derivado con su avance. Solo presenta lo que ya calculó la base.
+ * contra los rangos de ese día, los servicios contratados con su check y la compra (marca propia). El avance, la merma
+ * y dónde está el café van en sus propios bloques de la ficha (A-17). Solo presenta lo que ya calculó la base.
  */
-export function LoteCabecera({ lote, etapas, zonaHoraria }: { lote: LoteFicha; etapas: EtapaAvance[]; zonaHoraria: string }) {
-  const avance = calcularAvance(
-    {
-      linea: lote.linea,
-      estado: lote.estado,
-      avanceTexto: lote.avanceTexto,
-      serviciosCompletados: lote.serviciosCompletados,
-      serviciosRequeridos: lote.serviciosRequeridos,
-    },
-    etapas,
-  );
+export function LoteCabecera({ lote, etapas, zonaHoraria }: { lote: LoteFicha; etapas: EtapaLote[]; zonaHoraria: string }) {
   const completos = new Set(etapas.filter((e) => e.completo).map((e) => e.tipo));
   const calidad = medicionesDeCalidad(lote);
   const esServicio = lote.linea === "servicio";
@@ -78,6 +67,9 @@ export function LoteCabecera({ lote, etapas, zonaHoraria }: { lote: LoteFicha; e
         <Dato etiqueta="Tipo de café">{lote.tipoCafe ?? "—"}</Dato>
         <Dato etiqueta="Fecha de recepción" className="tabular-nums">
           {fechaCorta(lote.fechaRecepcion)}
+        </Dato>
+        <Dato etiqueta="Hora de llegada" className="tabular-nums">
+          {horaLlegada(lote.creadoEn, zonaHoraria)}
         </Dato>
         <Dato etiqueta="Recibido" className="tabular-nums">
           {formatearKg3(lote.pesoRecibidoKg)} kg · {lote.numBultos} {lote.numBultos === 1 ? "bulto" : "bultos"}
@@ -143,21 +135,12 @@ export function LoteCabecera({ lote, etapas, zonaHoraria }: { lote: LoteFicha; e
         )}
         {lote.facturaProveedor && <Dato etiqueta="Factura del proveedor">{lote.facturaProveedor}</Dato>}
 
-        <Dato etiqueta="Queda en planta" className="tabular-nums">
-          {formatearKg3(lote.pesoActualKg)} kg
-        </Dato>
-        <Dato etiqueta="Merma total" className="tabular-nums">
-          {formatearKg3(lote.mermaTotalKg)} kg · {formatearMermaPct(lote.mermaTotalKg, lote.pesoRecibidoKg)}
-        </Dato>
         {esServicio && (
           <Dato etiqueta="Valor de los servicios" className="tabular-nums">
             {formatearCOP(lote.valorServicios)}
             <span className="ml-1 text-xs text-gray-500">(referencia)</span>
           </Dato>
         )}
-        <Dato etiqueta="Avance" className="sm:col-span-2 lg:col-span-1">
-          <AvanceBarra avance={avance} completo={lote.estado === "listo" || lote.estado === "entregado"} />
-        </Dato>
       </dl>
 
       {lote.observaciones && (

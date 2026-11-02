@@ -15,6 +15,9 @@ export interface Membresia {
   rol: RolTenant;
 }
 
+/** Pantalla de inicio configurable por usuario (A-07): dónde aterriza un operativo de café. */
+export type PantallaInicio = "planta" | "recibir";
+
 export interface Sesion {
   user: { id: string; email: string };
   /** El cliente activo (el de `tenant_actual()`), con vertical y módulos. */
@@ -23,6 +26,8 @@ export interface Sesion {
   /** Rol de la tabla `roles`, para las pantallas legacy; `null` si el usuario no tiene fila (p. ej. un platform admin). */
   rolLegacy: RolLegacy | null;
   esPlatformAdmin: boolean;
+  /** Pantalla de inicio de la membresía en el cliente activo; `null` = la de por defecto del rol. */
+  pantallaInicio: PantallaInicio | null;
   membresias: Membresia[];
 }
 
@@ -54,6 +59,8 @@ interface MiSesionJson {
   rol_tenant: RolTenant | null;
   rol_legacy: RolLegacy | null;
   es_platform_admin: boolean;
+  /** Ausente en una base sin la migración A-07. */
+  pantalla_inicio?: PantallaInicio | null;
   membresias: { tenant_id: string; nombre: string; slug: string; vertical: Vertical; rol: RolTenant }[];
 }
 
@@ -96,6 +103,7 @@ export const getSesionBase = cache(async function getSesionBase(): Promise<Sesio
     rolTenant: s.rol_tenant,
     rolLegacy: s.rol_legacy,
     esPlatformAdmin: s.es_platform_admin,
+    pantallaInicio: s.pantalla_inicio ?? null,
     membresias: s.membresias.map((m) => ({
       tenantId: m.tenant_id,
       nombre: m.nombre,

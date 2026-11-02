@@ -10,8 +10,18 @@ import { mensajeRpc } from "@/modules/core/rpc/mensajes";
 import { requireModulo } from "@/modules/core/tenants/tenant.guards";
 import { fechaHoyEnZona } from "../../insumos/lib/insumos";
 import { getKardexProducto } from "../queries/empaque.queries";
-import { empaqueSchema, payloadEmpaque, payloadSalidaPt, salidaPtSchema, type EmpaqueFormInput, type SalidaPtFormInput } from "../schemas/empaque.schema";
-import type { KardexProducto, ResultadoEmpaque } from "../types";
+import {
+  convertirPresentacionSchema,
+  empaqueSchema,
+  payloadConvertirPresentacion,
+  payloadEmpaque,
+  payloadSalidaPt,
+  salidaPtSchema,
+  type ConvertirPresentacionFormInput,
+  type EmpaqueFormInput,
+  type SalidaPtFormInput,
+} from "../schemas/empaque.schema";
+import type { KardexProducto, ResultadoConversion, ResultadoEmpaque } from "../types";
 
 // Server Actions del empaque de marca propia y del inventario de producto terminado (FIN-111). Cada una: módulo
 // activo → rol de la membresía → Zod → RPC. Son endpoints POST públicos: la frontera real son las RPC
@@ -34,7 +44,6 @@ function revalidarEmpaque(loteId: string | null) {
   revalidatePath("/dashboard/cafe/planta");
   revalidatePath("/dashboard/cafe/lotes");
   revalidatePath("/dashboard/cafe/inventario");
-  revalidatePath("/dashboard/cafe/insumos");
   if (loteId) {
     revalidatePath(`/dashboard/cafe/planta/${loteId}`);
     revalidatePath(`/dashboard/cafe/lotes/${loteId}`);
@@ -101,4 +110,22 @@ export async function obtenerKardexProducto(articuloId: string): Promise<Result<
   } catch {
     return { ok: false, code: "error_inesperado", message: "No se pudo cargar el kardex." };
   }
+}
+
+/**
+ * Convierte unidades de una presentación de un lote de marca propia en otra del mismo tipo y forma (A-15). UNA RPC
+ * transaccional (`cafe.convertir_presentacion`): descuenta el origen y las bolsas/etiquetas del destino, suma el
+ * destino y deja la traza en el lote. Que los kilos no cuadren no bloquea: vuelve en `cuadra`/`diferencia_kg`.
+ */
+export async function convertirPresentacion(input: ConvertirPresentacionFormInput): Promise<Result<ResultadoConversion>> {
+  await requireModulo("cafe.inventario");
+  await requireRolTenant(ROLES_OPERACION);
+  const parsed = convertirPresentacionSchema.safeParse(input);
+  if (!parsed.success) return datosInvalidos(parsed.error.issues[0]?.message);
+
+  const r = await callRpc<"cafe", "convertir_presentacion", ResultadoConversion>("cafe", "convertir_presentacion", {
+    p: payloadConvertirPresentacion(parsed.data),
+  });
+  if (r.ok) revalidarEmpaque(parsed.data.loteId);
+  return r;
 }

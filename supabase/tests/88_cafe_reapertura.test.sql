@@ -91,7 +91,7 @@ grant execute on function pg_temp.tostar(text, text) to authenticated;
 create or replace function pg_temp.empacar(p_res text, p_k text, p_lineas integer[][]) returns void language plpgsql as $$
 begin
   insert into res select p_res, cafe.registrar_empaque(jsonb_build_object(
-    'lote_id', pg_temp.lid(p_k), 'fecha', pg_temp.hoy(), 'bultos', to_jsonb(pg_temp.barr(p_k)),
+    'lote_id', pg_temp.lid(p_k), 'fecha', pg_temp.hoy(), 'bultos', to_jsonb(pg_temp.barr(p_k)), 'diferencia_destino', 'perdida',
     'lineas', (select jsonb_agg(jsonb_build_object('presentacion_g', p_lineas[i][1], 'unidades', p_lineas[i][2]) order by i)
                  from generate_subscripts(p_lineas, 1) i)));
 end $$;
@@ -122,6 +122,7 @@ grant execute on function pg_temp.pr(text, text, text, jsonb) to authenticated;
 -- Empaque sobre una reapertura: `[[2500, 7]]`.
 create or replace function pg_temp.pe(p_k text, p_reap text, p_lineas integer[][], p_extra jsonb default '{}') returns jsonb language sql as $$
   select jsonb_build_object('lote_id', pg_temp.lid(p_k), 'fecha', pg_temp.hoy(), 'reapertura_id', pg_temp.rid(p_reap),
+         'diferencia_destino', 'perdida',
          'lineas', (select jsonb_agg(jsonb_build_object('presentacion_g', p_lineas[i][1], 'unidades', p_lineas[i][2]) order by i)
                       from generate_subscripts(p_lineas, 1) i)) || p_extra
 $$;
@@ -162,7 +163,7 @@ select is(
   (select array_agg(p.prosecdef order by p.proname)
      from pg_proc p
     where p.oid in ('cafe.reabrir_producto(jsonb)'::regprocedure,
-                    'cafe._insertar_proceso_reapertura(uuid,cafe.tipo_proceso,date,numeric,numeric,text)'::regprocedure)),
+                    'cafe._insertar_proceso_reapertura(uuid,cafe.tipo_proceso,date,numeric,numeric,text,text)'::regprocedure)),
   array[false, false], 'reabrir_producto y el proceso de reapertura son SECURITY INVOKER'
 );
 select ok(
@@ -384,7 +385,7 @@ select throws_ok(
 );
 select is(
   pg_temp.detalle($$select cafe.registrar_empaque(pg_temp.pe('MP1', 'R1', array[[2500, 8]]))$$),
-  'Empacarías 20 kg y solo hay 19.8 kg disponibles en el café reabierto. Empaca solo lo que hay.',
+  'Las bolsas suman 20 kg y a empaque solo llegan 19.8 kg (el café reabierto).',
   'el mensaje habla del café reabierto, no de bultos'
 );
 select throws_ok(

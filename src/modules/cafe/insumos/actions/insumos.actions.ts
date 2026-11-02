@@ -42,7 +42,7 @@ const ROLES_OPERACION: RolTenant[] = ["owner", "admin", "operativo"];
 /** Consultar el kardex: todos, Gerencia incluida. */
 const ROLES_LECTURA: RolTenant[] = ["owner", "admin", "operativo", "viewer"];
 
-const RUTA = "/dashboard/cafe/insumos";
+const RUTA = "/dashboard/cafe/inventario"; // A-15: Insumos es una pestaña del Inventario
 
 async function autorizar(roles: RolTenant[]): Promise<Sesion> {
   await requireModulo("cafe.inventario");
@@ -154,7 +154,7 @@ export async function registrarCompraInsumo(input: CompraInsumoFormInput): Promi
     cantidad,
     motivo: "compra",
     ...(instante ? { fecha: instante } : {}),
-    ...(costoUnitario !== null ? { costo_unitario: costoUnitario } : {}),
+    costo_unitario: costoUnitario,
     ...(terceroId ? { ref_tipo: REF_TERCERO, ref_id: terceroId } : {}),
     ...(observaciones ? { observaciones } : {}),
   };

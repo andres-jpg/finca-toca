@@ -12,6 +12,8 @@ import { listarMiembros } from "@/modules/core/equipo/queries/equipo.queries";
  * `core.equipo` activo y solo owner/admin (un operativo o la gerencia que teclee la URL acaba en su
  * dashboard). Las RPC `*_miembro_tenant` lo vuelven a comprobar en la base.
  */
+export const metadata = { title: "Equipo" };
+
 export default async function EquipoPage() {
   await requireModuloPagina("core.equipo");
   const { user, tenant, rolTenant } = await requireSesion();
@@ -24,5 +26,5 @@ export default async function EquipoPage() {
     ultimoAccesoLabel: m.ultimoAcceso ? formatearAcceso(m.ultimoAcceso, tenant.zonaHoraria) : null,
   }));
 
-  return <EquipoPanel miembros={vista} historial={historial} yoId={user.id} rolLlamante={rolTenant} />;
+  return <EquipoPanel miembros={vista} historial={historial} yoId={user.id} rolLlamante={rolTenant} vertical={tenant.vertical} />;
 }

@@ -17,6 +17,7 @@ import {
   type CompletarFacturaInput,
   type VentaFormInput,
 } from "../schemas/venta.schema";
+import { getConsumidorFinalId } from "../queries/ventas.queries";
 import type { ResultadoVenta } from "../types";
 
 // Server Actions de las ventas y cortesías (FIN-112). Cada una: módulo activo → rol de la membresía → Zod → base. Son
@@ -56,6 +57,11 @@ export async function registrarVenta(input: VentaFormInput): Promise<Result<Resu
   // La fecha es un día del calendario del cliente: no se vende en el futuro. (La base solo la valida como fecha.)
   if (parsed.data.fecha > fechaHoyEnZona(sesion.tenant.zonaHoraria)) {
     return datosInvalidos("La fecha no puede ser futura.");
+  }
+
+  // A-16: una cortesía necesita un destinatario real, no el «Consumidor final».
+  if (parsed.data.tipo === "cortesia" && parsed.data.terceroId === (await getConsumidorFinalId())) {
+    return datosInvalidos("Indica el destinatario de la cortesía: no puede ser «Consumidor final».");
   }
 
   const r = await callRpc<"cafe", "registrar_venta", ResultadoVenta>("cafe", "registrar_venta", { p: payloadVenta(parsed.data) });

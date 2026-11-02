@@ -8,6 +8,8 @@ import { listarTerceros } from "@/modules/core/terceros/queries/terceros.queries
  * `tenant_modulos`; otro cliente que escriba la URL a mano acaba en su dashboard. El alta la hacen
  * owner/admin/operativo y la edición owner/admin (el viewer solo consulta), igual que el RLS.
  */
+export const metadata = { title: "Terceros" };
+
 export default async function TercerosPage() {
   await requireModuloPagina("core.terceros");
   const { rolTenant } = await requireSesion();

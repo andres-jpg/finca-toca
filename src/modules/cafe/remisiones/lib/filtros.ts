@@ -4,7 +4,7 @@ import { esFechaYmd } from "@/modules/cafe/lotes/lib/filtros";
 // mismos). `parsearFiltrosRemisiones` es la única lectura de esos parámetros; lo inválido se descarta en silencio.
 // Mismas reglas que `parsearFiltros` de los lotes. Pura.
 
-export const ESTADOS_FILTRO_REMISION = ["vigente", "anulada"] as const;
+export const ESTADOS_FILTRO_REMISION = ["entregada", "anulada"] as const;
 export type EstadoFiltroRemision = (typeof ESTADOS_FILTRO_REMISION)[number];
 
 export interface FiltrosRemisiones {
@@ -37,7 +37,9 @@ export function parsearFiltrosRemisiones(entrada: EntradaParams): FiltrosRemisio
   let desde = primero(entrada, "desde");
   let hasta = primero(entrada, "hasta");
   const tercero = primero(entrada, "tercero");
-  const estado = primero(entrada, "estado");
+  // «vigente» fue el nombre antiguo de «entregada»: los enlaces guardados siguen funcionando.
+  const estadoCrudo = primero(entrada, "estado");
+  const estado = estadoCrudo === "vigente" ? "entregada" : estadoCrudo;
   const q = primero(entrada, "q")?.slice(0, Q_MAX_REMISION);
   const pagina = Number(primero(entrada, "pagina"));
 

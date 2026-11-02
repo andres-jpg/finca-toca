@@ -1,3 +1,5 @@
+import { formatKgNum, formatPct } from "@/modules/core/formato/numeros";
+
 // Formato de lo que muestran el listado y la ficha de lotes. Funciones puras: se formatea a mano (no con `Intl`
 // salvo la zona horaria) para que el servidor y el navegador den el mismo texto.
 
@@ -27,19 +29,25 @@ export function fechaHoraZona(iso: string, zona: string): string {
   return `${p("day")}/${p("month")}/${p("year")} ${p("hour")}:${p("minute")}`;
 }
 
-const conMiles = (entero: string) => entero.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-
 /**
- * Kilos con SIEMPRE tres decimales (la precisión del gramo) y coma decimal: `332` → `332,000`, `1234.5` → `1.234,500`.
- * Es el formato de las columnas de peso de las tablas, que así alinean; los textos sueltos usan `formatearKg`.
+ * Hora de llegada de un instante en la zona del cliente, en 12 h: `7:15 a. m.`, `12:05 p. m.`, `12:30 a. m.` (FIN-129 · A-11).
+ * Se arma a mano (hora 0-23 de `Intl` + sufijo propio) para que no dependa de los datos de ICU del servidor.
+ * Devuelve «—» si no es una fecha.
  */
-export function formatearKg3(kg: number): string {
-  if (!Number.isFinite(kg)) return "0,000";
-  const gramos = Math.round(Math.abs(kg) * 1000);
-  const entero = Math.floor(gramos / 1000);
-  const decimales = String(gramos % 1000).padStart(3, "0");
-  return `${kg < 0 && gramos > 0 ? "-" : ""}${conMiles(String(entero))},${decimales}`;
+export function horaLlegada(iso: string | null | undefined, zona: string): string {
+  if (!iso) return "—";
+  const instante = new Date(iso);
+  if (Number.isNaN(instante.getTime())) return "—";
+  const partes = new Intl.DateTimeFormat("en-GB", { timeZone: zona, hourCycle: "h23", hour: "2-digit", minute: "2-digit" }).formatToParts(instante);
+  const hora24 = Number(partes.find((x) => x.type === "hour")?.value);
+  const minutos = partes.find((x) => x.type === "minute")?.value;
+  if (!Number.isFinite(hora24) || !minutos) return "—";
+  const hora12 = hora24 % 12 === 0 ? 12 : hora24 % 12;
+  return `${hora12}:${minutos} ${hora24 < 12 ? "a. m." : "p. m."}`;
 }
+
+/** Kilos con 1 decimal y coma (`332` → `332,0`, `1234.56` → `1.234,6`), sin la unidad. Los pesos se guardan con 3 decimales; aquí solo se muestran (FIN-122). */
+export const formatearKg3 = formatKgNum;
 
 /**
  * Porcentaje de merma = merma / entrada, redondeado a 2 decimales (medios hacia arriba) y calculado con los KILOS,
@@ -61,15 +69,8 @@ export function pctDeMerma(mermaKg: number | null | undefined, entradaKg: number
   return centesimas / 100;
 }
 
-/** `19` → `19 %`, `18.02` → `18,02 %`, `0.6` → `0,6 %`. Hasta 2 decimales, sin ceros sobrantes. `null` → «—». */
-export function formatearPct(pct: number | null | undefined): string {
-  if (pct == null || !Number.isFinite(pct)) return "—";
-  const centesimas = Math.round(Math.abs(pct) * 100);
-  const entero = Math.floor(centesimas / 100);
-  const dec = String(centesimas % 100).padStart(2, "0").replace(/0+$/, "");
-  const signo = pct < 0 && centesimas > 0 ? "-" : "";
-  return `${signo}${conMiles(String(entero))}${dec ? `,${dec}` : ""} %`;
-}
+/** `19` → `19,0 %`, `18.02` → `18,0 %`, `0.6` → `0,6 %`. 1 decimal (FIN-122). `null` → «—». */
+export const formatearPct = formatPct;
 
 /** Merma en porcentaje ya formateada desde los kilos (ver `pctDeMerma`). */
 export function formatearMermaPct(mermaKg: number | null | undefined, entradaKg: number | null | undefined): string {

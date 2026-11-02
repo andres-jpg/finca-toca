@@ -8,6 +8,8 @@ import { listarTiposCafe } from "@/modules/cafe/tipos/queries/tipos.queries";
  * Catálogo de tipos de café (Consumo, Excelso…). Maestro: solo owner/admin lo ven y lo editan, igual que
  * el RLS de `cafe.tipos_cafe`.
  */
+export const metadata = { title: "Tipos de café" };
+
 export default async function TiposCafePage() {
   await requireModuloPagina("cafe.recepcion");
   const { rolTenant } = await requireSesion();

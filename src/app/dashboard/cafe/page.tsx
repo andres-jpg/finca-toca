@@ -6,6 +6,9 @@ import { tieneModulo } from "@/modules/core/tenants/modulos";
 import { requireModuloPagina } from "@/modules/core/tenants/tenant.guards";
 import { fechaHoyEnZona } from "@/modules/cafe/insumos/lib/insumos";
 import { EsqueletoGraficos, EsqueletoInventario, EsqueletoResumen, EsqueletoTarjetas } from "@/modules/cafe/panel/components/esqueletos";
+import { SeccionCartera } from "@/modules/cafe/panel/components/seccion-cartera";
+import { SeccionProveedores } from "@/modules/cafe/panel/components/seccion-proveedores";
+import { SeccionCostoLibra } from "@/modules/cafe/costo/components/seccion-costo-libra";
 import { PanelFiltros } from "@/modules/cafe/panel/components/panel-filtros";
 import { SeccionGraficos } from "@/modules/cafe/panel/components/seccion-graficos";
 import { SeccionInventario } from "@/modules/cafe/panel/components/seccion-inventario";
@@ -25,6 +28,8 @@ import { describirPeriodo, etiquetaLinea, parsearParamsPanel, resolverPeriodo } 
  * RLS aísla por cliente. Como `cafe.dashboard` no es módulo base, un cliente sin él vuelve a `/dashboard`, que lo manda a
  * los lotes (`paginaInicial`): no hay bucle de redirecciones.
  */
+export const metadata = { title: "Panel" };
+
 export default async function PanelCafePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   await requireModuloPagina("cafe.dashboard");
   const { tenant } = await requireSesion();
@@ -58,6 +63,11 @@ export default async function PanelCafePage({ searchParams }: { searchParams: Pr
         <SeccionTarjetas desde={desde} hasta={hasta} linea={linea} />
       </Suspense>
 
+      {/* «Para decidir hoy» (A-19, foto de ahora): respetan la línea, no el periodo. */}
+      <Suspense key={`p-${clave}`} fallback={<EsqueletoInventario />}>
+        <SeccionCartera linea={linea} hoy={hoy} />
+      </Suspense>
+
       <Suspense key={`i-${clave}`} fallback={<EsqueletoInventario />}>
         <SeccionInventario desde={desde} hasta={hasta} linea={linea} />
       </Suspense>
@@ -65,6 +75,20 @@ export default async function PanelCafePage({ searchParams }: { searchParams: Pr
       <Suspense key={`g-${clave}`} fallback={<EsqueletoGraficos />}>
         <SeccionGraficos desde={desde} hasta={hasta} linea={linea} />
       </Suspense>
+
+      {/* Costo por libra (A-05): solo marca propia, así que con trilla o maquila no se muestra. */}
+      {(linea === null || linea === "marca_propia") && (
+        <Suspense key={`c-${clave}`} fallback={<EsqueletoResumen />}>
+          <SeccionCostoLibra desde={desde} hasta={hasta} />
+        </Suspense>
+      )}
+
+      {/* Proveedores de marca propia (A-19): solo marca propia, como el costo por libra. */}
+      {(linea === null || linea === "marca_propia") && (
+        <Suspense key={`v-${clave}`} fallback={<EsqueletoResumen />}>
+          <SeccionProveedores desde={desde} hasta={hasta} />
+        </Suspense>
+      )}
 
       <section className="space-y-3" aria-labelledby="resumen-titulo">
         <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">

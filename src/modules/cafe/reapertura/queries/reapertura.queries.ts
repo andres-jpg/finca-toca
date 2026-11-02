@@ -3,6 +3,7 @@ import { getStock } from "@/modules/core/inventario/queries/inventario.queries";
 import { getLineasEmpaque } from "../../empaque/queries/empaque.queries";
 import type { ReaperturaLinea } from "../../lotes/lib/linea-tiempo";
 import { textoReapertura } from "../lib/reapertura";
+import { COPY } from "../../copy";
 import type { EstadoReapertura, ProcesoDeReapertura, ReaperturaVista, SaldoPresentacion } from "../types";
 
 // Módulo plano (no "use server"): solo lo llama código de servidor. La autorización es el RLS: las vistas son
@@ -39,7 +40,7 @@ function aVista(f: Fila): ReaperturaVista {
     loteId: f.lote_id,
     loteCodigo: f.lote_codigo,
     tipoCafe: f.tipo_cafe_nombre,
-    producto: f.producto ?? "Producto terminado",
+    producto: f.producto ?? COPY.productoRespaldo,
     presentacionG: f.presentacion_g,
     unidades: f.unidades,
     pesoKg: num(f.peso_kg),
@@ -78,7 +79,7 @@ export async function getSaldosReabribles(loteId: string): Promise<SaldoPresenta
       {
         presentacionG: s.presentacion_g,
         articuloId: s.articulo_pt_id,
-        producto: producto?.nombre ?? "Producto terminado",
+        producto: producto?.nombre ?? COPY.productoRespaldo,
         empacadas: num(s.unidades_empacadas),
         reabiertas: num(s.unidades_reabiertas),
         saldo: Math.max(0, num(s.saldo)),

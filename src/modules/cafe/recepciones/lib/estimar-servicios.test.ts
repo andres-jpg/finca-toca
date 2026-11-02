@@ -4,12 +4,12 @@ import { estimarServicios } from "./estimar-servicios";
 // Ejemplo del informe de Cofradía: 500 kg → trilla $700.000; 405 kg → tostión $891.000. Mismos números que
 // `supabase/tests/96_cafe_recepcion.test.sql`.
 const tarifas = { trilla: 1400, tostion: 2200, molienda: 1000 };
-const mermasRef = { trilla: 19, tostion: 18 };
+const mermasRef = { trilla: 19, tostion: { bajo: 15, medio: 18, alto: 21 } };
 
 describe("estimarServicios", () => {
   it("solo trilla: 500 kg × $1.400 = $700.000", () => {
     const e = estimarServicios({ pesoKg: 500, servicios: ["trilla"], tarifas, mermasRef });
-    expect(e.lineas).toEqual([{ servicio: "trilla", pesoKg: 500, tarifaKg: 1400, valor: 700000 }]);
+    expect(e.lineas).toEqual([{ servicio: "trilla", pesoKg: 500, tarifaKg: 1400, valor: 700000, estimado: false }]);
     expect(e.total).toBe(700000);
     expect(e.incompleta).toBe(false);
     expect(e.conEmpaque).toBe(false);
@@ -62,7 +62,7 @@ describe("estimarServicios", () => {
       tarifas: { trilla: 1400, tostion: null },
       mermasRef,
     });
-    expect(e.lineas[1]).toEqual({ servicio: "tostion", pesoKg: 405, tarifaKg: null, valor: null });
+    expect(e.lineas[1]).toEqual({ servicio: "tostion", pesoKg: 405, tarifaKg: null, valor: null, estimado: true });
     expect(e.total).toBe(700000);
     expect(e.incompleta).toBe(true);
   });
@@ -90,12 +90,37 @@ describe("estimarServicios", () => {
 
   it("sin servicios: sin líneas", () => {
     const e = estimarServicios({ pesoKg: 500, servicios: [], tarifas, mermasRef });
-    expect(e).toEqual({ lineas: [], total: 0, incompleta: false, conEmpaque: false });
+    expect(e).toEqual({ lineas: [], total: 0, incompleta: false, conEmpaque: false, hayEstimadas: false });
   });
 
   it("pesos con decimales: se redondea a gramos y el valor a pesos enteros", () => {
     const e = estimarServicios({ pesoKg: 123.456, servicios: ["trilla"], tarifas, mermasRef });
     expect(e.lineas[0].pesoKg).toBe(123.456);
     expect(e.lineas[0].valor).toBe(172838); // 123,456 × 1.400 = 172.838,4
+  });
+
+  it("A-10: 50 kg trilla + tostión: trilla exacta $70.000, tostión estimada 40,5 kg × $2.200 = $89.100", () => {
+    const e = estimarServicios({ pesoKg: 50, servicios: ["trilla", "tostion"], tarifas, mermasRef, nivelTueste: "medio" });
+    expect(e.lineas.map((l) => [l.servicio, l.pesoKg, l.valor, l.estimado])).toEqual([
+      ["trilla", 50, 70000, false],
+      ["tostion", 40.5, 89100, true],
+    ]);
+    expect(e.total).toBe(159100);
+    expect(e.hayEstimadas).toBe(true);
+  });
+
+  it("A-10: un solo servicio no tiene líneas estimadas ni nota", () => {
+    for (const s of ["trilla", "tostion", "molienda"] as const) {
+      const e = estimarServicios({ pesoKg: 50, servicios: [s], tarifas, mermasRef, nivelTueste: "medio" });
+      expect(e.lineas.map((l) => l.estimado)).toEqual([false]);
+      expect(e.hayEstimadas).toBe(false);
+    }
+  });
+
+  it("A-10: la merma de la tostión sigue el nivel de tueste (bajo 15 %, alto 21 %)", () => {
+    const molienda = (nivelTueste: "bajo" | "alto") =>
+      estimarServicios({ pesoKg: 100, servicios: ["tostion", "molienda"], tarifas, mermasRef, nivelTueste }).lineas[1];
+    expect(molienda("bajo")).toMatchObject({ pesoKg: 85, estimado: true });
+    expect(molienda("alto")).toMatchObject({ pesoKg: 79, estimado: true });
   });
 });

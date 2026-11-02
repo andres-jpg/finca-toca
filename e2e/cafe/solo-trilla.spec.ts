@@ -1,5 +1,5 @@
 import { expect, test, usarRol } from "../fixtures/test";
-import { abrirFichaDeLote, abrirPlanta, aviso, irA, textoDelAviso } from "../helpers/ui";
+import { abrirFichaDeLote, abrirPlanta, aviso, irA, textoDelAviso, NAVEGACION_LENTA } from "../helpers/ui";
 
 test.use(usarRol("cafeAdmin"));
 
@@ -8,14 +8,14 @@ test.use(usarRol("cafeAdmin"));
 
 test("solo trilla con desvío de merma y remisión", async ({ page }) => {
   // --- 1. Recepción de 2 bultos (125 kg) solo para trilla: dentro de rangos, sin alertas de calidad -------------------------
-  await irA(page, "/dashboard/cafe/lotes/nueva-recepcion");
+  await irA(page, "/dashboard/cafe/recibir?tipo=servicios");
   await page.getByText("Selecciona o crea el cliente").click();
   await page.getByRole("option", { name: /Cliente E2E/ }).click();
   await page.getByLabel("Número de bultos").fill("2");
   await page.getByLabel("Humedad (%)").fill("11");
   await page.getByLabel("Densidad").fill("680");
-  await page.getByRole("checkbox", { name: /^Trilla/ }).check();
-  await page.getByRole("button", { name: "Registrar recepción" }).click();
+  await page.getByRole("button", { name: "Trilla", exact: true }).click();
+  await page.getByRole("button", { name: "Guardar y enviar a planta" }).click();
   const codigo = (await textoDelAviso(page, /Recepción registrada: MQ-/)).match(/MQ-\d{4}-\d+/)?.[0];
   expect(codigo, "el aviso trae el código del lote MQ").toBeTruthy();
 
@@ -26,11 +26,11 @@ test("solo trilla con desvío de merma y remisión", async ({ page }) => {
   const merma = page.getByRole("region", { name: "Merma" });
   await expect(merma).toContainText(/25(,0)? %/);
   // El aviso de desvío cita la referencia y deja claro que se puede guardar igualmente.
-  await expect(merma).toContainText("Referencia 19 % ± 3 puntos");
+  await expect(merma).toContainText("Referencia 19 % ± 2 puntos");
   await expect(merma).toContainText("Revisa el pesaje. Puedes guardar igualmente");
   await page.getByRole("button", { name: "Registrar trilla" }).click();
-  await expect(aviso(page, /La merma se desvió de la referencia/)).toBeVisible();
-  await expect(page).toHaveURL(/\/dashboard\/cafe\/planta$/);
+  await expect(aviso(page, /La merma quedó por encima de la referencia/)).toBeVisible();
+  await expect(page).toHaveURL(/\/dashboard\/cafe\/planta$/, { timeout: NAVEGACION_LENTA });
 
   // El proceso queda marcado: el listado de lotes enseña la alerta y el lote ya está listo (un solo servicio).
   await irA(page, `/dashboard/cafe/lotes?q=${codigo}`);
@@ -40,15 +40,18 @@ test("solo trilla con desvío de merma y remisión", async ({ page }) => {
 
   // --- 3. Remisión de entrega ------------------------------------------------------------------------------------------------------
   await abrirFichaDeLote(page, codigo!);
-  await page.getByRole("button", { name: "Generar remisión" }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Generar remisión" }).click();
+  await page.getByRole("link", { name: "Entregar" }).click();
+  await page.getByLabel("Nombre de quien recibe").fill("Juan Pérez");
+  await page.getByLabel("Cédula").fill("1020304050");
+  await page.getByRole("button", { name: "Entregar e imprimir remisión" }).click();
   const numero = (await textoDelAviso(page, /Remisión REM-.* generada/)).match(/REM-\d{4}-\d+/)?.[0];
   expect(numero).toBeTruthy();
+  await abrirFichaDeLote(page, codigo!);
   await expect(page.getByRole("region", { name: "Remisión de entrega" })).toContainText(numero!);
 
-  // Y aparece en el listado de remisiones, vigente.
-  await irA(page, `/dashboard/cafe/remisiones?q=${numero}`);
+  // Y aparece en el listado de remisiones, entregada.
+  await irA(page, `/dashboard/cafe/remisiones?tab=todas&q=${numero}`);
   const filaRemision = page.getByRole("row").filter({ hasText: numero! });
   await expect(filaRemision).toContainText(codigo!);
-  await expect(filaRemision).toContainText("Vigente");
+  await expect(filaRemision).toContainText("Entregada");
 });

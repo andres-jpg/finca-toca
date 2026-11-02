@@ -2,7 +2,7 @@
 // SIEMPRE las recalcula; esto es la vista previa en pantalla):
 //   merma_kg  = peso_entrada_kg - peso_salida_kg
 //   merma_pct = round((entrada - salida) / entrada * 100, 3)
-//   desvio    = abs(merma_pct - referencia) > tolerancia
+//   desvio    = abs(merma_pct - referencia) > tolerancia   (alta si merma > ref + tol, baja si merma < ref - tol)
 // Trabaja en gramos enteros para no arrastrar errores de coma flotante.
 
 export interface Merma {
@@ -46,4 +46,27 @@ export function esDesvio(
   if (referenciaPct == null || toleranciaPts == null) return false;
   if (!Number.isFinite(mermaPct) || !Number.isFinite(referenciaPct) || !Number.isFinite(toleranciaPts)) return false;
   return Math.abs(aGramos(mermaPct) - aGramos(referenciaPct)) > aGramos(toleranciaPts);
+}
+
+/** Estado de una merma frente a su referencia (A-03): en rango, alta (sobre ref + tol) o baja (bajo ref - tol). */
+export type EstadoMerma = "en_rango" | "alta" | "baja";
+
+/**
+ * Estado de la merma de dos lados, igual que la columna generada `cafe.procesos.desvio_sentido` (milésimas de
+ * punto, límites incluidos en el rango: 20 % con referencia 18 ± 2 está EN RANGO). `null` sin referencia o sin
+ * tolerancia (molienda y empaque) o con valores no numéricos: ahí no hay estado que mostrar. Solo avisa.
+ */
+export function estadoMerma(
+  mermaPct: number,
+  referenciaPct: number | null | undefined,
+  toleranciaPts: number | null | undefined,
+): EstadoMerma | null {
+  if (referenciaPct == null || toleranciaPts == null) return null;
+  if (!Number.isFinite(mermaPct) || !Number.isFinite(referenciaPct) || !Number.isFinite(toleranciaPts)) return null;
+  const merma = aGramos(mermaPct);
+  const techo = aGramos(referenciaPct) + aGramos(toleranciaPts);
+  const piso = aGramos(referenciaPct) - aGramos(toleranciaPts);
+  if (merma > techo) return "alta";
+  if (merma < piso) return "baja";
+  return "en_rango";
 }

@@ -17,13 +17,27 @@ export interface DetalleServicio {
   pendiente: boolean;
 }
 
+/** Un lote dentro de la remisión, con su snapshot (la remisión suma estos). */
+export interface LoteRemisionado {
+  loteId: string;
+  loteCodigo: string;
+  pesoRecibidoKg: number;
+  pesoEntregadoKg: number;
+  detalle: DetalleServicio[];
+  valorServicios: number;
+}
+
 /** Una remisión de entrega: el snapshot de lo entregado al cliente (no cambia aunque se corrija el lote). */
 export interface Remision {
   id: string;
   /** `REM-2026-0001`. */
   numero: string;
+  /** El primer lote (compatibilidad); la remisión puede llevar varios: ver `lotes`. */
   loteId: string;
+  /** Códigos de todos los lotes, separados por coma. */
   loteCodigo: string;
+  /** Los lotes entregados en esta remisión (N:N, A-14), por código. */
+  lotes: LoteRemisionado[];
   /** `YYYY-MM-DD`: fecha de entrega. */
   fecha: string;
   terceroId: string;
@@ -35,6 +49,9 @@ export interface Remision {
   detalle: DetalleServicio[];
   /** Solo referencia: la remisión no es una factura. */
   valorServicios: number;
+  /** Quién recibe y su cédula (obligatorios desde A-14; las remisiones anteriores dicen «Sin registrar»). */
+  recibeNombre: string;
+  recibeDocumento: string;
   recibidoPor: string | null;
   observaciones: string | null;
   /** Se entregó con servicios pendientes (solo `owner`/`admin`, con observación). */

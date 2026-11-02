@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filasEtapas, quedaDisponible, type EtapaLote } from "./etapas";
+import { filasEtapas, mermaProcesada, quedaDisponible, type EtapaLote } from "./etapas";
 
 const etapa = (tipo: EtapaLote["tipo"], entrada: number, salida: number, extra: Partial<EtapaLote> = {}): EtapaLote => ({
   tipo,
@@ -67,5 +67,38 @@ describe("quedaDisponible", () => {
   });
   it("sin bultos, nada", () => {
     expect(quedaDisponible([])).toEqual([]);
+  });
+});
+
+describe("mermaProcesada (A-03)", () => {
+  const etapa = (tipo: EtapaLote["tipo"], entrada: number, salida: number): EtapaLote => ({
+    tipo,
+    bultosProcesados: 1,
+    bultosTotal: 6,
+    completo: false,
+    parcial: true,
+    pesoEntradaKg: entrada,
+    pesoSalidaKg: salida,
+    mermaKg: entrada - salida,
+    valor: 0,
+    desvios: 0,
+    numProcesos: 1,
+  });
+
+  it("2 de 6 bultos (125 kg de 375): mide esos bultos, 20 %, no 6,7 % sobre lo recibido", () => {
+    const r = mermaProcesada([etapa("trilla", 125, 100)]);
+    expect(r).toEqual({ entradaKg: 125, mermaKg: 25, pct: 20 });
+  });
+
+  it("suma las etapas hechas (Σ merma / Σ entrada) y no cuenta el empaque", () => {
+    const r = mermaProcesada([etapa("trilla", 500, 405), etapa("tostion", 405, 332), etapa("empaque", 332, 332)]);
+    expect(r?.mermaKg).toBe(168);
+    expect(r?.entradaKg).toBe(905);
+    expect(r?.pct).toBe(18.56);
+  });
+
+  it("sin procesos no hay merma", () => {
+    expect(mermaProcesada([])).toBeNull();
+    expect(mermaProcesada([etapa("empaque", 10, 10)])).toBeNull();
   });
 });

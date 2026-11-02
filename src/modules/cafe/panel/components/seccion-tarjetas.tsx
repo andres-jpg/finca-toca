@@ -1,12 +1,13 @@
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatearCOP } from "../../compras/lib/compra";
-import { formatearKg3 } from "../../lotes/lib/formato";
+import { MermaBadge } from "../../components/merma-badge";
+import { formatearKg3, pctDeMerma } from "../../lotes/lib/formato";
 import { etiquetaServicio } from "../../lotes/lib/servicios";
 import { DEFINICIONES } from "../lib/kpis";
 import { cuentaLotes, cuentaProcesos, enteroTexto, kgTexto, mermaTexto } from "../lib/formato";
 import { etiquetaLinea } from "../lib/periodo";
-import { getKpisPanel } from "../queries/panel.queries";
+import { getKpisPanel, getReferenciasPanel } from "../queries/panel.queries";
 import type { LineaPanel } from "../types";
 import { Cifra, Detalle, TarjetaKpi } from "./tarjeta-kpi";
 
@@ -22,7 +23,7 @@ interface Props {
  * pintan: nunca se muestra un cero que parezca un dato. Las cifras vienen de una sola llamada a `cafe.kpis_periodo`.
  */
 export async function SeccionTarjetas({ desde, hasta, linea }: Props) {
-  const k = await getKpisPanel(desde, hasta, linea);
+  const [k, refs] = await Promise.all([getKpisPanel(desde, hasta, linea), getReferenciasPanel()]);
   const totalProcesos = k.mermas.reduce((s, m) => s + m.procesos, 0);
 
   return (
@@ -68,13 +69,22 @@ export async function SeccionTarjetas({ desde, hasta, linea }: Props) {
                   <span className="inline-flex items-center justify-end gap-1">
                     {m.desvios > 0 && <AlertTriangle className="h-3.5 w-3.5 text-amber-600" aria-label={`${m.desvios} con desvío`} />}
                     {mermaTexto(m)}
+                    {m.procesos > 0 && (
+                      <MermaBadge
+                        mermaPct={pctDeMerma(m.mermaKg, m.kgEntrada) ?? Number.NaN}
+                        referenciaPct={m.tipo === "trilla" ? refs.trilla : m.tipo === "tostion" ? refs.tostion : null}
+                        toleranciaPts={refs.toleranciaPts}
+                        tipo={m.tipo}
+                        conAyuda={false}
+                      />
+                    )}
                   </span>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <Detalle>Ponderada por peso: kg de merma ÷ kg de entrada.</Detalle>
+        <Detalle>Ponderada por peso: kg de merma ÷ kg de entrada. El estado compara con la referencia ± tolerancia.</Detalle>
       </TarjetaKpi>
 
       {k.ingresoMarcaPropia && (

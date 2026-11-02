@@ -35,7 +35,11 @@ export interface ProcesoLinea {
   observaciones: string | null;
   baches: BacheLinea[];
   /** Presentaciones empacadas (solo el empaque de marca propia, CO-30): «120 × Excelso 500 g». */
-  lineasEmpaque?: { presentacionG: number; unidades: number; producto: string }[];
+  lineasEmpaque?: { presentacionG: number; unidades: number; producto: string; forma?: "grano" | "molido" }[];
+  /** Solo empaque (A-01): lo que llegó y no entró en bolsas. NO es merma. */
+  diferenciaKg?: number | null;
+  /** `suelto` | `granel` | `muestra` | `perdida` (CHECK de la base); `null` si no hubo diferencia. */
+  diferenciaDestino?: string | null;
   /** Reapertura de la que cuelga (molienda o empaque de un café reabierto, CO-33); `null`/ausente = del lote. */
   reaperturaId?: string | null;
   anulacion: { en: string; por: string | null; motivo: string } | null;

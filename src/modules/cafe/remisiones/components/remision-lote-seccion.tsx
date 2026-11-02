@@ -35,11 +35,13 @@ export function RemisionLoteSeccion({
         <div className="space-y-3 rounded-lg border border-teal-200 bg-teal-50/60 p-4">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-lg font-bold tabular-nums text-gray-800">{vigente.numero}</span>
-            <Badge className="bg-teal-100 text-teal-800 hover:bg-teal-100">Vigente</Badge>
+            <Badge className="bg-teal-100 text-teal-800 hover:bg-teal-100">Entregada</Badge>
             {vigente.forzada && <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">Con servicios pendientes</Badge>}
           </div>
           <p className="text-sm text-gray-700">
-            Entregado el <span className="tabular-nums">{fechaCorta(vigente.fecha)}</span> a {vigente.clienteNombre}:{" "}
+            Entregado el <span className="tabular-nums">{fechaCorta(vigente.fecha)}</span> a {vigente.clienteNombre}
+            {vigente.lotes.length > 1 ? ` junto con ${vigente.lotes.length - 1} lote${vigente.lotes.length > 2 ? "s" : ""} más (${vigente.loteCodigo})` : ""}. Recibió{" "}
+            {vigente.recibeNombre} (cédula <span className="tabular-nums">{vigente.recibeDocumento}</span>):{" "}
             <span className="tabular-nums font-medium">{formatearKg3(vigente.pesoEntregadoKg)} kg</span> de{" "}
             <span className="tabular-nums">{formatearKg3(vigente.pesoRecibidoKg)} kg</span> recibidos (merma{" "}
             <span className="tabular-nums">{resumenEntrega(vigente).mermaPct}</span>). Valor de los servicios{" "}

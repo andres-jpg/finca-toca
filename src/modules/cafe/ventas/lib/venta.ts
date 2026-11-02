@@ -4,6 +4,7 @@
 // arrastrar errores de coma flotante.
 import { enteroConMiles } from "../../empaque/lib/empaque";
 import { formatearCOP } from "../../compras/lib/compra";
+import { COPY } from "../../copy";
 import type { EstadoFactura, EstadoVenta, TipoVenta } from "../types";
 
 export interface LineaCuenta {
@@ -59,8 +60,9 @@ export function etiquetaTipoVenta(tipo: TipoVenta): string {
   return tipo === "cortesia" ? "Cortesía" : "Venta";
 }
 
-export function etiquetaEstadoVenta(estado: EstadoVenta): string {
-  return estado === "anulada" ? "Anulada" : "Vigente";
+/** Solo existe «Anulada»: una venta no anulada no lleva estado (A-16: «Vigente» no se entendía). `null` = sin badge. */
+export function etiquetaEstadoVenta(estado: EstadoVenta): string | null {
+  return estado === "anulada" ? COPY.anulada : null;
 }
 
 /** «Pendiente» (ámbar en la tabla), el número de la factura, o «—» si la venta no la requiere. */

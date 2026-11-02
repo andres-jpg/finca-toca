@@ -131,7 +131,9 @@ create or replace function pg_temp.gen(p_res text, p_k text, p_extra jsonb defau
 returns void language plpgsql as $$
 begin
   insert into res select p_res, cafe.generar_remision(
-    jsonb_build_object('lote_id', pg_temp.lid(p_k), 'fecha', pg_temp.hoy()) || p_extra);
+    jsonb_build_object('lote_id', pg_temp.lid(p_k), 'fecha', pg_temp.hoy(), 'recibe_documento', '1000')
+    || case when p_extra ? 'recibido_por' then '{}'::jsonb else '{"recibe_nombre": "Quien Recibe"}'::jsonb end
+    || p_extra);
 end $$;
 grant execute on function pg_temp.gen(text, text, jsonb) to authenticated;
 
@@ -207,11 +209,11 @@ select pg_temp.comprar('M1', 125, 2);
 select throws_ok($$select cafe.generar_remision('{}'::jsonb)$$, 'P0001', 'datos_invalidos', 'sin lote ni fecha: datos_invalidos');
 select throws_ok($$select cafe.generar_remision('[]'::jsonb)$$, 'P0001', 'datos_invalidos', 'ni como arreglo: datos_invalidos');
 select throws_ok(
-  $$select cafe.generar_remision(jsonb_build_object('lote_id', 'no-es-uuid', 'fecha', pg_temp.hoy()))$$,
+  $$select cafe.generar_remision(jsonb_build_object('lote_id', 'no-es-uuid', 'fecha', pg_temp.hoy(), 'recibe_nombre', 'R', 'recibe_documento', '1'))$$,
   'P0001', 'datos_invalidos', 'un lote_id que no es uuid: datos_invalidos'
 );
 select throws_ok(
-  $$select cafe.generar_remision(jsonb_build_object('lote_id', gen_random_uuid(), 'fecha', pg_temp.hoy()))$$,
+  $$select cafe.generar_remision(jsonb_build_object('lote_id', gen_random_uuid(), 'fecha', pg_temp.hoy(), 'recibe_nombre', 'R', 'recibe_documento', '1'))$$,
   'P0001', 'lote_no_encontrado', 'un lote que no existe: lote_no_encontrado'
 );
 select throws_ok(
@@ -308,8 +310,8 @@ select is(
 -- Una sola remisión vigente por lote.
 select throws_ok($$select pg_temp.gen('x', 'L1')$$, 'P0001', 'remision_duplicada', 'una segunda remisión del mismo lote: remision_duplicada');
 select throws_ok(
-  format($$insert into cafe.remisiones (numero, lote_id, lote_codigo, fecha, tercero_id, cliente_nombre, peso_recibido_kg, peso_entregado_kg, detalle, valor_servicios)
-           values ('REM-OTRA', %L, 'MQ-X', current_date, %L, 'X', 500, 330, '[]', 0)$$, pg_temp.lid('L1'), (select id from ids where clave = 'ca')),
+  format($$insert into cafe.remisiones (numero, lote_id, lote_codigo, fecha, tercero_id, cliente_nombre, peso_recibido_kg, peso_entregado_kg, detalle, valor_servicios, recibe_nombre, recibe_documento)
+           values ('REM-OTRA', %L, 'MQ-X', current_date, %L, 'X', 500, 330, '[]', 0, 'R', '1')$$, pg_temp.lid('L1'), (select id from ids where clave = 'ca')),
   '23505', null, 'ni insertando directo: el índice único parcial lo impide'
 );
 
@@ -388,7 +390,8 @@ select throws_ok(
 );
 select is(
   (select cafe.anular_remision(pg_temp.lid('R2'), 'El cliente aún no recoge')),
-  jsonb_build_object('id', pg_temp.lid('R2'), 'numero', pg_temp.rem(2), 'lote_id', pg_temp.lid('L2'), 'lote_estado', 'en_proceso'),
+  jsonb_build_object('id', pg_temp.lid('R2'), 'numero', pg_temp.rem(2), 'lote_id', pg_temp.lid('L2'), 'lote_estado', 'en_proceso',
+                     'lote_ids', jsonb_build_array(pg_temp.lid('L2'))),
   'anular devuelve la remisión y el estado en que queda el lote (en proceso: la tostión sigue pendiente)'
 );
 select is(
@@ -478,8 +481,8 @@ select throws_ok(
   '42501', null, 'ni las anula'
 );
 select throws_ok(
-  format($$insert into cafe.remisiones (numero, lote_id, lote_codigo, fecha, tercero_id, cliente_nombre, peso_recibido_kg, peso_entregado_kg, detalle, valor_servicios)
-           values ('REM-DIRECTO', %L, 'MQ-X', current_date, %L, 'X', 60, 50, '[]', 0)$$, pg_temp.lid('L4'), (select id from ids where clave = 'ca')),
+  format($$insert into cafe.remisiones (numero, lote_id, lote_codigo, fecha, tercero_id, cliente_nombre, peso_recibido_kg, peso_entregado_kg, detalle, valor_servicios, recibe_nombre, recibe_documento)
+           values ('REM-DIRECTO', %L, 'MQ-X', current_date, %L, 'X', 60, 50, '[]', 0, 'R', '1')$$, pg_temp.lid('L4'), (select id from ids where clave = 'ca')),
   '42501', null, 'ni inserta directo (RLS)'
 );
 select is(
@@ -525,13 +528,13 @@ select throws_ok(
   'P0001', 'remision_no_encontrada', 'ni anula remisiones de A'
 );
 select throws_ok(
-  format($$insert into cafe.remisiones (tenant_id, numero, lote_id, lote_codigo, fecha, tercero_id, cliente_nombre, peso_recibido_kg, peso_entregado_kg, detalle, valor_servicios)
-           values (%L, 'REM-X', %L, 'MQ-X', current_date, %L, 'X', 10, 8, '[]', 0)$$, (select id from ids where clave = 'a'), pg_temp.lid('LB'), (select id from ids where clave = 'ca')),
+  format($$insert into cafe.remisiones (tenant_id, numero, lote_id, lote_codigo, fecha, tercero_id, cliente_nombre, peso_recibido_kg, peso_entregado_kg, detalle, valor_servicios, recibe_nombre, recibe_documento)
+           values (%L, 'REM-X', %L, 'MQ-X', current_date, %L, 'X', 10, 8, '[]', 0, 'R', '1')$$, (select id from ids where clave = 'a'), pg_temp.lid('LB'), (select id from ids where clave = 'ca')),
   '42501', null, 'ni inserta con el tenant_id de A (RLS)'
 );
 select throws_ok(
-  format($$insert into cafe.remisiones (tenant_id, numero, lote_id, lote_codigo, fecha, tercero_id, cliente_nombre, peso_recibido_kg, peso_entregado_kg, detalle, valor_servicios)
-           values (%L, 'REM-X', %L, 'MQ-X', current_date, %L, 'X', 10, 8, '[]', 0)$$, (select id from ids where clave = 'b'), pg_temp.lid('L1'), (select id from ids where clave = 'cb')),
+  format($$insert into cafe.remisiones (tenant_id, numero, lote_id, lote_codigo, fecha, tercero_id, cliente_nombre, peso_recibido_kg, peso_entregado_kg, detalle, valor_servicios, recibe_nombre, recibe_documento)
+           values (%L, 'REM-X', %L, 'MQ-X', current_date, %L, 'X', 10, 8, '[]', 0, 'R', '1')$$, (select id from ids where clave = 'b'), pg_temp.lid('L1'), (select id from ids where clave = 'cb')),
   '23503', null, 'ni cuelga una remisión suya de un lote de A (FK compuesta con el tenant)'
 );
 

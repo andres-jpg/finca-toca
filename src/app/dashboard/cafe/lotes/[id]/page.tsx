@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Factory } from "lucide-react";
+import { ArrowLeft, Factory, PackageCheck } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { getHistorialCambios, type CambioAuditado } from "@/modules/core/auditoria/actions/historial.actions";
@@ -9,16 +9,25 @@ import { requireSesion } from "@/modules/core/auth/guards";
 import { tieneModulo } from "@/modules/core/tenants/modulos";
 import { requireModuloPagina } from "@/modules/core/tenants/tenant.guards";
 import { AnularLoteButton } from "@/modules/cafe/lotes/components/anular-lote-button";
+import { EditarLote } from "@/modules/cafe/lotes/components/editar-lote";
+import { EdicionesLote } from "@/modules/cafe/lotes/components/ediciones-lote";
 import { BultosTabla } from "@/modules/cafe/lotes/components/bultos-tabla";
 import { EtapasTabla } from "@/modules/cafe/lotes/components/etapas-tabla";
+import { CostoLibraLote } from "@/modules/cafe/costo/components/costo-libra-lote";
+import { getCostoLibraLote } from "@/modules/cafe/costo/queries/costo.queries";
 import { LoteCabecera } from "@/modules/cafe/lotes/components/lote-cabecera";
+import { CifrasLote } from "@/modules/cafe/lotes/components/cifras-lote";
+import { DondeEstaHoy } from "@/modules/cafe/lotes/components/donde-esta-hoy";
+import { RecorridoLote } from "@/modules/cafe/lotes/components/recorrido-lote";
+import { bultosPorEstado, empacadoPorPresentacion, llevaTostion, sinTostar } from "@/modules/cafe/lotes/lib/donde-esta-hoy";
+import { mermaProcesada } from "@/modules/cafe/lotes/lib/etapas";
+import { construirRecorrido } from "@/modules/cafe/lotes/lib/recorrido";
+import { getSaldoGranel } from "@/modules/cafe/empaque/queries/empaque.queries";
 import { LoteTimeline } from "@/modules/cafe/lotes/components/lote-timeline";
 import { lotePendienteDeTrabajo } from "@/modules/cafe/lotes/lib/estado";
-import { etiquetaServicio } from "@/modules/cafe/lotes/lib/servicios";
 import { fechaHoyEnZona } from "@/modules/cafe/insumos/lib/insumos";
-import { GenerarRemisionButton } from "@/modules/cafe/remisiones/components/generar-remision-button";
 import { RemisionLoteSeccion } from "@/modules/cafe/remisiones/components/remision-lote-seccion";
-import { aEventoDeLinea, opcionGenerar } from "@/modules/cafe/remisiones/lib/estado";
+import { aEventoDeLinea, opcionGenerar, rutaEntregar } from "@/modules/cafe/remisiones/lib/estado";
 import { getRemisionesDeLote } from "@/modules/cafe/remisiones/queries/remisiones.queries";
 import { EmpacadoSeccion } from "@/modules/cafe/reapertura/components/empacado-seccion";
 import { getReaperturasDeFicha } from "@/modules/cafe/reapertura/queries/reapertura.queries";
@@ -38,6 +47,8 @@ import {
  * de owner/admin. En un lote de servicio, «Generar remisión» (CO-32) es de quien opera cuando el lote está listo y
  * de owner/admin también con servicios pendientes; tras entregar, la sección «Remisión de entrega» imprime y anula. Lo escondido es cosmético: cada acción repite módulo y rol y el RLS es la frontera real.
  */
+export const metadata = { title: "Lote" };
+
 export default async function LotePage({ params }: { params: Promise<{ id: string }> }) {
   await requireModuloPagina("cafe.recepcion");
   const sesion = await requireSesion();
@@ -49,12 +60,13 @@ export default async function LotePage({ params }: { params: Promise<{ id: strin
 
   const esAdmin = sesion.rolTenant === "owner" || sesion.rolTenant === "admin";
   const conRemisiones = lote.linea === "servicio" && tieneModulo(sesion.tenant.modulos, "cafe.remisiones");
-  const [etapas, bultos, responsables, historial, remisiones] = await Promise.all([
+  const [etapas, bultos, responsables, historial, remisiones, costoLibra] = await Promise.all([
     getEtapas(lote.id),
     getBultos(lote.id),
     getResponsables(lote.id),
     esAdmin ? historialDelLote(lote.id) : Promise.resolve<CambioAuditado[] | null>(null),
     conRemisiones ? remisionesDelLote(lote.id) : Promise.resolve<Remision[]>([]),
+    lote.linea === "marca_propia" ? costoLibraDelLote(lote.id) : Promise.resolve(null),
   ]);
   // Reaperturas de producto empacado (CO-33): solo un lote de marca propia las tiene.
   const reaperturas =
@@ -62,16 +74,36 @@ export default async function LotePage({ params }: { params: Promise<{ id: strin
   const eventos = await getTimeline(lote, bultos, responsables, remisiones.map((r) => aEventoDeLinea(r, responsables)), reaperturas.eventos);
 
   const zona = sesion.tenant.zonaHoraria;
+
+  // Recorrido, cifras y «dónde está hoy» (A-17): todo derivado de lo ya leído; el granel sale de `v_granel_lote`.
+  const esMarcaPropia = lote.linea === "marca_propia";
+  const granelKg = esMarcaPropia ? await granelDelLote(lote.id) : null;
+  const procesosVigentes = eventos.flatMap((e) => (e.clase === "proceso" ? [e.datos] : []));
+  const grupos = bultosPorEstado(bultos);
+  const conTostion = llevaTostion(lote.serviciosRequeridos, etapas);
+  const reabiertas = new Map(reaperturas.saldos.map((s) => [s.presentacionG, s.reabiertas]));
+  const empacado = empacadoPorPresentacion(procesosVigentes, reabiertas);
+  const merma = mermaProcesada(etapas);
+  const etapasConMerma = etapas.filter((e) => e.tipo !== "empaque");
+  const tostion = etapas.find((e) => e.tipo === "tostion");
+  // La insignia solo compara contra la referencia de la tostión cuando esa es la única etapa con merma.
+  const refTostion =
+    merma && etapasConMerma.length === 1 && tostion
+      ? procesosVigentes.find((p) => p.tipo === "tostion" && p.anulacion === null && p.mermaReferenciaPct !== null)
+      : undefined;
+  const recorrido = construirRecorrido({
+    linea: lote.linea,
+    estado: lote.estado,
+    requeridos: lote.serviciosRequeridos,
+    etapas,
+    agotado: grupos.length === 0 && !(granelKg && granelKg > 0) && empacado.length === 0 && etapas.length > 0,
+  });
   const sinProcesos = etapas.length === 0;
   const puedeOperar = sesion.rolTenant !== "viewer" && tieneModulo(sesion.tenant.modulos, "cafe.procesos");
   const verPlanta = puedeOperar && lotePendienteDeTrabajo(lote.estado);
   const puedeAnular = esAdmin && sinProcesos && lote.anulacion === null;
   // Remisión: Gerencia (`viewer`) no genera. Esconder el botón es cosmético; la action y la RPC lo exigen.
   const generar = conRemisiones && sesion.rolTenant !== "viewer" ? opcionGenerar({ linea: lote.linea, estado: lote.estado }, esAdmin) : "no";
-  const pendientes = lote.serviciosRequeridos
-    .filter((s) => !etapas.some((e) => e.tipo === s && e.completo))
-    .map((s) => etiquetaServicio(s).toLowerCase())
-    .join(", ");
 
   return (
     <div className="space-y-6">
@@ -82,18 +114,16 @@ export default async function LotePage({ params }: { params: Promise<{ id: strin
             Lotes
           </Link>
         </Button>
-        {(verPlanta || puedeAnular || generar !== "no") && (
+        {(esAdmin || verPlanta || puedeAnular || generar === "normal") && (
           <div className="flex flex-col gap-2 sm:flex-row">
-            {generar !== "no" && (
-              <GenerarRemisionButton
-                loteId={lote.id}
-                loteCodigo={lote.codigo}
-                clienteNombre={lote.tercero ?? "el cliente"}
-                fechaHoy={fechaHoyEnZona(zona)}
-                fechaRecepcion={lote.fechaRecepcion}
-                modo={generar === "forzar" ? "forzar" : "normal"}
-                pendientes={pendientes}
-              />
+            <EditarLote loteId={lote.id} esAdmin={esAdmin} zona={zona} />
+            {generar === "normal" && (
+              <Button asChild className="h-11 sm:h-9">
+                <Link href={rutaEntregar(lote.id)}>
+                  <PackageCheck className="mr-2 h-4 w-4" />
+                  Entregar
+                </Link>
+              </Button>
             )}
             {verPlanta && (
               <Button asChild className="h-11 sm:h-9">
@@ -109,6 +139,26 @@ export default async function LotePage({ params }: { params: Promise<{ id: strin
       </div>
 
       <LoteCabecera lote={lote} etapas={etapas} zonaHoraria={zona} />
+
+      <RecorridoLote pasos={recorrido} />
+
+      <CifrasLote
+        esServicio={!esMarcaPropia}
+        recibidoKg={lote.pesoRecibidoKg}
+        tostadoKg={conTostion ? (tostion?.pesoSalidaKg ?? 0) : null}
+        merma={merma}
+        referencia={
+          merma && refTostion
+            ? { pct: merma.pct, referenciaPct: refTostion.mermaReferenciaPct, toleranciaPts: refTostion.toleranciaPts, tipo: "tostion" }
+            : null
+        }
+        granelKg={granelKg}
+        sinTostarKg={conTostion ? sinTostar(grupos).pesoKg : null}
+      />
+
+      <DondeEstaHoy grupos={grupos} granelKg={granelKg} empacado={empacado} />
+
+      {costoLibra && <CostoLibraLote costo={costoLibra} />}
 
       <RemisionLoteSeccion remisiones={remisiones} puedeAnular={esAdmin} zonaHoraria={zona} />
 
@@ -133,10 +183,12 @@ export default async function LotePage({ params }: { params: Promise<{ id: strin
 
       <section className="space-y-2" aria-labelledby="titulo-timeline">
         <h2 id="titulo-timeline" className="text-lg font-semibold text-gray-800">
-          Línea de tiempo
+          Historia del lote
         </h2>
         <LoteTimeline eventos={eventos} zonaHoraria={zona} />
       </section>
+
+      <EdicionesLote loteId={lote.id} zona={zona} />
 
       <section className="space-y-2" aria-labelledby="titulo-bultos">
         <h2 id="titulo-bultos" className="text-lg font-semibold text-gray-800">
@@ -173,6 +225,24 @@ async function remisionesDelLote(loteId: string): Promise<Remision[]> {
 async function historialDelLote(loteId: string): Promise<CambioAuditado[] | null> {
   try {
     return await getHistorialCambios("cafe.lotes", loteId);
+  } catch {
+    return null;
+  }
+}
+
+/** El costo por libra es un extra de la ficha: si la función aún no existe en este entorno (migración pendiente), se omite. */
+async function costoLibraDelLote(loteId: string) {
+  try {
+    return await getCostoLibraLote(loteId);
+  } catch {
+    return null;
+  }
+}
+
+/** El granel es un extra de la ficha: si la vista aún no existe en este entorno, se omite. */
+async function granelDelLote(loteId: string): Promise<number | null> {
+  try {
+    return await getSaldoGranel(loteId);
   } catch {
     return null;
   }

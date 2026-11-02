@@ -23,8 +23,8 @@ describe("parsearFiltrosRemisiones", () => {
   });
 
   it("acepta un URLSearchParams y toma el primer valor de un arreglo", () => {
-    expect(parsearFiltrosRemisiones(new URLSearchParams("estado=vigente&q=MQ"))).toEqual({ estado: "vigente", q: "MQ", pagina: 1 });
-    expect(parsearFiltrosRemisiones({ estado: ["vigente", "anulada"] })).toEqual({ estado: "vigente", pagina: 1 });
+    expect(parsearFiltrosRemisiones(new URLSearchParams("estado=entregada&q=MQ"))).toEqual({ estado: "entregada", q: "MQ", pagina: 1 });
+    expect(parsearFiltrosRemisiones({ estado: ["vigente", "anulada"] })).toEqual({ estado: "entregada", pagina: 1 });
   });
 
   it("limita la búsqueda a 40 caracteres", () => {
@@ -32,15 +32,21 @@ describe("parsearFiltrosRemisiones", () => {
   });
 });
 
+describe("estado «vigente» heredado", () => {
+  it("un enlace antiguo con estado=vigente se lee como entregada", () => {
+    expect(parsearFiltrosRemisiones({ estado: "vigente" }).estado).toBe("entregada");
+  });
+});
+
 describe("serializarFiltrosRemisiones / hayFiltrosRemisiones", () => {
   it("orden fijo y sin la página por defecto", () => {
-    expect(serializarFiltrosRemisiones({ q: "MQ", estado: "vigente", desde: "2026-11-01", pagina: 4 })).toBe("desde=2026-11-01&estado=vigente&q=MQ");
+    expect(serializarFiltrosRemisiones({ q: "MQ", estado: "entregada", desde: "2026-11-01", pagina: 4 })).toBe("desde=2026-11-01&estado=entregada&q=MQ");
     expect(serializarFiltrosRemisiones({ pagina: 4 }, { conPagina: true })).toBe("pagina=4");
     expect(serializarFiltrosRemisiones({ pagina: 1 }, { conPagina: true })).toBe("");
   });
 
   it("ida y vuelta", () => {
-    const filtros = { desde: "2026-11-01", hasta: "2026-11-30", tercero: T, estado: "vigente" as const, q: "REM", pagina: 2 };
+    const filtros = { desde: "2026-11-01", hasta: "2026-11-30", tercero: T, estado: "entregada" as const, q: "REM", pagina: 2 };
     expect(parsearFiltrosRemisiones(new URLSearchParams(serializarFiltrosRemisiones(filtros, { conPagina: true })))).toEqual(filtros);
   });
 
@@ -49,3 +55,4 @@ describe("serializarFiltrosRemisiones / hayFiltrosRemisiones", () => {
     expect(hayFiltrosRemisiones({ pagina: 1, estado: "anulada" })).toBe(true);
   });
 });
+

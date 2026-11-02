@@ -9,4 +9,5 @@ const Cargando = () => <div className="h-72 animate-pulse rounded-xl border bord
 
 export const GraficoProduccion = dynamic(() => import("./grafico-produccion").then((m) => m.GraficoProduccion), { ssr: false, loading: Cargando });
 export const GraficoMerma = dynamic(() => import("./grafico-merma").then((m) => m.GraficoMerma), { ssr: false, loading: Cargando });
+export const GraficoMermaTostion = dynamic(() => import("./grafico-merma-tostion").then((m) => m.GraficoMermaTostion), { ssr: false, loading: Cargando });
 export const GraficoIngreso = dynamic(() => import("./grafico-ingreso").then((m) => m.GraficoIngreso), { ssr: false, loading: Cargando });

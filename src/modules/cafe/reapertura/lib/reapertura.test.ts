@@ -40,12 +40,12 @@ describe("maxReabrible", () => {
 describe("kgReabiertos / textoEquivale", () => {
   it("40 × 500 g son 20 kg", () => {
     expect(kgReabiertos(500, 40)).toBe(20);
-    expect(textoEquivale(500, 40)).toBe("Equivale a 20,000 kg");
+    expect(textoEquivale(500, 40)).toBe("Equivale a 20,0 kg");
   });
   it("sin deriva de coma flotante", () => {
     expect(kgReabiertos(2500, 7)).toBe(17.5);
     expect(kgReabiertos(250, 3)).toBe(0.75);
-    expect(textoEquivale(2500, 1234)).toBe("Equivale a 3.085,000 kg");
+    expect(textoEquivale(2500, 1234)).toBe("Equivale a 3.085,0 kg");
   });
 });
 
@@ -74,11 +74,11 @@ describe("validarUnidadesReapertura", () => {
 
 describe("textos", () => {
   it("la reapertura en una línea", () => {
-    expect(textoReapertura(40, "Excelso 500 g", 20)).toBe("40 × Excelso 500 g (20 kg)");
-    expect(textoReapertura(1200, "Consumo 500 g", 600)).toBe("1.200 × Consumo 500 g (600 kg)");
+    expect(textoReapertura(40, "Excelso 500 g", 20)).toBe("40 × Excelso 500 g (20,0 kg)");
+    expect(textoReapertura(1200, "Consumo 500 g", 600)).toBe("1.200 × Consumo 500 g (600,0 kg)");
   });
   it("título de la tarjeta de la cola", () => {
-    expect(tituloTarjetaReapertura("MP-2026-0003", 20, "Excelso")).toBe("Reapertura de MP-2026-0003 · 20 kg · Excelso");
+    expect(tituloTarjetaReapertura("MP-2026-0003", 20, "Excelso")).toBe("Reapertura de MP-2026-0003 · 20,0 kg · Excelso");
     expect(tituloTarjetaReapertura("MP-2026-0003", 2.5, null)).toBe("Reapertura de MP-2026-0003 · 2,5 kg");
   });
   it("pasos pendientes según el estado", () => {

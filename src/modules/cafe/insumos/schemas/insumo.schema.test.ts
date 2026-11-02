@@ -58,10 +58,16 @@ describe("editarInsumoSchema", () => {
 });
 
 describe("compraInsumoSchema", () => {
-  const base = { articuloId: ID, cantidad: 500, fecha: "2026-11-02" };
+  const base = { articuloId: ID, cantidad: 500, costoUnitario: 450, fecha: "2026-11-02" };
 
   it("acepta una compra mínima y rellena lo opcional con null", () => {
-    expect(compraInsumoSchema.parse(base)).toEqual({ ...base, costoUnitario: null, terceroId: null, observaciones: null });
+    expect(compraInsumoSchema.parse(base)).toEqual({ ...base, terceroId: null, observaciones: null });
+  });
+
+  it("el precio unitario es obligatorio (A-05)", () => {
+    expect(compraInsumoSchema.safeParse({ ...base, costoUnitario: undefined }).success).toBe(false);
+    expect(compraInsumoSchema.safeParse({ ...base, costoUnitario: null }).success).toBe(false);
+    expect(compraInsumoSchema.safeParse({ ...base, costoUnitario: Number.NaN }).success).toBe(false);
   });
 
   it("acepta costo, proveedor y observaciones", () => {

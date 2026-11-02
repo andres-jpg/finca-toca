@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fechaCorta, fechaHoraZona, formatearKg3, formatearMermaPct, formatearPct, pctDeMerma } from "./formato";
+import { fechaCorta, fechaHoraZona, formatearKg3, formatearMermaPct, formatearPct, horaLlegada, pctDeMerma } from "./formato";
 
 describe("fechaCorta", () => {
   it("da día/mes/año sin desplazar el día", () => {
@@ -20,16 +20,16 @@ describe("fechaHoraZona", () => {
 });
 
 describe("formatearKg3", () => {
-  it("siempre tres decimales y miles con punto", () => {
-    expect(formatearKg3(332)).toBe("332,000");
-    expect(formatearKg3(405)).toBe("405,000");
-    expect(formatearKg3(62.5)).toBe("62,500");
-    expect(formatearKg3(1234.5)).toBe("1.234,500");
-    expect(formatearKg3(0)).toBe("0,000");
-    expect(formatearKg3(50.625)).toBe("50,625");
+  it("siempre un decimal y miles con punto", () => {
+    expect(formatearKg3(332)).toBe("332,0");
+    expect(formatearKg3(405)).toBe("405,0");
+    expect(formatearKg3(62.5)).toBe("62,5");
+    expect(formatearKg3(1234.5)).toBe("1.234,5");
+    expect(formatearKg3(0)).toBe("0,0");
+    expect(formatearKg3(50.625)).toBe("50,6");
   });
   it("no deja ruido de coma flotante", () => {
-    expect(formatearKg3(0.1 + 0.2)).toBe("0,300");
+    expect(formatearKg3(0.1 + 0.2)).toBe("0,3");
   });
 });
 
@@ -59,12 +59,12 @@ describe("pctDeMerma", () => {
 
 describe("formatearPct", () => {
   it("hasta dos decimales, sin ceros sobrantes y con coma", () => {
-    expect(formatearPct(19)).toBe("19 %");
-    expect(formatearPct(18.02)).toBe("18,02 %");
+    expect(formatearPct(19)).toBe("19,0 %");
+    expect(formatearPct(18.02)).toBe("18,0 %");
     expect(formatearPct(0.6)).toBe("0,6 %");
     expect(formatearPct(33.6)).toBe("33,6 %");
-    expect(formatearPct(0)).toBe("0 %");
-    expect(formatearPct(100)).toBe("100 %");
+    expect(formatearPct(0)).toBe("0,0 %");
+    expect(formatearPct(100)).toBe("100,0 %");
   });
   it("«—» sin dato", () => {
     expect(formatearPct(null)).toBe("—");
@@ -74,8 +74,21 @@ describe("formatearPct", () => {
 
 describe("formatearMermaPct", () => {
   it("compone el cálculo y el formato", () => {
-    expect(formatearMermaPct(73, 405)).toBe("18,02 %");
-    expect(formatearMermaPct(95, 500)).toBe("19 %");
+    expect(formatearMermaPct(73, 405)).toBe("18,0 %");
+    expect(formatearMermaPct(95, 500)).toBe("19,0 %");
     expect(formatearMermaPct(0, 0)).toBe("—");
+  });
+});
+
+describe("horaLlegada (FIN-129 · A-11)", () => {
+  it("12 h con a. m./p. m. en la zona del cliente", () => {
+    expect(horaLlegada("2026-11-05T12:15:00Z", "America/Bogota")).toBe("7:15 a. m.");
+    expect(horaLlegada("2026-11-05T17:05:00Z", "America/Bogota")).toBe("12:05 p. m.");
+    expect(horaLlegada("2026-11-05T05:30:00Z", "America/Bogota")).toBe("12:30 a. m.");
+    expect(horaLlegada("2026-11-06T02:59:00Z", "America/Bogota")).toBe("9:59 p. m.");
+  });
+  it("sin dato o inválido, «—»", () => {
+    expect(horaLlegada(null, "America/Bogota")).toBe("—");
+    expect(horaLlegada("nada", "America/Bogota")).toBe("—");
   });
 });

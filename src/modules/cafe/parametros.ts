@@ -33,6 +33,9 @@ export interface Rango {
   max: number;
 }
 
+/** Nivel de tueste → su parámetro de merma de referencia (A-03). */
+export const CLAVES_MERMA_TOSTION = ["bajo", "medio", "alto"] as const;
+
 export const PARAMETROS_CAFE = {
   capacidadTostadoraKg: {
     clave: "cafe.capacidad_tostadora_kg",
@@ -56,11 +59,33 @@ export const PARAMETROS_CAFE = {
     tipo: "numero",
     unidad: "%",
   } satisfies ParametroDef<number>,
-  mermaReferenciaTostionPct: {
-    clave: "cafe.merma_referencia_tostion_pct",
+  mermaReferenciaTostionBajoPct: {
+    clave: "cafe.merma_referencia_tostion_bajo_pct",
     modulo: "cafe.procesos",
-    etiqueta: "Merma de referencia en tostión",
-    ayuda: "Porcentaje de pérdida esperado al tostar (verde → tostado).",
+    etiqueta: "Merma de referencia en tostión · tueste bajo",
+    ayuda: "Porcentaje de pérdida esperado al tostar a nivel bajo (verde → tostado). Un cambio aplica solo a los procesos que se registren después.",
+    schema: porcentaje("Debe estar entre 0 y 100"),
+    defecto: 18,
+    grupo: "Mermas",
+    tipo: "numero",
+    unidad: "%",
+  } satisfies ParametroDef<number>,
+  mermaReferenciaTostionMedioPct: {
+    clave: "cafe.merma_referencia_tostion_medio_pct",
+    modulo: "cafe.procesos",
+    etiqueta: "Merma de referencia en tostión · tueste medio",
+    ayuda: "Porcentaje de pérdida esperado al tostar a nivel medio (verde → tostado). Un cambio aplica solo a los procesos que se registren después.",
+    schema: porcentaje("Debe estar entre 0 y 100"),
+    defecto: 18,
+    grupo: "Mermas",
+    tipo: "numero",
+    unidad: "%",
+  } satisfies ParametroDef<number>,
+  mermaReferenciaTostionAltoPct: {
+    clave: "cafe.merma_referencia_tostion_alto_pct",
+    modulo: "cafe.procesos",
+    etiqueta: "Merma de referencia en tostión · tueste alto",
+    ayuda: "Porcentaje de pérdida esperado al tostar a nivel alto (verde → tostado). Un cambio aplica solo a los procesos que se registren después.",
     schema: porcentaje("Debe estar entre 0 y 100"),
     defecto: 18,
     grupo: "Mermas",
@@ -71,9 +96,9 @@ export const PARAMETROS_CAFE = {
     clave: "cafe.merma_tolerancia_pts",
     modulo: "cafe.procesos",
     etiqueta: "Tolerancia de la merma",
-    ayuda: "Puntos porcentuales de diferencia con la referencia antes de avisar. Valor provisional: pendiente de confirmar con Cofradía.",
+    ayuda: "Puntos porcentuales de diferencia con la referencia, por encima o por debajo, antes de avisar. Valor provisional: pendiente de confirmar con Cofradía.",
     schema: z.number({ message: "La tolerancia debe ser un número" }).refine(Number.isFinite, { message: "La tolerancia debe ser un número" }).min(0, "No puede ser negativa"),
-    defecto: 3,
+    defecto: 2,
     grupo: "Mermas",
     tipo: "numero",
     unidad: "pts",
@@ -109,6 +134,17 @@ export const PARAMETROS_CAFE = {
     grupo: "Recepción",
     tipo: "numero",
     unidad: "kg",
+  } satisfies ParametroDef<number>,
+  diasSinRecoger: {
+    clave: "cafe.dias_sin_recoger",
+    modulo: "cafe.procesos",
+    etiqueta: "Días para avisar de un lote sin recoger",
+    ayuda: "Un lote de servicio listo para entregar que lleva más de estos días en planta sale en el aviso del tablero de Planta.",
+    schema: z.number({ message: "Los días deben ser un número entero" }).int("Los días deben ser un número entero").min(1, "Debe ser al menos 1 día").max(365, "No puede pasar de 365 días"),
+    defecto: 7,
+    grupo: "Planta",
+    tipo: "numero",
+    unidad: "días",
   } satisfies ParametroDef<number>,
 } as const;
 

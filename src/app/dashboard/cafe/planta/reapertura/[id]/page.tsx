@@ -20,6 +20,8 @@ import { getProcesosDeReaperturas, getReapertura } from "@/modules/cafe/reapertu
  * owner/admin/operativo; Gerencia (`viewer`) consulta el lote y vuelve a su ficha. El origen no se pierde: cada
  * proceso queda ligado a la reapertura y al lote original (se ven en su ficha y en su línea de tiempo).
  */
+export const metadata = { title: "Reapertura de lote" };
+
 export default async function ReaperturaPlantaPage({ params }: { params: Promise<{ id: string }> }) {
   await requireModuloPagina("cafe.procesos");
   const { rolTenant, tenant } = await requireSesion();

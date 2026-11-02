@@ -240,7 +240,7 @@ select pg_temp.reg('M1_tostion', 'M1', 'tostion', pg_temp.baches(100, 0.82) || '
 select pg_temp.reg('M3_tostion', 'M3', 'tostion', pg_temp.baches(20, 0.82) || '{"fecha": "2026-03-10", "nivel_tueste": "medio"}');
 -- Empaque de M3: 32 × 500 g = 16 kg de los 16,4 que salieron de la tostión.
 insert into res select 'M3_empaque', cafe.registrar_empaque(jsonb_build_object(
-  'lote_id', pg_temp.lid('M3'), 'fecha', '2026-03-10', 'bultos', to_jsonb(pg_temp.barr('M3')),
+  'lote_id', pg_temp.lid('M3'), 'fecha', '2026-03-10', 'bultos', to_jsonb(pg_temp.barr('M3')), 'diferencia_destino', 'granel',
   'lineas', jsonb_build_array(jsonb_build_object('presentacion_g', 500, 'unidades', 32))));
 
 -- Ventas: 03-09 una de $23.000; 03-10 el ejemplo de $98.000, una cortesía y una venta de $50.000 que se anula.
@@ -250,7 +250,7 @@ select pg_temp.vender('C1', 'cortesia', '2026-03-10', 'cfa', '[["Excelso 500 g",
 select pg_temp.vender('V2', 'venta', '2026-03-10', 'cfa', '[["Excelso 500 g", 2, 25000]]');
 
 -- L2 queda entregado (remisión vigente): sale del inventario de terceros.
-select cafe.generar_remision(jsonb_build_object('lote_id', pg_temp.lid('L2'), 'fecha', '2026-03-11'));
+select cafe.generar_remision(jsonb_build_object('lote_id', pg_temp.lid('L2'), 'fecha', '2026-03-11', 'recibe_nombre', 'Quien Recibe', 'recibe_documento', '1000'));
 
 -- Correcciones del administrador: se anulan el proceso de L4, el lote L5 y la venta V2.
 reset role;

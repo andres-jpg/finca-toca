@@ -40,8 +40,7 @@ export function VentasFiltros({ filtros, ruta }: { filtros: FiltrosVentas; ruta:
           <Label htmlFor="f-estado">Estado</Label>
           <select id="f-estado" name="estado" defaultValue={filtros.estado ?? ""} className={CAMPO}>
             <option value="">Todas</option>
-            <option value="vigente">Vigentes</option>
-            <option value="anulada">Anuladas</option>
+            <option value="anulada">Solo anuladas</option>
           </select>
         </div>
         <div className="space-y-1.5">

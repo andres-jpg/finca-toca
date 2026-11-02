@@ -39,7 +39,7 @@ describe("serializarFiltrosVentas", () => {
   });
 
   it("es el inverso de parsear", () => {
-    const f = parsearFiltrosVentas({ desde: "2026-11-01", estado: "vigente", factura: "pendiente", pagina: "4" });
+    const f = parsearFiltrosVentas({ desde: "2026-11-01", estado: "anulada", factura: "pendiente", pagina: "4" });
     expect(parsearFiltrosVentas(new URLSearchParams(serializarFiltrosVentas(f, { conPagina: true })))).toEqual(f);
   });
 });

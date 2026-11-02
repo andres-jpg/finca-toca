@@ -31,8 +31,8 @@ describe("construirMatriz", () => {
     expect(excelso.celdas[500]?.producto.stock).toBe(120);
     expect(excelso.celdas[500]?.kg).toBe(60);
     expect(excelso.celdas[2500]?.kg).toBe(20);
-    expect(Object.keys(m)).toEqual(["presentaciones", "filas"]);
-    expect(Object.keys(excelso)).toEqual(["tipoCafeId", "tipoCafe", "celdas"]);
+    expect(Object.keys(m)).toEqual(["presentaciones", "presentacionesMolido", "filas"]);
+    expect(Object.keys(excelso)).toEqual(["tipoCafeId", "tipoCafe", "celdas", "celdasMolido"]);
   });
 
   it("el stock negativo se conserva (la pantalla lo pinta en rojo)", () => {
@@ -66,9 +66,27 @@ describe("construirMatriz", () => {
   });
 });
 
+describe("construirMatriz · forma (A-02)", () => {
+  it("el inventario se separa por calidad × presentación × forma: el molido no pisa al grano", () => {
+    const molido = { ...producto("t-excelso", 2500, 8), articuloId: "m", forma: "molido" as const };
+    const m = construirMatriz([producto("t-excelso", 500, 40), producto("t-excelso", 2500, 3), molido], tipos);
+    const fila = m.filas.find((f) => f.tipoCafe === "Excelso")!;
+    expect(m.presentaciones).toEqual([500, 2500]);
+    expect(m.presentacionesMolido).toEqual([2500]);
+    expect(fila.celdas[2500]?.producto.stock).toBe(3);
+    expect(fila.celdasMolido[2500]?.producto.stock).toBe(8);
+    expect(fila.celdasMolido[500]).toBeUndefined();
+  });
+});
+
 describe("leerAtributosProducto", () => {
   it("lee tipo y presentación", () => {
-    expect(leerAtributosProducto({ tipo_cafe_id: "abc", presentacion_g: 500 })).toEqual({ tipoCafeId: "abc", presentacionG: 500 });
+    expect(leerAtributosProducto({ tipo_cafe_id: "abc", presentacion_g: 500 })).toEqual({ tipoCafeId: "abc", presentacionG: 500, forma: "grano" });
+  });
+
+  it("lee la forma: sin clave es grano; molido solo si lo dice", () => {
+    expect(leerAtributosProducto({ tipo_cafe_id: "abc", presentacion_g: 2500, forma: "molido" })).toEqual({ tipoCafeId: "abc", presentacionG: 2500, forma: "molido" });
+    expect(leerAtributosProducto({ tipo_cafe_id: "abc", presentacion_g: 2500, forma: "otra" })?.forma).toBe("grano");
   });
 
   it("rechaza lo que no es un producto terminado de café", () => {

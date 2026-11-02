@@ -2,16 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
-import { AlertTriangle, Plus, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { AlertTriangle, Minus, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { StockBadge } from "@/modules/core/inventario/components/stock-badge";
 import { TerceroCombobox } from "@/modules/core/terceros/components/tercero-combobox";
+import { COPY } from "../../copy";
 import { formatearCOP, parsearPrecio } from "../../compras/lib/compra";
 import { enteroConMiles, parsearUnidades } from "../../empaque/lib/empaque";
 import { registrarVenta } from "../actions/ventas.actions";
@@ -24,12 +24,8 @@ import type { ProductoVenta, TipoVenta } from "../types";
 // calculan en vivo con las mismas cuentas que la RPC; vender más de lo que hay AVISA y no bloquea (el stock queda
 // negativo, en rojo). La venta NO emite factura electrónica: solo guarda el número de la que se emite en Aliados.
 const CAMPO = "h-11 text-base";
-const SELECT =
-  "h-11 w-full rounded-md border border-input bg-transparent px-3 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50";
 
 interface FilaForm {
-  /** Clave local de React (no viaja). */
-  clave: number;
   articuloId: string;
   cantidad: string;
   precio: string;
@@ -48,11 +44,10 @@ interface VentaFormProps {
 
 export function VentaForm({ productos, fechaHoy, consumidorFinalId }: VentaFormProps) {
   const router = useRouter();
-  const siguiente = useRef(1);
   const [tipo, setTipo] = useState<TipoVenta>("venta");
   const [fecha, setFecha] = useState(fechaHoy);
   const [terceroId, setTerceroId] = useState<string | null>(consumidorFinalId);
-  const [filas, setFilas] = useState<FilaForm[]>(() => [{ clave: 0, articuloId: "", cantidad: "", precio: "" }]);
+  const [filas, setFilas] = useState<FilaForm[]>([]);
   const [requiereFactura, setRequiereFactura] = useState(false);
   const [numeroFactura, setNumeroFactura] = useState("");
   const [observaciones, setObservaciones] = useState("");
@@ -73,44 +68,49 @@ export function VentaForm({ productos, fechaHoy, consumidorFinalId }: VentaFormP
   }));
   const total = totalVenta(cuentas, tipo);
   const unidades = totalUnidades(cuentas);
-  const elegidos = new Set(filas.map((f) => f.articuloId).filter(Boolean));
+  const enCarrito = new Map(filas.map((f) => [f.articuloId, parsearUnidades(f.cantidad) ?? 0]));
 
-  const cambiar = (clave: number, cambios: Partial<FilaForm>) =>
-    setFilas((prev) => prev.map((f) => (f.clave === clave ? { ...f, ...cambios } : f)));
+  const cambiar = (articuloId: string, cambios: Partial<FilaForm>) =>
+    setFilas((prev) => prev.map((f) => (f.articuloId === articuloId ? { ...f, ...cambios } : f)));
 
-  function elegirProducto(clave: number, articuloId: string) {
-    const p = porId.get(articuloId);
-    // Precarga el precio vigente (editable); sin precio queda vacío y el operario lo escribe.
-    cambiar(clave, { articuloId, precio: textoPrecio(p?.precio ?? null) });
+  /** Un toque agrega la línea (con el precio vigente, editable); otro toque suma una unidad. */
+  function tocarProducto(p: ProductoVenta) {
+    setFilas((prev) => {
+      const actual = prev.find((f) => f.articuloId === p.articuloId);
+      if (!actual) return [...prev, { articuloId: p.articuloId, cantidad: "1", precio: textoPrecio(p.precio) }];
+      return prev.map((f) => (f.articuloId === p.articuloId ? { ...f, cantidad: String((parsearUnidades(f.cantidad) ?? 0) + 1) } : f));
+    });
   }
 
-  /** Una fila en blanco con su clave local. La clave se toma FUERA del updater de `setFilas` (en desarrollo React lo ejecuta dos veces). */
-  const filaNueva = (): FilaForm => ({ clave: siguiente.current++, articuloId: "", cantidad: "", precio: "" });
-
-  function agregarFila() {
-    const nueva = filaNueva();
-    setFilas((prev) => [...prev, nueva]);
+  function paso(articuloId: string, delta: number) {
+    const f = filas.find((x) => x.articuloId === articuloId);
+    const n = Math.max(1, (parsearUnidades(f?.cantidad ?? "") ?? 0) + delta);
+    cambiar(articuloId, { cantidad: String(n) });
   }
 
-  function quitarFila(clave: number) {
-    const reemplazo = filas.length === 1 ? filaNueva() : null;
-    setFilas((prev) => (reemplazo ? [reemplazo] : prev.filter((f) => f.clave !== clave)));
-  }
+  const quitarFila = (articuloId: string) => setFilas((prev) => prev.filter((f) => f.articuloId !== articuloId));
 
   function cambiarTipo(nuevo: TipoVenta) {
     setTipo(nuevo);
-    // Una cortesía no se factura.
+    // Una cortesía no se factura y su destinatario no puede ser el consumidor final.
     if (nuevo === "cortesia") {
       setRequiereFactura(false);
       setNumeroFactura("");
+      if (terceroId === consumidorFinalId) setTerceroId(null);
+    } else if (terceroId === null) {
+      setTerceroId(consumidorFinalId);
     }
   }
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (filas.every((f) => f.articuloId === "")) {
+    if (filas.length === 0) {
       setError("Añade al menos un producto");
+      return;
+    }
+    if (esCortesia && (terceroId === null || terceroId === consumidorFinalId)) {
+      setError("Indica el destinatario de la cortesía: no puede ser «Consumidor final».");
       return;
     }
     const parsed = ventaSchema.safeParse({
@@ -120,8 +120,7 @@ export function VentaForm({ productos, fechaHoy, consumidorFinalId }: VentaFormP
       requiereFactura,
       numeroFactura,
       observaciones,
-      // Las filas sin producto ni cantidad (la fila en blanco del final) no cuentan.
-      lineas: filas.filter((f) => f.articuloId !== "" || f.cantidad.trim() !== "").map((f) => ({ articuloId: f.articuloId, cantidad: f.cantidad, precio: f.precio })),
+      lineas: filas.map((f) => ({ articuloId: f.articuloId, cantidad: f.cantidad, precio: f.precio })),
     });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Revisa los campos");
@@ -148,7 +147,7 @@ export function VentaForm({ productos, fechaHoy, consumidorFinalId }: VentaFormP
   }
 
   const boton = enviando ? "Guardando…" : esCortesia ? "Registrar cortesía" : "Guardar venta";
-  const deshabilitado = enviando || terceroId === null || filas.every((f) => f.articuloId === "");
+  const deshabilitado = enviando || terceroId === null || filas.length === 0;
 
   return (
     <form onSubmit={guardar} noValidate className="space-y-6 pb-2">
@@ -174,25 +173,27 @@ export function VentaForm({ productos, fechaHoy, consumidorFinalId }: VentaFormP
             ))}
           </div>
           {esCortesia && (
-            <p className="text-xs text-gray-500">La cortesía descuenta café del inventario sin valor: no suma al ingreso del día.</p>
+            <p className="text-xs text-gray-500">La cortesía descuenta café del inventario sin valor: no suma al ingreso del día. Total $0.</p>
           )}
         </fieldset>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label>Cliente</Label>
+            <Label>{esCortesia ? "Destinatario" : "Cliente"}</Label>
             <div className="[&_button[role=combobox]]:h-11 [&_button[role=combobox]]:text-base">
               <TerceroCombobox
                 value={terceroId}
                 onChange={(id) => setTerceroId(id)}
                 rol="cliente"
                 permitirCrear
-                incluirConsumidorFinal
-                placeholder="Selecciona o crea el cliente"
+                incluirConsumidorFinal={!esCortesia}
+                placeholder={esCortesia ? "Selecciona o crea el destinatario" : "Selecciona o crea el cliente"}
                 disabled={enviando}
               />
             </div>
-            <p className="text-xs text-gray-500">Si no se identifica, déjalo en «Consumidor final».</p>
+            <p className="text-xs text-gray-500">
+              {esCortesia ? "Obligatorio: a quién se le entrega la cortesía." : "Si no se identifica, déjalo en «Consumidor final»."}
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="venta-fecha">Fecha</Label>
@@ -202,13 +203,13 @@ export function VentaForm({ productos, fechaHoy, consumidorFinalId }: VentaFormP
         </div>
       </section>
 
-      <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm" aria-labelledby="venta-productos">
+      <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm" aria-labelledby="venta-productos">
         <div>
           <h2 id="venta-productos" className="text-base font-semibold text-gray-800">
             Productos
           </h2>
           <p className="text-xs text-gray-500">
-            Elige el tipo de café y la presentación. El precio se precarga con el vigente y se puede cambiar; si no alcanza el inventario, el sistema avisa pero no bloquea.
+            Toca un producto para agregarlo; vuelve a tocarlo para sumar una unidad. Si no alcanza el inventario, el sistema avisa pero no bloquea.
           </p>
         </div>
 
@@ -218,109 +219,118 @@ export function VentaForm({ productos, fechaHoy, consumidorFinalId }: VentaFormP
           </p>
         )}
 
-        <ul className="divide-y divide-gray-100">
-          {filas.map((f, i) => {
-            const p = porId.get(f.articuloId);
-            const cantidad = parsearUnidades(f.cantidad);
-            const hayCantidad = f.cantidad.trim() !== "";
-            const precioNum = parsearPrecio(f.precio);
-            const hayPrecio = f.precio.trim() !== "";
-            const aviso = p && cantidad ? avisoStock(p.stock, cantidad) : null;
-            const subtotal = subtotalLinea(cantidad ?? 0, esCortesia ? 0 : (precioNum ?? 0));
-            return (
-              <li key={f.clave} className="space-y-3 py-4">
-                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_7rem_9rem_8rem_auto] sm:items-end">
-                  <div className="space-y-1.5">
-                    <Label htmlFor={`venta-prod-${f.clave}`}>Producto</Label>
-                    <select
-                      id={`venta-prod-${f.clave}`}
-                      className={SELECT}
-                      value={f.articuloId}
-                      disabled={enviando}
-                      onChange={(e) => elegirProducto(f.clave, e.target.value)}
-                    >
-                      <option value="">Elige un producto…</option>
-                      {grupos.map(([tipoCafe, lista]) => (
-                        <optgroup key={tipoCafe} label={tipoCafe}>
-                          {lista.map((pr) => (
-                            <option key={pr.articuloId} value={pr.articuloId} disabled={elegidos.has(pr.articuloId) && pr.articuloId !== f.articuloId}>
-                              {pr.nombre} · {enteroConMiles(pr.stock)} en inventario
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor={`venta-cant-${f.clave}`}>Cantidad</Label>
-                    <Input
-                      id={`venta-cant-${f.clave}`}
-                      inputMode="numeric"
-                      autoComplete="off"
-                      placeholder="0"
-                      disabled={enviando}
-                      className={cn(CAMPO, "text-right tabular-nums")}
-                      aria-invalid={hayCantidad && cantidad === null}
-                      value={f.cantidad}
-                      onChange={(e) => cambiar(f.clave, { cantidad: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor={`venta-precio-${f.clave}`}>Precio unitario ($)</Label>
-                    <Input
-                      id={`venta-precio-${f.clave}`}
-                      inputMode="decimal"
-                      autoComplete="off"
-                      placeholder={p && p.precio === null ? "Sin precio: escríbelo" : "0"}
-                      disabled={enviando || esCortesia}
-                      className={cn(CAMPO, "text-right tabular-nums")}
-                      aria-invalid={!esCortesia && hayPrecio && precioNum === null}
-                      value={esCortesia ? "0" : f.precio}
-                      onChange={(e) => cambiar(f.clave, { precio: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <p className="text-sm font-medium text-gray-700">Subtotal</p>
-                    <p className="flex h-11 items-center justify-end text-base font-semibold tabular-nums text-gray-900">{formatearCOP(subtotal)}</p>
-                  </div>
-
-                  <Button type="button" variant="ghost" className="h-11 w-11 shrink-0 justify-self-end p-0 text-gray-500 hover:text-red-600" onClick={() => quitarFila(f.clave)} disabled={enviando}>
-                    <Trash2 className="h-5 w-5" />
-                    <span className="sr-only">Quitar el producto {i + 1}</span>
-                  </Button>
-                </div>
-
-                {p && (
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-gray-600">
-                    <span className="inline-flex items-center gap-1.5">
-                      En inventario <StockBadge stock={p.stock} stockMinimo={null} />
+        {grupos.map(([tipoCafe, lista]) => (
+          <div key={tipoCafe} className="space-y-2">
+            <h3 className="text-sm font-medium text-gray-700">{tipoCafe}</h3>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+              {lista.map((p) => {
+                const n = enCarrito.get(p.articuloId) ?? 0;
+                return (
+                  <button
+                    key={p.articuloId}
+                    type="button"
+                    onClick={() => tocarProducto(p)}
+                    disabled={enviando}
+                    aria-label={`Agregar ${p.nombre}`}
+                    className={cn(
+                      "relative flex min-h-24 flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors",
+                      n > 0 ? "border-amber-600 bg-amber-50" : "border-gray-300 bg-white hover:bg-gray-50",
+                    )}
+                  >
+                    <span className="text-base font-semibold text-gray-900">{p.nombre}</span>
+                    <span className="text-sm tabular-nums text-gray-600">
+                      {esCortesia ? "Sin valor" : p.precio === null ? "Precio por definir" : formatearCOP(p.precio)}
                     </span>
-                    {!esCortesia && p.precio === null && <span className="text-amber-800">Este producto no tiene precio en la lista: escribe el valor.</span>}
-                  </div>
-                )}
-                {aviso && (
-                  <p role="status" className="flex items-start gap-1.5 text-sm text-amber-900">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                    {aviso.texto}
-                  </p>
-                )}
-                {hayCantidad && cantidad === null && (
-                  <p role="alert" className="text-xs font-medium text-red-600">
-                    Las unidades son un número entero mayor que cero.
-                  </p>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                    <span className={cn("text-xs tabular-nums", p.stock <= 0 ? "font-medium text-red-600" : "text-gray-500")}>
+                      {enteroConMiles(p.stock)} en inventario
+                    </span>
+                    {n > 0 && (
+                      <span className="absolute right-2 top-2 rounded-full bg-amber-600 px-2 py-0.5 text-xs font-semibold tabular-nums text-white">{n}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
 
-        <Button type="button" variant="outline" className="h-11" onClick={agregarFila} disabled={enviando || filas.length >= productos.length}>
-          <Plus className="mr-1.5 h-4 w-4" />
-          Añadir producto
-        </Button>
+        {filas.length > 0 && (
+          <ul className="divide-y divide-gray-100 border-t border-gray-100">
+            {filas.map((f) => {
+              const p = porId.get(f.articuloId);
+              const cantidad = parsearUnidades(f.cantidad);
+              const hayCantidad = f.cantidad.trim() !== "";
+              const precioNum = parsearPrecio(f.precio);
+              const hayPrecio = f.precio.trim() !== "";
+              const aviso = p && cantidad ? avisoStock(p.stock, cantidad) : null;
+              const subtotal = subtotalLinea(cantidad ?? 0, esCortesia ? 0 : (precioNum ?? 0));
+              return (
+                <li key={f.articuloId} className="space-y-2 py-3">
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_9rem_8rem_auto] sm:items-end">
+                    <p className="text-base font-medium text-gray-900">{p?.nombre ?? COPY.productoRespaldo}</p>
+
+                    <div className="flex items-center gap-1" role="group" aria-label={`Unidades de ${p?.nombre ?? "producto"}`}>
+                      <Button type="button" variant="outline" className="h-11 w-11 p-0" onClick={() => paso(f.articuloId, -1)} disabled={enviando}>
+                        <Minus className="h-4 w-4" />
+                        <span className="sr-only">Una unidad menos</span>
+                      </Button>
+                      <Input
+                        aria-label="Cantidad"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        disabled={enviando}
+                        className={cn(CAMPO, "w-16 text-center tabular-nums")}
+                        aria-invalid={hayCantidad && cantidad === null}
+                        value={f.cantidad}
+                        onChange={(e) => cambiar(f.articuloId, { cantidad: e.target.value })}
+                      />
+                      <Button type="button" variant="outline" className="h-11 w-11 p-0" onClick={() => paso(f.articuloId, 1)} disabled={enviando}>
+                        <Plus className="h-4 w-4" />
+                        <span className="sr-only">Una unidad más</span>
+                      </Button>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label htmlFor={`venta-precio-${f.articuloId}`} className="text-xs text-gray-500">
+                        Precio unitario ($)
+                      </Label>
+                      <Input
+                        id={`venta-precio-${f.articuloId}`}
+                        inputMode="decimal"
+                        autoComplete="off"
+                        placeholder={p && p.precio === null ? "Precio por definir" : "0"}
+                        disabled={enviando || esCortesia}
+                        className={cn(CAMPO, "text-right tabular-nums")}
+                        aria-invalid={!esCortesia && hayPrecio && precioNum === null}
+                        value={esCortesia ? "0" : f.precio}
+                        onChange={(e) => cambiar(f.articuloId, { precio: e.target.value })}
+                      />
+                    </div>
+
+                    <p className="flex h-11 items-center justify-end text-base font-semibold tabular-nums text-gray-900">{formatearCOP(subtotal)}</p>
+
+                    <Button type="button" variant="ghost" className="h-11 w-11 shrink-0 justify-self-end p-0 text-gray-500 hover:text-red-600" onClick={() => quitarFila(f.articuloId)} disabled={enviando}>
+                      <Trash2 className="h-5 w-5" />
+                      <span className="sr-only">Quitar {p?.nombre ?? "el producto"}</span>
+                    </Button>
+                  </div>
+                  {p && !esCortesia && p.precio === null && <p className="text-xs text-amber-800">Precio por definir: escribe el valor.</p>}
+                  {aviso && (
+                    <p role="status" className="flex items-start gap-1.5 text-sm text-amber-900">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                      {aviso.texto}
+                    </p>
+                  )}
+                  {hayCantidad && cantidad === null && (
+                    <p role="alert" className="text-xs font-medium text-red-600">
+                      Las unidades son un número entero mayor que cero.
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
 
       {!esCortesia && (
@@ -336,11 +346,11 @@ export function VentaForm({ productos, fechaHoy, consumidorFinalId }: VentaFormP
                 if (!e.target.checked) setNumeroFactura("");
               }}
             />
-            ¿Requiere factura electrónica?
+            Requiere factura electrónica
           </label>
           {requiereFactura && (
             <div className="space-y-1.5">
-              <Label htmlFor="venta-factura">N.º de factura emitida en Aliados (opcional)</Label>
+              <Label htmlFor="venta-factura">N.º de la factura emitida en Aliados</Label>
               <Input
                 id="venta-factura"
                 autoComplete="off"
@@ -359,8 +369,18 @@ export function VentaForm({ productos, fechaHoy, consumidorFinalId }: VentaFormP
       )}
 
       <section className="space-y-1.5 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-        <Label htmlFor="venta-obs">Observaciones (opcional)</Label>
-        <Textarea id="venta-obs" rows={2} maxLength={500} className="text-base" value={observaciones} onChange={(e) => setObservaciones(e.target.value)} disabled={enviando} />
+        <Label htmlFor="venta-obs">{esCortesia ? "Motivo de la cortesía" : "Observaciones (opcional)"}</Label>
+        <Textarea
+          id="venta-obs"
+          rows={2}
+          maxLength={500}
+          className="text-base"
+          value={observaciones}
+          onChange={(e) => setObservaciones(e.target.value)}
+          disabled={enviando}
+          aria-required={esCortesia}
+          placeholder={esCortesia ? "Ej: muestra para un cliente nuevo" : undefined}
+        />
       </section>
 
       {error && (
@@ -374,7 +394,7 @@ export function VentaForm({ productos, fechaHoy, consumidorFinalId }: VentaFormP
         <p aria-live="polite" className="min-w-0 text-sm text-gray-600">
           {esCortesia ? (
             <>
-              <span className="text-xl font-bold tabular-nums text-gray-900">Sin valor</span> · {enteroConMiles(unidades)} {unidades === 1 ? "unidad" : "unidades"}
+              Total <span className="text-xl font-bold tabular-nums text-gray-900">$0</span> · {enteroConMiles(unidades)} {unidades === 1 ? "unidad" : "unidades"}
             </>
           ) : (
             <>

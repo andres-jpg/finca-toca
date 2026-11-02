@@ -31,10 +31,20 @@ describe("paginaInicial", () => {
     expect(paginaInicial({ rolLegacy: null, rolTenant: "viewer", tenant: { vertical: "cafe" } })).toBe("/dashboard/cafe/lotes");
   });
 
-  it("el resto de roles de café sigue entrando por los lotes aunque tengan el panel", () => {
-    for (const rol of ["owner", "admin", "operativo"] as const) {
-      expect(paginaInicial({ rolLegacy: null, rolTenant: rol, tenant: { vertical: "cafe", modulos: ["cafe.dashboard"] } })).toBe("/dashboard/cafe/lotes");
+  it("propietario y administrador de café aterrizan en el Panel si el cliente lo tiene (A-07)", () => {
+    for (const rol of ["owner", "admin"] as const) {
+      expect(paginaInicial({ rolLegacy: null, rolTenant: rol, tenant: { vertical: "cafe", modulos: ["cafe.dashboard"] } })).toBe("/dashboard/cafe");
+      expect(paginaInicial({ rolLegacy: null, rolTenant: rol, tenant: { vertical: "cafe", modulos: ["cafe.recepcion"] } })).toBe("/dashboard/cafe/lotes");
     }
+  });
+
+  it("el operativo aterriza en su pantalla configurada; sin configurar, en Planta (A-07)", () => {
+    const op = (pantallaInicio: "planta" | "recibir" | null, modulos: string[]) =>
+      paginaInicial({ rolLegacy: null, rolTenant: "operativo", pantallaInicio, tenant: { vertical: "cafe", modulos } });
+    expect(op("recibir", ["cafe.recepcion", "cafe.procesos"])).toBe("/dashboard/cafe/recibir");
+    expect(op("planta", ["cafe.recepcion", "cafe.procesos"])).toBe("/dashboard/cafe/planta");
+    expect(op(null, ["cafe.recepcion", "cafe.procesos"])).toBe("/dashboard/cafe/planta");
+    expect(op(null, ["cafe.recepcion"])).toBe("/dashboard/cafe/lotes");
   });
 
   it("un viewer de otro vertical no cambia", () => {

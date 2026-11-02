@@ -9,7 +9,19 @@ import { registrarContextoSentry } from "@/lib/sentry/contexto";
 import { ContextoSentryCliente } from "@/components/sentry/contexto-sentry-cliente";
 import { getSesionBase } from "@/modules/core/auth/sesion";
 import { getNavParaSesion } from "@/modules/registry";
+import { getTenantActual } from "@/modules/core/tenants/tenant.queries";
+import { NOMBRE_PLATAFORMA } from "@/lib/plataforma";
+import type { Metadata } from "next";
 import type { UserRole } from "@/types";
+
+/**
+ * Título de pestaña: `<pantalla> · <cliente activo>`. El nombre sale del tenant de la sesión (en caché por
+ * request, sin consultas extra); sin cliente, el de la plataforma. Cada página aporta su `title`.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const nombre = (await getTenantActual())?.nombre ?? NOMBRE_PLATAFORMA;
+  return { title: { default: nombre, template: `${nombre} · %s` } };
+}
 
 /** El hato solo existe para la finca: los roles de cooperativa no pagan la consulta. */
 const ROLES_CON_ALERTAS: UserRole[] = ["admin", "user", "viewer"];

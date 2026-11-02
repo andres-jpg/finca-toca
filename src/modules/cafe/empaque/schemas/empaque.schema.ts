@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Json } from "@/lib/supabase/database.types";
 import { parsearDecimal } from "../../procesos/lib/numero";
-import { parsearUnidades } from "../lib/empaque";
+import { DESTINOS_DIFERENCIA, FORMAS_CAFE, parsearUnidades } from "../lib/empaque";
 
 // `message` en vez de `required_error`/`invalid_type_error`: Zod 4 ya no los acepta. Mismas reglas que
 // `cafe.registrar_empaque()` y `cafe.registrar_salida_pt()` (la base las repite: es la frontera real) para que el
@@ -32,6 +32,20 @@ const kilosOpcional = z
     return n;
   });
 
+/** Peso obligatorio de la molienda: `permitirCero` admite 0 en la salida (se molió y no salió nada). */
+function kilosRequerido(nombre: string, permitirCero = false) {
+  return z.union([z.number(), z.string()], { message: `Indica el peso de ${nombre}` }).transform((v, ctx) => {
+    const n = parsearDecimal(v);
+    if (n === null || n < 0 || (n === 0 && !permitirCero)) {
+      ctx.addIssue({ code: "custom", message: `El peso de ${nombre} debe ser un número${permitirCero ? "" : " mayor que cero"}` });
+      return z.NEVER;
+    }
+    if (n >= MAX_KG) ctx.addIssue({ code: "custom", message: "El peso es demasiado grande" });
+    else if (!enGramos(n)) ctx.addIssue({ code: "custom", message: "Usa como máximo 3 decimales (gramos)" });
+    return n;
+  });
+}
+
 const unidades = z.union([z.number(), z.string()], { message: "Indica las unidades" }).transform((v, ctx) => {
   const n = parsearUnidades(v);
   if (n === null) {
@@ -49,6 +63,16 @@ export const lineaEmpaqueSchema = z.object({
     .min(1, "La presentación no es válida")
     .max(MAX_UNIDADES, "La presentación no es válida"),
   unidades,
+  /** Marca propia: grano o molido. En servicios a terceros siempre es grano. */
+  forma: z
+    .enum(FORMAS_CAFE, { message: "La forma del café es grano o molido" })
+    .nullish()
+    .transform((v) => v ?? "grano"),
+  /** Servicios a terceros: la bolsa la trae el cliente (siempre `true`, nunca descuenta insumos). En marca propia siempre es `false`. */
+  bolsaCliente: z
+    .boolean()
+    .nullish()
+    .transform((v) => v === true),
 });
 
 export const empaqueSchema = z
@@ -64,6 +88,16 @@ export const empaqueSchema = z
       .nullish()
       .transform((v) => v ?? null),
     pesoEntradaKg: kilosOpcional,
+    /** Marca propia con líneas de café molido: la molienda se registra en el mismo paso (A-02). */
+    molienda: z
+      .object({ entradaKg: kilosRequerido("entrada de la molienda"), salidaKg: kilosRequerido("salida de la molienda", true) })
+      .nullish()
+      .transform((v) => v ?? null),
+    /** A dónde va lo que llega a empaque y no entra en bolsas. Obligatorio si sobra café (lo exige la base). */
+    diferenciaDestino: z
+      .enum(DESTINOS_DIFERENCIA, { message: "Elige el destino de la diferencia" })
+      .nullish()
+      .transform((v) => v ?? null),
     lineas: z
       .array(lineaEmpaqueSchema)
       .min(1, "Indica las unidades de al menos una presentación")
@@ -76,12 +110,16 @@ export const empaqueSchema = z
       .transform((v) => (v ? v : null)),
   })
   .superRefine((v, ctx) => {
-    const vistas = new Set<number>();
+    const vistas = new Set<string>();
     for (const [i, l] of v.lineas.entries()) {
-      if (vistas.has(l.presentacionG)) {
+      const clave = `${l.presentacionG}:${l.forma}`;
+      if (vistas.has(clave)) {
         ctx.addIssue({ code: "custom", path: ["lineas", i, "presentacionG"], message: "Esa presentación está repetida" });
       }
-      vistas.add(l.presentacionG);
+      vistas.add(clave);
+    }
+    if (v.molienda && v.molienda.salidaKg > v.molienda.entradaKg) {
+      ctx.addIssue({ code: "custom", path: ["molienda", "salidaKg"], message: "Lo que sale de la molienda no puede superar lo que entra" });
     }
   });
 
@@ -97,7 +135,14 @@ export function payloadEmpaque(v: EmpaqueValues): Json {
     // Solo con un café reabierto (CO-33); sin él la RPC recibe lo mismo de siempre.
     ...(v.reaperturaId ? { reapertura_id: v.reaperturaId } : {}),
     peso_entrada_kg: v.pesoEntradaKg,
-    lineas: v.lineas.map((l) => ({ presentacion_g: l.presentacionG, unidades: l.unidades })),
+    lineas: v.lineas.map((l) => ({
+      presentacion_g: l.presentacionG,
+      unidades: l.unidades,
+      ...(l.forma === "molido" ? { forma: "molido" } : {}),
+      ...(l.bolsaCliente ? { bolsa_cliente: true } : {}),
+    })),
+    ...(v.molienda ? { molienda: { peso_entrada_kg: v.molienda.entradaKg, peso_salida_kg: v.molienda.salidaKg } } : {}),
+    diferencia_destino: v.diferenciaDestino,
     observaciones: v.observaciones,
   };
 }
@@ -155,5 +200,40 @@ export function payloadSalidaPt(v: SalidaPtValues): Json {
     motivo: v.motivo,
     unidades: v.motivo === "ajuste" && v.direccion === "disminuye" ? -v.unidades : v.unidades,
     observaciones: v.observaciones,
+  };
+}
+
+// Convertir presentación (A-15 · FIN-133). Mismas reglas que `cafe.convertir_presentacion`, que las repite.
+export const convertirPresentacionSchema = z
+  .object({
+    loteId: z.uuid({ message: "Elige el lote de origen" }),
+    fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "La fecha no es válida"),
+    origenId: z.uuid({ message: "Elige el producto de origen" }),
+    unidadesOrigen: unidades,
+    destinoId: z.uuid({ message: "Elige el producto de destino" }),
+    unidadesDestino: unidades,
+    motivo: z
+      .string()
+      .trim()
+      .max(500, "Máximo 500 caracteres")
+      .nullish()
+      .transform((v) => (v ? v : null)),
+  })
+  .superRefine((v, ctx) => {
+    if (v.origenId === v.destinoId) {
+      ctx.addIssue({ code: "custom", path: ["destinoId"], message: "El destino debe ser otra presentación distinta del origen" });
+    }
+  });
+
+export type ConvertirPresentacionFormInput = z.input<typeof convertirPresentacionSchema>;
+export type ConvertirPresentacionValues = z.output<typeof convertirPresentacionSchema>;
+
+export function payloadConvertirPresentacion(v: ConvertirPresentacionValues): Json {
+  return {
+    lote_id: v.loteId,
+    fecha: v.fecha,
+    origen: { articulo_id: v.origenId, unidades: v.unidadesOrigen },
+    destino: { articulo_id: v.destinoId, unidades: v.unidadesDestino },
+    motivo: v.motivo,
   };
 }

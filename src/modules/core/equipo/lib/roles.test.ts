@@ -61,3 +61,14 @@ describe("puedeModificarMiembro", () => {
     }
   });
 });
+
+describe("rolesAsignables en el vertical de café", () => {
+  it("no ofrece Gerencia (viewer) en café", () => {
+    expect(rolesAsignables("owner", "cafe")).toEqual(["owner", "admin", "operativo"]);
+    expect(rolesAsignables("admin", "cafe")).toEqual(["admin", "operativo"]);
+  });
+
+  it("otros verticales siguen ofreciéndola", () => {
+    expect(rolesAsignables("admin", "ganaderia")).toContain("viewer");
+  });
+});

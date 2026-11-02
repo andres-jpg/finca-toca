@@ -1,4 +1,5 @@
 import { pctDeMerma } from "../../lotes/lib/formato";
+import { estadoMerma, type EstadoMerma } from "../../procesos/lib/merma";
 import { ORDEN_PROCESO } from "../../lotes/lib/servicios";
 import type { TipoProceso } from "../../lotes/types";
 import type { FilaProduccion, LineaPanel, VentaDiaria } from "../types";
@@ -95,4 +96,25 @@ export interface ResumenLinea {
 /** Lo mismo por línea: cada línea con sus tipos de proceso (nunca se suman kilos de líneas distintas). */
 export function resumenPorLinea(filas: readonly FilaProduccion[]): ResumenLinea[] {
   return LINEAS_PANEL.map((linea) => ({ linea, procesos: resumenPorTipo(filas.filter((f) => f.linea === linea)) })).filter((l) => l.procesos.length > 0);
+}
+
+export interface PuntoMermaTostion {
+  fecha: string;
+  /** Merma ponderada de tostión del día (2 decimales, desde los kilos); `null` si ese día no hubo tostión. */
+  pct: number | null;
+  /** Frente a referencia ± tolerancia: `alta` (sobre la banda), `baja` (bajo ella), `en_rango`; `null` sin dato o sin referencia. */
+  estado: EstadoMerma | null;
+}
+
+/**
+ * Gráfico «Merma de tostión por día» (A-19): la merma ponderada de cada día con su estado frente a la banda de referencia
+ * (referencia ± tolerancia, A-03). Los días sin tostión quedan como hueco, no como 0 %. Sin referencia (`null`, cuando los
+ * tres niveles de tueste tienen referencias distintas y el agregado del día las mezclaría) no hay estado ni banda.
+ */
+export function serieMermaTostion(filas: readonly FilaProduccion[], dias: readonly string[], referenciaPct: number | null, toleranciaPts: number): PuntoMermaTostion[] {
+  return serieMermaPorDia(filas, dias).map(({ fecha, tostion }) => ({
+    fecha,
+    pct: tostion,
+    estado: tostion === null ? null : estadoMerma(tostion, referenciaPct, toleranciaPts),
+  }));
 }

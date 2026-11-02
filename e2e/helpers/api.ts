@@ -108,16 +108,23 @@ export async function crearRecepcion(opciones: {
   bultos?: number;
   servicios: string[];
   nivelTueste?: string;
+  /** Perfil de tueste pedido por el cliente (opcional). */
+  perfilTempC?: number;
+  perfilTiempoMin?: number;
+  /** `YYYY-MM-DD` de la recepción (por defecto, hoy): sirve para fabricar antigüedad. */
+  fecha?: string;
 }): Promise<LoteCreado> {
   const r = await rpcCafe<{ id: string; codigo: string }>("registrar_recepcion", {
     tercero_id: await idTercero(CLIENTE_SERVICIO.identificacion),
-    fecha: hoyBogota(),
+    fecha: opciones.fecha ?? hoyBogota(),
     peso_kg: opciones.pesoKg ?? 125,
     num_bultos: opciones.bultos ?? 2,
     humedad_pct: 11,
     densidad: 680,
     servicios: opciones.servicios,
     ...(opciones.servicios.includes("tostion") ? { nivel_tueste: opciones.nivelTueste ?? "medio" } : {}),
+    ...(opciones.perfilTempC !== undefined ? { perfil_temp_c: opciones.perfilTempC } : {}),
+    ...(opciones.perfilTiempoMin !== undefined ? { perfil_tiempo_min: opciones.perfilTiempoMin } : {}),
   });
   return { id: r.id, codigo: r.codigo };
 }
@@ -127,6 +134,18 @@ async function idsDeBultos(loteId: string): Promise<string[]> {
   const { data, error } = await supabase.schema("cafe").from("lote_bultos").select("id").eq("lote_id", loteId).order("numero");
   if (error) throw new Error(error.message);
   return (data ?? []).map((b: { id: string }) => b.id);
+}
+
+/** Trilla de TODOS los bultos de un lote de servicio por la RPC (el lote queda «listo» si solo contrató trilla). */
+export async function registrarTrilla(lote: LoteCreado, entradaKg: number, salidaKg: number): Promise<void> {
+  await rpcCafe("registrar_proceso", {
+    lote_id: lote.id,
+    tipo: "trilla",
+    fecha: hoyBogota(),
+    bultos: await idsDeBultos(lote.id),
+    peso_entrada_kg: entradaKg,
+    peso_salida_kg: salidaKg,
+  });
 }
 
 /** Reparte `pesoKg` en baches de la capacidad de la tostadora (13,5 kg) con una merma fija de `mermaPct`. */
@@ -142,30 +161,54 @@ function bachesDe(pesoKg: number, mermaPct = 18, capacidadKg = 13.5) {
   return baches;
 }
 
+/** Tostión de TODOS los bultos de un lote por la RPC, con baches de la capacidad de la tostadora y merma fija del 18 %. Devuelve los kg que salen. */
+export async function registrarTostion(lote: LoteCreado, entradaKg: number): Promise<number> {
+  const baches = bachesDe(entradaKg);
+  const salida = baches.reduce((a, b) => a + Math.round(b.peso_salida_kg * 1000), 0) / 1000;
+  await rpcCafe("registrar_proceso", {
+    lote_id: lote.id,
+    tipo: "tostion",
+    fecha: hoyBogota(),
+    bultos: await idsDeBultos(lote.id),
+    peso_entrada_kg: entradaKg,
+    peso_salida_kg: salida,
+    nivel_tueste: "medio",
+    baches,
+  });
+  return salida;
+}
+
 /** Tuesta TODOS los bultos de un lote de marca propia y empaca `lineas` (presentación en gramos → unidades). */
 export async function tostarYEmpacar(
   lote: LoteCreado,
   pesoKg: number,
   lineas: { presentacion_g: number; unidades: number }[],
 ): Promise<void> {
-  const bultos = await idsDeBultos(lote.id);
-  const baches = bachesDe(pesoKg);
-  const salida = baches.reduce((a, b) => a + Math.round(b.peso_salida_kg * 1000), 0) / 1000;
-  await rpcCafe("registrar_proceso", {
-    lote_id: lote.id,
-    tipo: "tostion",
-    fecha: hoyBogota(),
-    bultos,
-    peso_entrada_kg: pesoKg,
-    peso_salida_kg: salida,
-    nivel_tueste: "medio",
-    baches,
-  });
+  await registrarTostion(lote, pesoKg);
   await rpcCafe("registrar_empaque", {
     lote_id: lote.id,
     fecha: hoyBogota(),
-    bultos,
+    bultos: await idsDeBultos(lote.id),
     peso_entrada_kg: null,
     lineas,
+    // El café que no entra en una bolsa (merma de empaque) debe tener destino (A-01): aquí, muestra de control.
+    diferencia_destino: "muestra",
+  });
+}
+
+/** `YYYY-MM-DD` de hace `dias` días en la zona del cliente de café. */
+export function haceDias(dias: number): string {
+  const [a, m, d] = hoyBogota().split("-").map(Number);
+  return new Date(Date.UTC(a, m - 1, d - dias)).toISOString().slice(0, 10);
+}
+
+/** Entrega (remisión) de lotes ya listos de un cliente por la RPC. */
+export async function entregarLotes(lotes: LoteCreado[], fecha: string, extra: Record<string, unknown> = {}): Promise<{ id: string; numero: string }> {
+  return rpcCafe<{ id: string; numero: string }>("entregar_lotes", {
+    lote_ids: lotes.map((l) => l.id),
+    fecha,
+    recibe_nombre: "Ana Torres",
+    recibe_documento: "43123456",
+    ...extra,
   });
 }

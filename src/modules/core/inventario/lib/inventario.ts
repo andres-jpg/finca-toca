@@ -4,6 +4,8 @@
  * de Postgres (`tipo_articulo`, `motivo_movimiento`) y el CHECK `movimiento_signo_valido()`.
  */
 
+import { formatKg } from "../../formato/numeros";
+
 export const TIPOS_ARTICULO = ["insumo", "producto_terminado", "materia_prima", "otro"] as const;
 export type TipoArticulo = (typeof TIPOS_ARTICULO)[number];
 
@@ -78,8 +80,10 @@ export function estadoStock(stock: number, stockMinimo: number | null): EstadoSt
   return "ok";
 }
 
-/** `1234.5` → "1.234,5 kg". Hasta 3 decimales, como la columna `numeric(14,3)`. */
+/** `1234.5` → "1.234,5 kg" (kg con 1 decimal); otras unidades, hasta 3 decimales como `numeric(14,3)`. */
 export function formatearCantidad(cantidad: number, unidad: UnidadArticulo = "unidad"): string {
+  // Pesos en kg: 1 decimal en pantalla (FIN-122); la base conserva los 3 decimales.
+  if (unidad === "kg") return formatKg(cantidad);
   const numero = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 3 }).format(cantidad);
   return `${numero} ${ABREVIATURA_UNIDAD[unidad]}`;
 }

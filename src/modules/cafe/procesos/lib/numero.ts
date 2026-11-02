@@ -1,3 +1,5 @@
+import { formatKgNum, formatPctNum } from "@/modules/core/formato/numeros";
+
 // Números de la planta: lectura de lo que escribe el operario (con coma decimal) y formato en pantalla. Puro,
 // sin React ni base. Los campos de peso son de texto (`inputMode="decimal"`) y no `type="number"`: este último
 // acepta o rechaza la coma según el idioma del navegador de la tablet.
@@ -41,23 +43,15 @@ export function aTextoDecimal(n: number | null | undefined): string {
   return String(Math.round(n * 1000) / 1000).replace(".", ",");
 }
 
-function conMiles(entero: string): string {
+function conMiles(entero: string) {
   return entero.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
-/** Kilos siempre con 3 decimales y coma: `405` → `405,000`, `1234.5` → `1.234,500`. No añade la unidad. */
-export function formatearPeso(kg: number): string {
-  if (!Number.isFinite(kg)) return "0,000";
-  const [entero, decimales] = Math.abs(kg).toFixed(3).split(".");
-  return `${kg < 0 ? "-" : ""}${conMiles(entero)},${decimales}`;
-}
+/** Kilos con 1 decimal y coma (FIN-122): `405` → `405,0`, `1234.56` → `1.234,6`. No añade la unidad. Se guarda con 3 decimales. */
+export const formatearPeso = formatKgNum;
 
-/** Porcentaje con coma: `25` → `25,0` (1 decimal por defecto). El signo `%` lo pone quien llama. */
-export function formatearPorcentaje(pct: number, decimales = 1): string {
-  if (!Number.isFinite(pct)) return "0";
-  const [entero, dec] = Math.abs(pct).toFixed(decimales).split(".");
-  return `${pct < 0 ? "-" : ""}${conMiles(entero)}${dec ? `,${dec}` : ""}`;
-}
+/** Porcentaje con coma y 1 decimal (FIN-122): `25` → `25,0`. El signo `%` lo pone quien llama. */
+export const formatearPorcentaje = formatPctNum;
 
 /** Referencia/tolerancia sin ceros sobrantes: `19` → `19`, `2.5` → `2,5`. */
 export function formatearCompacto(n: number): string {

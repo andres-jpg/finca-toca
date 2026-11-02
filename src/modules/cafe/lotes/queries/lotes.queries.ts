@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
 import { getLineasEmpaque } from "../../empaque/queries/empaque.queries";
 import type { EtapaAvance } from "../lib/avance";
-import type { BultoPeso, EtapaLote } from "../lib/etapas";
+import { mermaProcesada, type BultoPeso, type EtapaLote, type MermaProcesada } from "../lib/etapas";
 import { aplicarFiltrosLotes, LOTES_POR_PAGINA, type FiltrosLotes } from "../lib/filtros";
 import {
   construirLineaDeTiempo,
@@ -40,6 +40,8 @@ export interface LoteListado {
   tipoCafe: string | null;
   /** `YYYY-MM-DD`. */
   fechaRecepcion: string;
+  /** Instante de registro (`created_at`): la hora de llegada. */
+  llegadaEn: string;
   pesoRecibidoKg: number;
   numBultos: number;
   pesoActualKg: number;
@@ -47,6 +49,8 @@ export interface LoteListado {
   alertasCalidad: string[];
   tieneDesvio: boolean;
   etapas: EtapaAvance[];
+  /** Merma solo sobre lo procesado (A-03); `null` si aún no hay procesos. */
+  mermaProcesada: MermaProcesada | null;
 }
 
 export interface PaginaLotes {
@@ -58,7 +62,7 @@ export interface PaginaLotes {
 }
 
 const COLUMNAS_LISTADO =
-  "id, codigo, linea, servicios, servicios_requeridos, servicios_completados, avance_texto, estado, tercero_id, tercero_nombre, tipo_cafe_nombre, fecha_recepcion, peso_recibido_kg, num_bultos, peso_actual_kg, merma_total_kg, alertas_calidad, tiene_desvio";
+  "id, codigo, linea, servicios, servicios_requeridos, servicios_completados, avance_texto, estado, tercero_id, tercero_nombre, tipo_cafe_nombre, fecha_recepcion, created_at, peso_recibido_kg, num_bultos, peso_actual_kg, merma_total_kg, alertas_calidad, tiene_desvio";
 
 /**
  * Una página del listado de lotes con los filtros de la URL. Orden: línea (marca propia primero, así la pestaña
@@ -95,12 +99,16 @@ export async function listarLotes(filtros: FiltrosLotes): Promise<PaginaLotes> {
   const { data: etapas, error: errorEtapas } = await supabase
     .schema("cafe")
     .from("v_lote_etapas")
-    .select("lote_id, tipo, bultos_procesados, bultos_total, completo, parcial")
+    .select("lote_id, tipo, bultos_procesados, bultos_total, completo, parcial, peso_entrada, merma_kg")
     .in("lote_id", data.map((l) => l.id));
   if (errorEtapas) throw new Error("No se pudo cargar el avance de los lotes");
 
   const porLote = new Map<string, EtapaAvance[]>();
+  const pesosPorLote = new Map<string, { tipo: TipoProceso; pesoEntradaKg: number; mermaKg: number }[]>();
   for (const e of etapas ?? []) {
+    const pesos = pesosPorLote.get(e.lote_id) ?? [];
+    pesos.push({ tipo: e.tipo, pesoEntradaKg: num(e.peso_entrada), mermaKg: num(e.merma_kg) });
+    pesosPorLote.set(e.lote_id, pesos);
     const lista = porLote.get(e.lote_id) ?? [];
     lista.push({
       tipo: e.tipo,
@@ -126,6 +134,7 @@ export async function listarLotes(filtros: FiltrosLotes): Promise<PaginaLotes> {
       tercero: l.tercero_nombre ?? "—",
       tipoCafe: l.tipo_cafe_nombre,
       fechaRecepcion: l.fecha_recepcion,
+      llegadaEn: l.created_at,
       pesoRecibidoKg: num(l.peso_recibido_kg),
       numBultos: l.num_bultos,
       pesoActualKg: num(l.peso_actual_kg),
@@ -133,6 +142,7 @@ export async function listarLotes(filtros: FiltrosLotes): Promise<PaginaLotes> {
       alertasCalidad: l.alertas_calidad,
       tieneDesvio: l.tiene_desvio === true,
       etapas: porLote.get(l.id) ?? [],
+      mermaProcesada: mermaProcesada(pesosPorLote.get(l.id) ?? []),
     }),
   );
   return paginar(filas, count ?? filas.length, filtros.pagina);
@@ -298,7 +308,7 @@ export async function getTimeline(
     cafe
       .from("procesos")
       .select(
-        "id, tipo, fecha, created_at, created_by, peso_entrada_kg, peso_salida_kg, merma_kg, tarifa_kg, valor, merma_referencia_pct, tolerancia_pts, desvio, nivel_tueste, observaciones, anulado_at, anulado_por, motivo_anulacion, reapertura_id",
+        "id, tipo, fecha, created_at, created_by, peso_entrada_kg, peso_salida_kg, merma_kg, tarifa_kg, valor, merma_referencia_pct, tolerancia_pts, desvio, nivel_tueste, observaciones, diferencia_kg, diferencia_destino, anulado_at, anulado_por, motivo_anulacion, reapertura_id",
       )
       .eq("lote_id", lote.id),
     cafe.from("proceso_bultos").select("proceso_id, bulto_id").eq("lote_id", lote.id),
@@ -379,6 +389,8 @@ export async function getTimeline(
       observaciones: p.observaciones,
       baches: bachesDe.get(p.id) ?? [],
       lineasEmpaque: lineasEmpaque.get(p.id) ?? [],
+      diferenciaKg: p.tipo === "empaque" && p.diferencia_kg !== null ? num(p.diferencia_kg) : null,
+      diferenciaDestino: p.diferencia_destino,
       reaperturaId: p.reapertura_id,
       anulacion: p.anulado_at ? { en: p.anulado_at, por: quien(p.anulado_por), motivo: p.motivo_anulacion ?? "" } : null,
     }),
