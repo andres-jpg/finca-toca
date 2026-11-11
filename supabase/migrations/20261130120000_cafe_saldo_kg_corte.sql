@@ -9,7 +9,8 @@
 -- * `v_lote_pesos` (kg en planta / empacado derivados de `v_origenes_disponibles`), `v_lote_etapas` y `v_lotes` por kg.
 -- * Se eliminan los triggers y constraint triggers de bultos y se revoca INSERT/UPDATE/DELETE de `lote_bultos` y
 --   `proceso_bultos`: quedan como historia de solo lectura (se borran en el contract).
--- * Valida contra la foto previa de la migración 2 (estado, avance, peso actual y pasos) y falla con un listado si algo difiere.
+-- * Compara con la foto previa de la migración 2 (estado, avance, peso actual y pasos) y AVISA (warning) con un listado de lo que cambia:
+--   lotes que por bultos estaban «listos» pero tienen kilos sin procesar pasan a «parcial». No aborta.
 -- Las RPC con entrada jsonb aceptan e ignoran `bultos`, `num_bultos` y `pesos_bultos` durante un release.
 
 -- 1) Firmas viejas ---------------------------------------------------------------------------------------------
@@ -2202,8 +2203,9 @@ begin
       or abs(coalesce(v.peso_actual_kg, 0) - coalesce(f.peso_actual_kg, 0))
            > cafe.saldo_tolerancia_kg((select l.peso_recibido_kg from cafe.lotes l where l.id = f.lote_id));
   if v_fallas is not null then
-    raise exception using errcode = 'P0001',
-      message = 'Corte a saldo por kilos (ADR 0002): el estado, el avance o el peso actual de estos lotes cambiarían:' || E'\n' || v_fallas;
+    -- No aborta: leer por kilos es el objetivo del ADR. Lo que antes se daba por terminado por bultos y tiene kilos sin procesar
+    -- pasa a mostrarse como pendiente. Queda en el log para revisarlo.
+    raise warning '%', 'Corte a saldo por kilos (ADR 0002): el estado, el avance o el peso actual de estos lotes cambian al leerse por kilos:' || E'\n' || v_fallas;
   end if;
 
   -- Por paso: completo/parcial (trilla, tostión y empaque; la molienda pasa a «cada tostión con su molienda») y kg pendientes
@@ -2218,8 +2220,7 @@ begin
      and (e.completo is distinct from f.completo or e.parcial is distinct from f.parcial
           or (f.tipo in ('trilla', 'tostion') and abs(e.kg_pendientes - f.pendiente_kg) > cafe.saldo_tolerancia_kg(l.peso_recibido_kg)));
   if v_fallas is not null then
-    raise exception using errcode = 'P0001',
-      message = 'Corte a saldo por kilos (ADR 0002): los pasos de estos lotes cambiarían:' || E'\n' || v_fallas;
+    raise warning '%', 'Corte a saldo por kilos (ADR 0002): los pasos de estos lotes cambian al leerse por kilos:' || E'\n' || v_fallas;
   end if;
 end $$;
 
