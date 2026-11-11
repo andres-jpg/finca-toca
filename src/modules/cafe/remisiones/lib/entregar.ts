@@ -1,5 +1,6 @@
+import { formatKg } from "@/modules/core/formato/numeros";
 import { formatearCOP } from "@/modules/cafe/compras/lib/compra";
-import { horaLlegada, fechaCorta, formatearKg3 } from "@/modules/cafe/lotes/lib/formato";
+import { horaLlegada, fechaCorta } from "@/modules/cafe/lotes/lib/formato";
 import { textoPerfilTueste } from "@/modules/cafe/lotes/lib/perfil-tueste";
 import type { NivelTueste, TipoProceso } from "@/modules/cafe/lotes/types";
 
@@ -86,7 +87,6 @@ export function validarQuienRecibe(nombre: string, documento: string): ErroresQu
 export interface ExtrasLoteTiquete {
   llegadaEn: string;
   fechaRecepcion: string;
-  numBultos: number;
   nivelTueste: NivelTueste | null;
   perfilTempC: number | null;
   perfilTiempoMin: number | null;
@@ -96,14 +96,15 @@ export interface ExtrasLoteTiquete {
   sueltoKg: number;
 }
 
-/** «Recibido 12 nov · llegó 8:42 a. m. · 500,000 kg · 8 bultos». */
-export function lineaLlegada(e: Pick<ExtrasLoteTiquete, "llegadaEn" | "fechaRecepcion" | "numBultos">, pesoRecibidoKg: number, zona: string): string {
-  return `${fechaCorta(e.fechaRecepcion)} · ${horaLlegada(e.llegadaEn, zona)} · ${formatearKg3(pesoRecibidoKg)} kg · ${e.numBultos} ${e.numBultos === 1 ? "bulto" : "bultos"}`;
+/** «12/11/2026 · 8:42 a. m. · 500,0 kg» (B-17: kilos, sin bultos). */
+export function lineaLlegada(e: Pick<ExtrasLoteTiquete, "llegadaEn" | "fechaRecepcion">, pesoRecibidoKg: number, zona: string): string {
+  return `${fechaCorta(e.fechaRecepcion)} · ${horaLlegada(e.llegadaEn, zona)} · ${formatKg(pesoRecibidoKg)}`;
 }
 
-/** Perfil pedido: «medio · 205 °C · 12 min»; `null` si el lote no pidió tostión. */
+/** Perfil de tueste: «Medio · 222 °C · 17 min»; `null` si el lote no pidió tostión. */
 export function lineaPerfil(e: Pick<ExtrasLoteTiquete, "nivelTueste" | "perfilTempC" | "perfilTiempoMin">): string | null {
-  return textoPerfilTueste({ nivel: e.nivelTueste, tempC: e.perfilTempC, tiempoMin: e.perfilTiempoMin });
+  const t = textoPerfilTueste({ nivel: e.nivelTueste, tempC: e.perfilTempC, tiempoMin: e.perfilTiempoMin });
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : null;
 }
 
 /** «2 × 5 kg · 3 × 500 g» o `null` si el cliente no trajo bolsas. */
@@ -112,9 +113,9 @@ export function lineaBolsasCliente(bolsas: readonly { tamano: string; unidades: 
   return bolsas.map((b) => `${b.unidades} × ${b.tamano}`).join(" · ");
 }
 
-/** «3,500 kg» o `null` si no quedó nada suelto. */
+/** «2,1 kg» o `null` si no quedó nada a granel. */
 export function lineaSuelto(kg: number): string | null {
-  return kg > 0 ? `${formatearKg3(kg)} kg` : null;
+  return kg > 0 ? formatKg(kg) : null;
 }
 
 export const totalTexto = (total: number): string => formatearCOP(total);

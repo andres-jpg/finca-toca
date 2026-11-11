@@ -1,11 +1,10 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { requireSesion } from "@/modules/core/auth/guards";
 import { getParametro } from "@/modules/core/parametros/queries/parametros.queries";
 import { requireModuloPagina } from "@/modules/core/tenants/tenant.guards";
 import { EstiloTermico } from "@/modules/core/print/components/estilo-termico";
-import { ImprimirButton } from "@/modules/core/print/components/imprimir-button";
+import { formatKg } from "@/modules/core/formato/numeros";
 import {
   TicketCopias,
   TicketHeader,
@@ -17,6 +16,7 @@ import { parsearAncho } from "@/modules/core/print/lib/ancho";
 import { formatearFechaHoraImpresion, parsearCopias } from "@/modules/core/print/lib/opciones";
 import { PARAMETRO_IMPRESORA_ANCHO } from "@/modules/core/print/parametros";
 import { fechaCorta, fechaHoraZona } from "@/modules/cafe/lotes/lib/formato";
+import { ControlesRemision } from "@/modules/cafe/remisiones/components/controles-remision";
 import { ServiciosTiquete } from "@/modules/cafe/remisiones/components/servicios-tiquete";
 import {
   LEYENDA_REMISION,
@@ -66,19 +66,14 @@ export default async function RemisionTiquetePage({ params, searchParams }: Remi
     <>
       {ancho !== anchoCliente ? <EstiloTermico ancho={ancho} /> : null}
 
-      <div className="no-print mb-3 space-y-2 border-b border-dashed border-black pb-3 font-sans text-xs">
+      <div className="no-print mb-2 font-sans text-xs">
         <p>
           Remisión <strong>{remision.numero}</strong> · rollo de <strong>{ancho} mm</strong>
           {ancho !== anchoCliente ? ` (el del cliente es ${anchoCliente} mm)` : ""} · {copias} tiquete{copias === 1 ? "" : "s"}.
         </p>
         {anulada && <p className="font-bold text-red-700">Remisión anulada: el tiquete sale marcado como ANULADA.</p>}
-        <p>
-          <a className="underline" href="?copias=1">solo original</a> · <a className="underline" href="?copias=2">con copia del cliente</a> ·{" "}
-          <a className="underline" href={`?copias=${copias}&ancho=80`}>80 mm</a> · <a className="underline" href={`?copias=${copias}&ancho=58`}>58 mm</a>{" "}
-          · <Link className="underline" href="/dashboard/cafe/planta">volver a Planta</Link>
-        </p>
-        <ImprimirButton etiqueta={copias > 1 ? "Imprimir con copia" : "Imprimir"} />
       </div>
+      <ControlesRemision copias={copias} ancho={ancho} anchoForzado={ancho !== anchoCliente} hrefVolver="/dashboard/cafe/planta" />
 
       <TicketCopias copias={copias}>
         <TicketHeader nombre={tenant.nombre} nit={nit} logoUrl={tenant.logoUrl} titulo={TITULO_REMISION} />
@@ -96,24 +91,22 @@ export default async function RemisionTiquetePage({ params, searchParams }: Remi
           const e = extras.get(l.loteId);
           const perfil = e ? lineaPerfil(e) : null;
           const bolsas = e ? lineaBolsasCliente(e.bolsasCliente) : null;
-          const suelto = e ? lineaSuelto(e.sueltoKg) : null;
-          const r = resumenEntrega({ pesoRecibidoKg: l.pesoRecibidoKg, pesoEntregadoKg: l.pesoEntregadoKg, mermaTotalKg: l.pesoRecibidoKg - l.pesoEntregadoKg });
+          const granel = e ? lineaSuelto(e.sueltoKg) : null;
+          const empaque = l.detalle.some((d) => d.servicio === "empaque");
           return (
             <div key={l.loteId}>
               <TicketSeparador />
               <TicketLinea etiqueta="Lote" valor={l.loteCodigo} fuerte />
-              {e && <TicketLinea etiqueta="Llegó" valor={lineaLlegada(e, l.pesoRecibidoKg, tenant.zonaHoraria)} />}
-              {perfil && <TicketLinea etiqueta="Perfil pedido" valor={perfil} />}
-              {bolsas && <TicketLinea etiqueta="Bolsas del cliente" valor={bolsas} />}
-              {suelto && <TicketLinea etiqueta="Suelto" valor={suelto} />}
-              <ServiciosTiquete detalle={l.detalle} ancho={ancho} />
-              <TicketLinea etiqueta="Entregado" valor={`${r.entregado} (merma ${r.mermaPct})`} />
+              {e && <TicketLinea etiqueta="Llegada" valor={lineaLlegada(e, l.pesoRecibidoKg, tenant.zonaHoraria)} />}
+              <ServiciosTiquete detalle={l.detalle} perfil={perfil} />
+              {empaque && bolsas && <TicketLinea etiqueta="Bolsas del cliente" valor={bolsas} />}
+              {empaque && granel && <TicketLinea etiqueta="A granel" valor={granel} />}
+              <TicketLinea etiqueta="Entregado" valor={formatKg(l.pesoEntregadoKg)} />
             </div>
           );
         })}
         <TicketSeparador />
         <TicketLinea etiqueta={remision.lotes.length > 1 ? "Total entregado" : "Peso entregado"} valor={resumen.entregado} fuerte />
-        <TicketLinea etiqueta="Merma total" valor={`${resumen.mermaKg} (${resumen.mermaPct})`} />
         <TicketLinea etiqueta="Valor servicios (referencia)" valor={valorReferencia(remision.valorServicios)} />
         {remision.forzada && (
           <>

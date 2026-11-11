@@ -1,6 +1,8 @@
 import { formatearCOP } from "@/modules/cafe/compras/lib/compra";
-import { fechaCorta, formatearKg3, formatearMermaPct, formatearPct, pctDeMerma } from "@/modules/cafe/lotes/lib/formato";
-import { etiquetaServicio, etiquetaTueste } from "@/modules/cafe/lotes/lib/servicios";
+import { COPY_TUESTE } from "@/modules/cafe/copy";
+import { pctDeMerma } from "@/modules/cafe/lotes/lib/formato";
+import { etiquetaServicio } from "@/modules/cafe/lotes/lib/servicios";
+import { formatKg, formatKgNum, formatPct } from "@/modules/core/formato/numeros";
 import type { DetalleServicio, Remision } from "../types";
 
 // Texto del tiquete de la remisión (HU-F1-13). Todo se formatea AQUÍ, en el servidor y a mano (sin `Intl` del
@@ -9,67 +11,60 @@ import type { DetalleServicio, Remision } from "../types";
 
 export const TITULO_REMISION = "REMISIÓN DE ENTREGA";
 export const LEYENDA_REMISION = "Documento de control interno — no es factura";
-export const COLUMNAS_SERVICIOS = ["Servicio", "Entra kg", "Sale kg", "Merma"] as const;
-
-/** Una fila de la tabla de servicios del tiquete, ya como texto. */
-export interface FilaServicioTiquete {
-  /** «Tostión · tueste medio». */
-  servicio: string;
-  entra: string;
-  sale: string;
-  merma: string;
+/** Merma con UN solo redondeo, a 1 decimal (4,9 de 27,0 kg = 18,148 → 18,1 %; redondear antes a 2 decimales daría 18,2). */
+function mermaTiquete(mermaKg: number | null, entradaKg: number | null): string {
+  if (mermaKg === null || entradaKg === null || entradaKg <= 0) return formatPct(null);
+  return formatPct((mermaKg / entradaKg) * 100);
 }
 
-/**
- * Fila de un servicio. El empaque de maquila va incluido sin coste («incluido», sin cifras); un servicio
- * contratado que no se hizo (entrega forzada) sale «Pendiente» con guiones: nunca cifras inventadas.
- */
-export function filaServicio(d: DetalleServicio): FilaServicioTiquete {
-  const nombre = etiquetaServicio(d.servicio);
-  const servicio = d.nivelTueste ? `${nombre} · tueste ${etiquetaTueste(d.nivelTueste).toLowerCase()}` : nombre;
-  if (d.pendiente && d.kgEntrada === null) return { servicio, entra: "—", sale: "—", merma: "Pendiente" };
-  if (d.incluido) return { servicio, entra: "incluido", sale: "", merma: "" };
-  return {
-    servicio,
-    entra: d.kgEntrada === null ? "—" : formatearKg3(d.kgEntrada),
-    sale: d.kgSalida === null ? "—" : formatearKg3(d.kgSalida),
-    merma: formatearMermaPct(d.mermaKg, d.kgEntrada),
-  };
+/** Una línea del tiquete: etiqueta a la izquierda y valor a la derecha. */
+export interface LineaTiquete {
+  etiqueta: string;
+  valor: string;
 }
 
-export function filasServicios(detalle: readonly DetalleServicio[]): FilaServicioTiquete[] {
-  return detalle.map(filaServicio);
-}
-
-/**
- * El mismo servicio para el rollo ESTRECHO (58 mm, ~30 caracteres): la tabla de cuatro columnas no cabe (la columna de
- * texto se queda en una letra por renglón), así que va apilado: el servicio en una línea y, debajo, los kilos con la
- * merma a la derecha. El empaque incluido y los pendientes caben en una sola línea (`cuerpo = null`).
- */
-export interface LineaApilada {
+/** Un servicio del tiquete, ya como texto: título y sus líneas (sirve igual para 58 y 80 mm). */
+export interface BloqueServicio {
   titulo: string;
-  /** «405,000 → 332,000» (kg, lo dice `ENCABEZADO_APILADO`); `null` si el servicio va en una sola línea (incluido o pendiente). */
-  cuerpo: string | null;
-  derecha: string;
+  lineas: LineaTiquete[];
 }
 
-export function lineaApilada(d: DetalleServicio): LineaApilada {
-  const f = filaServicio(d);
-  if (f.merma === "Pendiente") return { titulo: f.servicio, cuerpo: null, derecha: "Pendiente" };
-  if (f.entra === "incluido") return { titulo: f.servicio, cuerpo: null, derecha: "incluido" };
-  return { titulo: f.servicio, cuerpo: `${f.entra} → ${f.sale}`, derecha: f.merma };
+/**
+ * Un servicio del tiquete (B-17). Trilla: kg entra → sale y merma de trilla. Tostión: perfil de tueste (si se
+ * conoce), kg entra → sale y merma de tostión. Molienda: kg molidos y valor, SIN merma. Empaque: «Incluido». Un
+ * servicio contratado que no se hizo (entrega forzada) sale «Pendiente»: nunca cifras inventadas.
+ * TODO(B-08): la salida de tostión será el peso en báscula; hoy es la salida registrada del proceso.
+ */
+export function bloqueServicio(d: DetalleServicio, perfil: string | null = null): BloqueServicio {
+  const titulo = etiquetaServicio(d.servicio);
+  if (d.pendiente && d.kgEntrada === null) return { titulo, lineas: [{ etiqueta: "Estado", valor: "Pendiente" }] };
+  if (d.servicio === "empaque") return { titulo, lineas: [{ etiqueta: "Costo", valor: d.incluido ? "Incluido" : valorReferencia(d.valor ?? 0) }] };
+  if (d.servicio === "molienda") {
+    const molido = d.kgSalida ?? d.kgEntrada;
+    return { titulo, lineas: [{ etiqueta: "Molido", valor: `${molido === null ? "—" : formatKg(molido)} · ${valorReferencia(d.valor ?? 0)}` }] };
+  }
+  const lineas: LineaTiquete[] = [];
+  if (d.servicio === "tostion" && perfil) lineas.push({ etiqueta: COPY_TUESTE.perfilDeTueste, valor: perfil });
+  const entra = d.kgEntrada === null ? "—" : formatKgNum(d.kgEntrada);
+  const sale = d.kgSalida === null ? "—" : formatKg(d.kgSalida);
+  lineas.push({ etiqueta: "Entra → sale", valor: `${entra} → ${sale}` });
+  lineas.push({ etiqueta: d.servicio === "tostion" ? "Merma de tostión" : "Merma de trilla", valor: mermaTiquete(d.mermaKg, d.kgEntrada) });
+  if (d.servicio === "trilla" && d.humedadPct != null) lineas.push({ etiqueta: "Humedad", valor: formatPct(d.humedadPct) });
+  if (d.servicio === "trilla" && d.densidadGl != null) lineas.push({ etiqueta: "Densidad", valor: `${formatKgNum(d.densidadGl)} g/L` });
+  return { titulo, lineas };
 }
 
-/** Rótulo de las líneas apiladas (sin «kg» en cada una: en 58 mm no cabría junto a la merma). */
-export const ENCABEZADO_APILADO = "Kg entra → sale · merma";
+export function bloquesServicios(detalle: readonly DetalleServicio[], perfil: string | null = null): BloqueServicio[] {
+  return detalle.map((d) => bloqueServicio(d, perfil));
+}
 
 /** Peso entregado y merma total del cliente, como los muestra el pie de la tabla. */
 export function resumenEntrega(r: Pick<Remision, "pesoRecibidoKg" | "pesoEntregadoKg" | "mermaTotalKg">) {
   return {
-    recibido: `${formatearKg3(r.pesoRecibidoKg)} kg`,
-    entregado: `${formatearKg3(r.pesoEntregadoKg)} kg`,
-    mermaKg: `${formatearKg3(r.mermaTotalKg)} kg`,
-    mermaPct: formatearPct(pctDeMerma(r.mermaTotalKg, r.pesoRecibidoKg)),
+    recibido: `${formatKgNum(r.pesoRecibidoKg)} kg`,
+    entregado: `${formatKgNum(r.pesoEntregadoKg)} kg`,
+    mermaKg: `${formatKgNum(r.mermaTotalKg)} kg`,
+    mermaPct: formatPct(pctDeMerma(r.mermaTotalKg, r.pesoRecibidoKg)),
   };
 }
 
@@ -81,9 +76,4 @@ export function lineaCliente(r: Pick<Remision, "clienteNombre" | "clienteIdentif
 /** Valor de referencia de los servicios: `$1.923.000`. No es una factura (HU-13 c4). */
 export function valorReferencia(valor: number): string {
   return formatearCOP(valor);
-}
-
-/** «500,000 kg · 8 bultos» para la línea «Recibido». */
-export function lineaRecibido(fechaRecepcion: string, pesoKg: number, numBultos: number): string {
-  return `${fechaCorta(fechaRecepcion)} · ${formatearKg3(pesoKg)} kg · ${numBultos} ${numBultos === 1 ? "bulto" : "bultos"}`;
 }

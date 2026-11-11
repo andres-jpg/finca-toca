@@ -158,15 +158,15 @@ export async function getNitDelCliente(tenantId: string): Promise<string | null>
   return data?.nit ?? null;
 }
 
-/** Fecha de recepción y bultos del lote para la línea «Recibido» del tiquete (de `cafe.v_lotes`). */
-export async function getRecepcionDelLote(loteId: string): Promise<{ fechaRecepcion: string; numBultos: number } | null> {
+/** Fecha de recepción del lote para la línea «Recibido» del tiquete (de `cafe.v_lotes`). */
+export async function getRecepcionDelLote(loteId: string): Promise<{ fechaRecepcion: string } | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .schema("cafe")
     .from("v_lotes")
-    .select("fecha_recepcion, num_bultos")
+    .select("fecha_recepcion")
     .eq("id", loteId)
     .maybeSingle();
   if (error || !data) return null;
-  return { fechaRecepcion: data.fecha_recepcion, numBultos: data.num_bultos };
+  return { fechaRecepcion: data.fecha_recepcion };
 }

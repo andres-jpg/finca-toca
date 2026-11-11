@@ -1,12 +1,11 @@
 import { z } from "zod";
-import { diferenciaPesos, tieneMaxDecimales } from "../lib/compra";
+import { tieneMaxDecimales } from "../lib/compra";
 
 // `message` en vez de `required_error`/`invalid_type_error`: Zod 4 ya no los acepta.
-// Mismos límites que la base: `peso_recibido_kg` y los bultos son `numeric(10,3)` (kg, 3 decimales),
-// `precio_compra_kg` es `numeric(12,2)` (pesos, 2 decimales) y un lote admite de 1 a 200 bultos. La RPC
-// `cafe.registrar_compra` los vuelve a comprobar: esto es lo que el formulario ve antes de enviar.
+// Mismos límites que la base: `peso_recibido_kg` es `numeric(10,3)` (kg, 3 decimales) y `precio_compra_kg`
+// `numeric(12,2)` (pesos, 2 decimales). La RPC `cafe.registrar_compra` los vuelve a comprobar: esto es lo que el
+// formulario ve antes de enviar. Todo se mide en kilos: no hay bultos (ADR 0002).
 
-export const MAX_BULTOS = 200;
 const MAX_KG = 9_999_999;
 const MAX_PRECIO = 9_999_999_999;
 
@@ -43,34 +42,13 @@ export const compraSchema = z
     terceroId: z.uuid({ message: "Elige el proveedor" }),
     /** `YYYY-MM-DD` en la zona del cliente. */
     fecha,
-    pesoKg: pesoKg("Indica el peso total en kilos"),
-    numBultos: numero("Indica el número de bultos")
-      .int("El número de bultos debe ser un entero")
-      .min(1, "Debe haber al menos 1 bulto")
-      .max(MAX_BULTOS, `Máximo ${MAX_BULTOS} bultos`),
-    /** `null` = partes iguales (lo reparte la base). Si viene, debe tener `numBultos` pesos que sumen `pesoKg`. */
-    pesosBultos: z
-      .array(pesoKg("Cada bulto necesita un peso"), { message: "Los pesos por bulto no son válidos" })
-      .nullish()
-      .transform((v) => v ?? null),
+    pesoKg: pesoKg("Indica el peso recibido en kilos"),
     precioKg: numero("Indica el precio por kilo")
       .min(0, "El precio no puede ser negativo")
       .max(MAX_PRECIO, "El precio es demasiado grande")
       .refine((v) => tieneMaxDecimales(v, 2), "El precio admite hasta 2 decimales"),
     facturaProveedor: textoOpcional(60),
     observaciones: textoOpcional(500),
-  })
-  .superRefine((v, ctx) => {
-    if (!v.pesosBultos) return;
-    if (v.pesosBultos.length !== v.numBultos) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["pesosBultos"],
-        message: `Hay ${v.pesosBultos.length} pesos por bulto y ${v.numBultos} bultos`,
-      });
-    } else if (diferenciaPesos(v.pesosBultos, v.pesoKg) !== 0) {
-      ctx.addIssue({ code: "custom", path: ["pesosBultos"], message: "Los pesos por bulto no suman el peso total" });
-    }
   });
 
 export type CompraFormInput = z.input<typeof compraSchema>;
@@ -83,8 +61,6 @@ export function aPayloadCompra(v: CompraValues) {
     tipo_cafe_id: v.tipoCafeId,
     fecha: v.fecha,
     peso_kg: v.pesoKg,
-    num_bultos: v.numBultos,
-    pesos_bultos: v.pesosBultos,
     precio_kg: v.precioKg,
     factura_proveedor: v.facturaProveedor,
     observaciones: v.observaciones,

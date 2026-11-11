@@ -1,32 +1,42 @@
-import type { BultoPeso, EtapaLote } from "./etapas";
-import { ESTADO_FISICO } from "./etapas";
+import type { EtapaLote } from "./etapas";
 import type { TipoProceso } from "../types";
 
-// «Dónde está hoy este café» (A-17): cada tipo de existencia por separado (bultos en verde, tostado sin empacar, granel,
-// unidades empacadas por presentación y forma). NUNCA se suman entre sí: kilos de café y unidades de bolsas no se mezclan.
+// «Dónde está hoy este café» (A-17): cada tipo de existencia por separado (café sin tostar, tostado sin empacar, unidades
+// empacadas por presentación y forma). NUNCA se suman entre sí: kilos de café y unidades de bolsas no se mezclan. Todo en
+// kilos (B-01): el saldo sale de `v_origenes_disponibles`.
 
-export interface GrupoBultos {
+/** Un origen con saldo (fila de `v_origenes_disponibles`): `tipo` null = el café tal como se recibió. */
+export interface OrigenSaldo {
+  tipo: TipoProceso | null;
+  saldoKg: number;
+  /** Tostión sin salida (tanda en curso): su peso es estimado. */
+  estimado?: boolean;
+}
+
+export interface GrupoSaldo {
   /** `null` = sin procesar. */
   paso: TipoProceso | null;
   texto: string;
-  bultos: number;
   pesoKg: number;
+  estimado: boolean;
 }
 
-/** Bultos con peso por su ÚLTIMO paso, del menos al más avanzado; los bultos ya empacados (peso 0) no cuentan. */
-export function bultosPorEstado(bultos: readonly BultoPeso[]): GrupoBultos[] {
-  const orden: (TipoProceso | null)[] = [null, "trilla", "tostion", "molienda"];
-  const grupos = new Map<TipoProceso | null, { n: number; gramos: number }>();
-  for (const b of bultos) {
-    if (b.ultimoTipo === "empaque" || b.pesoActualKg <= 0) continue;
-    const g = grupos.get(b.ultimoTipo) ?? { n: 0, gramos: 0 };
-    g.n += 1;
-    g.gramos += Math.round(b.pesoActualKg * 1000);
-    grupos.set(b.ultimoTipo, g);
+const TEXTO_PASO: Record<string, string> = { sin: "sin procesar", trilla: "trillado", tostion: "tostado por empacar", molienda: "molido" };
+
+/** Saldos por su paso de origen, del menos al más avanzado; el empaque (ya envasado) y lo agotado no cuentan. */
+export function saldoPorEstado(origenes: readonly OrigenSaldo[]): GrupoSaldo[] {
+  const orden: (TipoProceso | null)[] = [null, "trilla", "tostion"];
+  const grupos = new Map<TipoProceso | null, { gramos: number; estimado: boolean }>();
+  for (const o of origenes) {
+    if (o.tipo === "empaque" || o.saldoKg <= 0.05) continue;
+    const g = grupos.get(o.tipo) ?? { gramos: 0, estimado: false };
+    g.gramos += Math.round(o.saldoKg * 1000);
+    g.estimado = g.estimado || Boolean(o.estimado);
+    grupos.set(o.tipo, g);
   }
   return orden
     .filter((p) => grupos.has(p))
-    .map((p) => ({ paso: p, texto: p ? ESTADO_FISICO[p] : "sin procesar", bultos: grupos.get(p)!.n, pesoKg: grupos.get(p)!.gramos / 1000 }));
+    .map((p) => ({ paso: p, texto: TEXTO_PASO[p ?? "sin"], pesoKg: grupos.get(p)!.gramos / 1000, estimado: grupos.get(p)!.estimado }));
 }
 
 /** El lote pasa (o pasará) por tostión: solo entonces tiene sentido hablar de café «sin tostar». */
@@ -34,17 +44,11 @@ export function llevaTostion(requeridos: readonly TipoProceso[], etapas: readonl
   return requeridos.includes("tostion") || etapas.some((e) => e.tipo === "tostion");
 }
 
-/** Café que aún no se tostó: bultos sin procesar o solo trillados (kg y bultos). */
-export function sinTostar(grupos: readonly GrupoBultos[]): { bultos: number; pesoKg: number } {
-  let bultos = 0;
+/** Café que aún no se tostó: sin procesar o solo trillado (kg). */
+export function sinTostar(grupos: readonly GrupoSaldo[]): { pesoKg: number } {
   let gramos = 0;
-  for (const g of grupos) {
-    if (g.paso === null || g.paso === "trilla") {
-      bultos += g.bultos;
-      gramos += Math.round(g.pesoKg * 1000);
-    }
-  }
-  return { bultos, pesoKg: gramos / 1000 };
+  for (const g of grupos) if (g.paso === null || g.paso === "trilla") gramos += Math.round(g.pesoKg * 1000);
+  return { pesoKg: gramos / 1000 };
 }
 
 export interface UnidadesEmpacadas {

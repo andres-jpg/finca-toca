@@ -65,6 +65,14 @@ grant execute on function pg_temp.comprar(text, numeric, integer, text) to authe
 create or replace function pg_temp.lid(p_k text) returns uuid language sql as $$ select (r ->> 'id')::uuid from res where k = p_k $$;
 grant execute on function pg_temp.lid(text) to authenticated;
 
+-- Peso en báscula de la tanda: lo que dejó la tostión abierta del lote (su salida, o su entrada si aún no la tiene).
+create or replace function pg_temp.tostado(p_k text) returns numeric language sql as $$
+  select sum(coalesce(t.peso_salida_kg, t.peso_entrada_kg)) from cafe.procesos t
+   where t.lote_id = pg_temp.lid(p_k) and t.tipo = 'tostion' and t.anulado_at is null
+     and not exists (select 1 from cafe.procesos e where e.origen_proceso_id = t.id and e.tipo = 'empaque' and e.anulado_at is null)
+$$;
+grant execute on function pg_temp.tostado(text) to authenticated;
+
 create or replace function pg_temp.barr(p_k text) returns uuid[] language sql as $$
   select array_agg(b.id order by b.numero) from cafe.lote_bultos b where b.lote_id = pg_temp.lid(p_k)
 $$;
@@ -85,7 +93,7 @@ grant execute on function pg_temp.tostar(text, text) to authenticated;
 create or replace function pg_temp.empacar(p_res text, p_k text, p_lineas integer[][]) returns void language plpgsql as $$
 begin
   insert into res select p_res, cafe.registrar_empaque(jsonb_build_object(
-    'lote_id', pg_temp.lid(p_k), 'fecha', pg_temp.hoy(), 'bultos', to_jsonb(pg_temp.barr(p_k)), 'diferencia_destino', 'perdida',
+    'lote_id', pg_temp.lid(p_k), 'fecha', pg_temp.hoy(), 'peso_bascula_kg', pg_temp.tostado(p_k),
     'lineas', (select jsonb_agg(jsonb_build_object('presentacion_g', p_lineas[i][1], 'unidades', p_lineas[i][2]) order by i)
                  from generate_subscripts(p_lineas, 1) i)));
 end $$;

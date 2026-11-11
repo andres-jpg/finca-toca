@@ -1,5 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
-import { saldosPorLote, diasEnPlanta, type ConversionSaldo, type EmpaqueSaldo } from "../lib/inventario";
+import { callRpc } from "@/modules/core/rpc/call-rpc";
+import { getCostoLibraPanel } from "../../costo/queries/costo.queries";
+import { promedioPonderadoPorCalidad } from "../../costo/lib/costo-libra";
+import { desdeHistorico } from "../../panel/lib/periodo";
+import type { ProductoTerminado } from "../../empaque/lib/matriz";
+import { DIAS_VENTANA_COBERTURA, leerLibrasVendidas, saldosPorLote, diasEnPlanta, type ConversionSaldo, type EmpaqueSaldo, type LibrasVendidas } from "../lib/inventario";
 
 // Lecturas de las pestañas del inventario (A-15). Módulo plano (no "use server"): solo lo llama código de servidor.
 // La autorización es el RLS (`security_invoker` en las vistas): sin el módulo o sin membresía todo sale vacío.
@@ -12,73 +17,61 @@ const trozos = <T,>(xs: readonly T[], n: number): T[][] => Array.from({ length: 
 
 export interface CafeVerdeTipo {
   tipoCafe: string;
-  bultos: number;
   kg: number;
 }
 
-/** Café verde de marca propia que aún no se ha tostado: bultos y kg por tipo de café (lotes no anulados). */
+/** Café verde de marca propia que aún no se ha tostado: kg por tipo de café (lotes no anulados). Sale del saldo de la raíz. */
 export async function getCafeVerde(): Promise<CafeVerdeTipo[]> {
   const cafe = (await createClient()).schema("cafe");
-  const bultos: { lote_id: string; peso_actual_kg: number }[] = [];
+  const filas: { lote_id: string; saldo_kg: number }[] = [];
   for (let desde = 0; ; desde += PAGINA) {
     const { data, error } = await cafe
-      .from("v_bultos_estado")
-      .select("lote_id, peso_actual_kg, pasos")
-      .not("pasos", "cs", "{tostion}")
+      .from("v_origenes_disponibles")
+      .select("lote_id, saldo_kg")
+      .is("proceso_id", null)
+      .gt("saldo_kg", 0.05)
       .order("lote_id")
-      .order("numero")
       .range(desde, desde + PAGINA - 1);
     if (error) throw new Error("No se pudo cargar el café verde");
-    bultos.push(...(data ?? []).map((b) => ({ lote_id: b.lote_id, peso_actual_kg: Number(b.peso_actual_kg ?? 0) })));
+    filas.push(...(data ?? []).flatMap((b) => (b.lote_id ? [{ lote_id: b.lote_id, saldo_kg: Number(b.saldo_kg ?? 0) }] : [])));
     if ((data?.length ?? 0) < PAGINA) break;
   }
-  if (bultos.length === 0) return [];
+  if (filas.length === 0) return [];
 
-  const idsLotes = [...new Set(bultos.map((b) => b.lote_id))];
   const tipoDe = new Map<string, string>();
-  for (const ids of trozos(idsLotes, LOTE_IDS)) {
+  for (const ids of trozos([...new Set(filas.map((b) => b.lote_id))], LOTE_IDS)) {
     const { data, error } = await cafe.from("v_lotes").select("id, tipo_cafe_nombre").in("id", ids).eq("linea", "marca_propia").is("anulado_at", null);
     if (error) throw new Error("No se pudo cargar el café verde");
     for (const l of data ?? []) if (l.id) tipoDe.set(l.id, l.tipo_cafe_nombre ?? "Sin tipo");
   }
 
   const porTipo = new Map<string, CafeVerdeTipo>();
-  for (const b of bultos) {
+  for (const b of filas) {
     const tipo = tipoDe.get(b.lote_id);
     if (!tipo) continue; // lote de servicio o anulado: no es nuestro café verde
-    const f = porTipo.get(tipo) ?? { tipoCafe: tipo, bultos: 0, kg: 0 };
-    f.bultos += 1;
-    f.kg += b.peso_actual_kg;
+    const f = porTipo.get(tipo) ?? { tipoCafe: tipo, kg: 0 };
+    f.kg += b.saldo_kg;
     porTipo.set(tipo, f);
   }
   return [...porTipo.values()].sort((a, b) => a.tipoCafe.localeCompare(b.tipoCafe, "es"));
 }
 
-export interface GranelLote {
+export interface TostadoSinEmpacar {
   loteId: string;
   codigo: string;
   tipoCafe: string | null;
+  forma: "grano" | "molido";
   kg: number;
 }
 
-/** Tostado a granel (kg) por lote de marca propia: lo que «quedó a granel» al empacar (A-01). */
-export async function getGranelPorLote(): Promise<GranelLote[]> {
+/** Tostado sin empacar (kg) por lote, tipo de café y forma: el sobrante de los empaques de marca propia (B-09). */
+export async function getTostadoSinEmpacar(): Promise<TostadoSinEmpacar[]> {
   const cafe = (await createClient()).schema("cafe");
-  const { data, error } = await cafe.from("v_granel_lote").select("lote_id, kg_granel").gt("kg_granel", 0);
-  if (error) throw new Error("No se pudo cargar el tostado a granel");
-  const filas = (data ?? []).flatMap((g) => (g.lote_id ? [{ loteId: g.lote_id, kg: Number(g.kg_granel ?? 0) }] : []));
-  const lotes = new Map<string, { codigo: string; tipoCafe: string | null }>();
-  for (const ids of trozos(filas.map((f) => f.loteId), LOTE_IDS)) {
-    const { data: ls, error: e2 } = await cafe.from("v_lotes").select("id, codigo, tipo_cafe_nombre").in("id", ids).eq("linea", "marca_propia").is("anulado_at", null);
-    if (e2) throw new Error("No se pudo cargar el tostado a granel");
-    for (const l of ls ?? []) if (l.id && l.codigo) lotes.set(l.id, { codigo: l.codigo, tipoCafe: l.tipo_cafe_nombre });
-  }
-  return filas
-    .flatMap((f) => {
-      const l = lotes.get(f.loteId);
-      return l ? [{ loteId: f.loteId, codigo: l.codigo, tipoCafe: l.tipoCafe, kg: f.kg }] : [];
-    })
-    .sort((a, b) => b.kg - a.kg);
+  const { data, error } = await cafe.from("v_inventario_tostado").select("lote_id, lote_codigo, tipo_cafe_nombre, forma, kg").gt("kg", 0);
+  if (error) throw new Error("No se pudo cargar el tostado sin empacar");
+  return (data ?? [])
+    .flatMap((g) => (g.lote_id && g.lote_codigo ? [{ loteId: g.lote_id, codigo: g.lote_codigo, tipoCafe: g.tipo_cafe_nombre, forma: g.forma as "grano" | "molido", kg: Number(g.kg ?? 0) }] : []))
+    .sort((a, b) => a.codigo.localeCompare(b.codigo) || a.forma.localeCompare(b.forma));
 }
 
 export interface SaldoConvertible {
@@ -188,4 +181,53 @@ export async function getLotesTercerosEnPlanta(hoy: string): Promise<LoteTercero
     if ((data?.length ?? 0) < PAGINA) break;
   }
   return filas;
+}
+
+const sumarDias = (fecha: string, dias: number): string => {
+  const d = new Date(`${fecha}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
+};
+
+/**
+ * Libras vendidas por producto en los últimos 30 días contados hasta `hoy` inclusive (ventas y cortesías no anuladas), con
+ * `cafe.libras_vendidas`. Si la base falla se devuelve vacío: la cobertura sale «—» en vez de romper el inventario.
+ */
+export async function getLibrasVendidas30d(hoy: string): Promise<LibrasVendidas[]> {
+  const r = await callRpc("cafe", "libras_vendidas", { p_desde: sumarDias(hoy, -(DIAS_VENTANA_COBERTURA - 1)), p_hasta: hoy });
+  return r.ok ? leerLibrasVendidas(r.data) : [];
+}
+
+export interface ValorACosto {
+  /** COP: Σ libras × costo por libra de cada tipo × presentación que tiene costo. */
+  total: number;
+  /** `false` si algún producto con existencias no tiene costo calculable (sin tostión, sin precio de insumos…). */
+  completo: boolean;
+}
+
+/**
+ * Valor a costo del producto terminado = Σ libras disponibles × costo por libra (B-13). El costo de cada tipo × presentación es el
+ * promedio ponderado por kg empacado de los lotes de marca propia con costo (`cafe.costo_libra_panel`, todo el histórico);
+ * un producto sin costo no se valora (y `completo` = false). Las existencias de carga inicial no tienen lote: tampoco se valoran
+ * aquí. Si la función del panel no está disponible (módulo `cafe.dashboard`) devuelve `null`.
+ */
+export async function getValorACosto(productos: readonly ProductoTerminado[], hoy: string): Promise<ValorACosto | null> {
+  const conStock = productos.filter((p) => p.stock > 0);
+  if (conStock.length === 0) return { total: 0, completo: true };
+  try {
+    const costoPor = new Map<string, number | null>();
+    for (const g of [...new Set(conStock.map((p) => p.presentacionG))]) {
+      for (const c of promedioPonderadoPorCalidad(await getCostoLibraPanel(desdeHistorico(hoy), hoy, g))) costoPor.set(`${c.tipoCafeId}:${g}`, c.costoLibra);
+    }
+    let total = 0;
+    let completo = true;
+    for (const p of conStock) {
+      const costo = costoPor.get(`${p.tipoCafeId}:${p.presentacionG}`) ?? null;
+      if (costo === null) completo = false;
+      else total += p.stock * (p.presentacionG / 500) * costo;
+    }
+    return { total: Math.round(total), completo };
+  } catch {
+    return null;
+  }
 }

@@ -13,7 +13,7 @@ import { TarjetaLote } from "./tarjeta-lote";
 /**
  * Tablero de la planta (A-13): una sola cola por etapa (Por trillar · Por tostar · Por moler · Por empacar · Por
  * entregar), sin pestañas por línea; la línea es una etiqueta de la tarjeta. Un lote parcial sale en cada columna donde
- * aún tiene bultos. Las reaperturas de producto empacado (CO-33) van en Por moler (pendientes) o Por empacar (ya molidas).
+ * aún tiene café por procesar. Las reaperturas de producto empacado (CO-33) van en Por moler (pendientes) o Por empacar (ya molidas).
  * En tablet las columnas se desplazan en horizontal; en pantallas angostas se apilan. La búsqueda es local.
  */
 export function ColaPlanta({ tarjetas, reaperturas = [], zonaHoraria, hoy }: { tarjetas: TarjetaLotePlanta[]; reaperturas?: ReaperturaVista[]; zonaHoraria: string; hoy: string }) {

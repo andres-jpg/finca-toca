@@ -25,7 +25,7 @@ describe("definiciones de parámetros de café", () => {
       expect(p.defecto).toBe(18);
     }
     expect(PARAMETROS_CAFE.mermaToleranciaPts.defecto).toBe(2);
-    expect(PARAMETROS_CAFE.pesoBultoKg.defecto).toBe(62.5);
+    expect((PARAMETROS_CAFE as Record<string, unknown>).pesoBultoKg).toBeUndefined();
   });
 
 

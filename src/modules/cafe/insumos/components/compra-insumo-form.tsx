@@ -30,7 +30,7 @@ export function CompraInsumoForm({ insumo, fechaHoy, onSuccess }: CompraInsumoFo
     formState: { errors, isSubmitting },
   } = useForm<CompraInsumoFormInput, unknown, CompraInsumoValues>({
     resolver: zodResolver(compraInsumoSchema),
-    defaultValues: { articuloId: insumo.articulo_id, fecha: fechaHoy, terceroId: null, observaciones: "" },
+    defaultValues: { articuloId: insumo.articulo_id, fecha: fechaHoy, costoUnitario: insumo.precio ?? undefined, terceroId: null, observaciones: "" },
   });
 
   const onSubmit = async (values: CompraInsumoValues) => {

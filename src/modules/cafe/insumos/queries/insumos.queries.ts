@@ -13,11 +13,19 @@ import { REF_TERCERO, type InsumoEmpaque, type KardexInsumo } from "../types";
  * artículos de tipo insumo que no son bolsa/etiqueta con peso válido no se muestran aquí.
  */
 export async function getInsumosEmpaque(): Promise<InsumoEmpaque[]> {
-  const stock = await getStock({ tipo: "insumo", incluirInactivos: true });
+  const [stock, precios] = await Promise.all([getStock({ tipo: "insumo", incluirInactivos: true }), getPreciosInsumos()]);
   return stock.flatMap((s) => {
     const atributos = leerAtributosInsumo(s.atributos);
-    return atributos ? [{ ...s, clase: atributos.clase, presentacionG: atributos.presentacionG }] : [];
+    return atributos ? [{ ...s, clase: atributos.clase, presentacionG: atributos.presentacionG, precio: precios.get(s.articulo_id) ?? null }] : [];
   });
+}
+
+/** Precio unitario vigente de cada insumo (`cafe.v_insumo_precio_vigente`): artículo → COP. Sin precio, no aparece. */
+export async function getPreciosInsumos(): Promise<Map<string, number>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.schema("cafe").from("v_insumo_precio_vigente").select("articulo_id, precio");
+  if (error) throw new Error("No se pudieron cargar los precios de los insumos");
+  return new Map((data ?? []).flatMap((r) => (r.articulo_id ? [[r.articulo_id, Number(r.precio)] as const] : [])));
 }
 
 /**

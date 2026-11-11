@@ -1,14 +1,14 @@
 -- Ventas de marca propia y cortesías (FIN-112 · CO-31): cafe.ventas, cafe.venta_lineas, cafe.registrar_venta,
 -- cafe.anular_venta, cafe.resumen_ventas, la lista de precios (public.tarifas) y la serie VT.
 -- Cubre el ejemplo de la tarea (3 × Consumo 500 g + 1 × Excelso 500 g a Consumidor final = $98.000), vender sin stock
--- (avisa y no bloquea), la cortesía (total 0, motivo `cortesia`), el nº de factura de Aliados pendiente que se completa
+-- (B-11: se rechaza con stock_insuficiente, también la cortesía), la cortesía (total 0, motivo `cortesia`), el nº de factura de Aliados pendiente que se completa
 -- después, el snapshot del precio, la anulación que repone el stock, los roles y el aislamiento entre clientes.
 -- Todo se crea AQUÍ dentro de la transacción (rollback al final): dos clientes de café con el módulo (A y B) y uno sin
 -- él (C), sin depender del seed.
 --   a1 owner A   a2 admin A   a3 operativo A   a4 viewer A   a5 owner B   a6 owner C (sin cafe.ventas)
 begin;
 
-select plan(114);
+select plan(120);
 
 -- 0. Preparación --------------------------------------------------------------------------------------------
 insert into auth.users (id, aud, role, email) values
@@ -215,7 +215,7 @@ select is(
 select pg_temp.vender('V1', 'cf', '[["Consumo 500 g", 3, 23000], ["Excelso 500 g", 1, 29000]]');
 select is((select r ->> 'numero' from res where k = 'V1'), 'VT-' || pg_temp.anio() || '-0001', 'la primera venta es VT-<año>-0001');
 select is((select (r ->> 'total')::numeric from res where k = 'V1'), 98000::numeric, 'total $98.000');
-select is(jsonb_array_length((select r -> 'advertencias' from res where k = 'V1')), 0, 'con stock suficiente no hay advertencias');
+select ok(not (select r ? 'advertencias' from res where k = 'V1'), 'ya no hay advertencias de stock: lo que no alcanza se rechaza');
 select is(
   (select row(v.tipo, v.total, v.tercero_id = pg_temp.tid('cf'), v.fecha = current_date, v.requiere_factura, v.anulada_at)::text
      from cafe.ventas v where v.id = pg_temp.vid('V1')),
@@ -310,15 +310,28 @@ select is(
   row('FE-2000', 'emitida')::text, 'se puede guardar el número desde el principio (sin espacios sobrantes)'
 );
 
--- 6. Vender más de lo que hay: avisa y no bloquea -------------------------------------------------------------------------------
-select pg_temp.vender('V4', 'ca', '[["Excelso 2.500 g", 5, 120000]]');
-select is(
-  (select jsonb_agg(jsonb_build_object('articulo', a ->> 'articulo', 'stock', (a ->> 'stock_resultante')::numeric))
-     from res, jsonb_array_elements(r -> 'advertencias') a where k = 'V4'),
-  '[{"articulo": "Excelso 2.500 g", "stock": -3}]'::jsonb, 'vender 5 con 2 en inventario guarda la venta y avisa: quedan −3'
+-- 6. Vender más de lo que hay: se rechaza (B-11) ---------------------------------------------------------------------------------
+select throws_ok(
+  $$select cafe.registrar_venta(pg_temp.pv('ca', '[["Excelso 2.500 g", 3, 120000]]'))$$,
+  'P0001', 'stock_insuficiente', 'vender 3 con 2 en inventario se rechaza: stock_insuficiente'
 );
-select is(pg_temp.stock('Excelso 2.500 g'), -3.000, 'el stock queda negativo (en rojo en la pantalla)');
-select is((select (r ->> 'total')::numeric from res where k = 'V4'), 600000::numeric, 'y la venta existe con su total');
+select is(
+  pg_temp.detalle($q$select cafe.registrar_venta(pg_temp.pv('ca', '[["Excelso 2.500 g", 3, 120000]]'))$q$),
+  'Stock insuficiente para Excelso 2.500 g. Disponible: 2.', 'el mensaje dice el producto y lo disponible'
+);
+select is(pg_temp.stock('Excelso 2.500 g'), 2.000, 'y no se movió nada');
+select pg_temp.vender('V4', 'ca', '[["Excelso 2.500 g", 2, 120000]]');
+select is((select (r ->> 'total')::numeric from res where k = 'V4'), 240000::numeric, 'vender justo lo que hay sí se guarda');
+select is(pg_temp.stock('Excelso 2.500 g'), 0.000, 'y el stock queda en 0, nunca negativo');
+select is(
+  pg_temp.detalle($q$select cafe.registrar_venta(pg_temp.pv('ca', '[["Excelso 2.500 g", 1, 120000]]'))$q$),
+  'Stock insuficiente para Excelso 2.500 g. Disponible: 0.', 'con stock 0 no se vende ni una unidad'
+);
+select is(
+  pg_temp.detalle($q$select cafe.registrar_venta(pg_temp.pv('ca', '[["Excelso 500 g", 1, 29000], ["Excelso 2.500 g", 1, 120000]]'))$q$),
+  'Stock insuficiente para Excelso 2.500 g. Disponible: 0.', 'una venta con una línea sin stock se rechaza completa'
+);
+select is(pg_temp.stock('Excelso 500 g'), 8.000, 'y la otra línea tampoco descontó (todo o nada)');
 
 -- 7. Cortesía: total 0, motivo cortesía -------------------------------------------------------------------------------------
 select pg_temp.vender('C1', 'ca', '[["Excelso 500 g", 2, 5000]]', '{"tipo": "cortesia"}');
@@ -337,6 +350,10 @@ select is(
 );
 select is(pg_temp.stock('Excelso 500 g'), 6.000, 'la cortesía también descuenta del inventario (10 − 1 de V1 − 1 de V3 − 2 = 6)');
 select throws_ok(
+  $$select cafe.registrar_venta(pg_temp.pv('ca', '[["Excelso 2.500 g", 1, 0]]', '{"tipo": "cortesia"}'))$$,
+  'P0001', 'stock_insuficiente', 'la cortesía también se rechaza sin stock'
+);
+select throws_ok(
   $$select cafe.registrar_venta(pg_temp.pv('ca', '[["Excelso 500 g", 1, 0]]', '{"tipo": "cortesia", "requiere_factura": true}'))$$,
   'P0001', 'datos_invalidos', 'una cortesía no lleva factura'
 );
@@ -348,7 +365,7 @@ select throws_ok(
 -- 8. Resumen del periodo ----------------------------------------------------------------------------------------------------------
 select is(
   cafe.resumen_ventas(),
-  '{"n_ventas": 4, "n_anuladas": 0, "n_cortesias": 1, "total_ventas": 775000, "unidades_cortesia": 2, "n_factura_pendiente": 0}'::jsonb,
+  '{"n_ventas": 4, "n_anuladas": 0, "n_cortesias": 1, "total_ventas": 415000, "unidades_cortesia": 2, "n_factura_pendiente": 0}'::jsonb,
   'resumen: 4 ventas por $775.000; la cortesía se cuenta aparte (2 unidades) y no suma'
 );
 select is((cafe.resumen_ventas(p_tipo => 'cortesia') ->> 'n_ventas')::int, 0, 'filtrado por cortesías no hay ventas');
@@ -488,7 +505,7 @@ select throws_ok(
 );
 select lives_ok(format($q$select cafe.anular_venta(%L, 'no se entregó')$q$, pg_temp.vid('C1')), 'también se anula una cortesía');
 select is(pg_temp.stock('Excelso 500 g'), 9.000, 'y devuelve las 2 unidades de Excelso 500 g');
-select lives_ok(format($q$select cafe.anular_venta(%L, 'prueba de cantidad')$q$, pg_temp.vid('V4')), 'se anula la venta que dejó el stock en negativo');
+select lives_ok(format($q$select cafe.anular_venta(%L, 'prueba de cantidad')$q$, pg_temp.vid('V4')), 'se anula la venta que agotó el producto');
 select is(pg_temp.stock('Excelso 2.500 g'), 2.000, 'y el stock vuelve a 2');
 select is(
   cafe.resumen_ventas(),

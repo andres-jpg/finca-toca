@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { guardarEdicion, previsualizarEdicion, type ResultadoEdicion } from "../actions/edicion.actions";
 import { construirPayload, describirImpacto, formularioInicial, hayCambios, type DatosEdicion, type FormEdicion } from "../edicion/edicion";
 
+const MENSAJE_SIN_RESPUESTA = "No se pudo guardar la corrección: no hubo respuesta del servidor. No se cambió nada; revisa tu conexión e inténtalo de nuevo.";
+
 const ETIQUETA_PROCESO: Record<string, string> = { trilla: "Trilla", tostion: "Tostión", molienda: "Molienda", empaque: "Empaque" };
 
 function Campo({ id, etiqueta, children }: { id: string; etiqueta: string; children: React.ReactNode }) {
@@ -61,8 +63,12 @@ export function EditarLoteModal({ datos, zona }: { datos: DatosEdicion; zona: st
   async function verImpacto() {
     setOcupado(true);
     setError(null);
-    const r = await previsualizarEdicion({ loteId: datos.loteId, motivo, ...payload });
+    const r = await previsualizarEdicion({ loteId: datos.loteId, motivo, ...payload }).catch(() => null);
     setOcupado(false);
+    if (!r) {
+      setError(MENSAJE_SIN_RESPUESTA);
+      return;
+    }
     if (!r.ok) {
       setError(r.message);
       return;
@@ -72,8 +78,14 @@ export function EditarLoteModal({ datos, zona }: { datos: DatosEdicion; zona: st
 
   async function guardar() {
     setOcupado(true);
-    const r = await guardarEdicion({ loteId: datos.loteId, motivo, ...payload });
+    const r = await guardarEdicion({ loteId: datos.loteId, motivo, ...payload }).catch(() => null);
     setOcupado(false);
+    // Un fallo nunca pasa en silencio: se dice qué pasó y cómo resolverlo.
+    if (!r) {
+      setError(MENSAJE_SIN_RESPUESTA);
+      toast.error(MENSAJE_SIN_RESPUESTA);
+      return;
+    }
     if (!r.ok) {
       setError(r.message);
       toast.error(r.message);
@@ -130,6 +142,19 @@ export function EditarLoteModal({ datos, zona }: { datos: DatosEdicion; zona: st
               <Campo id="edit-obs" etiqueta="Observaciones">
                 <Textarea id="edit-obs" rows={2} value={form.observaciones} onChange={(e) => cambiar((f) => void (f.observaciones = e.target.value))} />
               </Campo>
+            </fieldset>
+
+            <fieldset className="space-y-3 rounded-md border border-gray-200 p-3">
+              <legend className="px-1 text-sm font-semibold text-gray-800">Peso recibido</legend>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <Campo id="peso-recibido" etiqueta="Peso recibido (kg)">
+                  <Input id="peso-recibido" inputMode="decimal" value={form.pesoRecibidoKg} onChange={(e) => cambiar((f) => void (f.pesoRecibidoKg = e.target.value))} />
+                </Campo>
+              </div>
+              <p className="text-xs text-gray-600">
+                Los kilos que se pesaron al recibir el café. El valor de la compra y los saldos se recalculan. Si ya hay procesos y el peso baja de lo
+                que ya consumieron, corrige también su peso de entrada.
+              </p>
             </fieldset>
 
             {datos.procesos.map((p) => {

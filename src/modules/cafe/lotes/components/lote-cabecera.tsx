@@ -21,7 +21,7 @@ function Dato({ etiqueta, children, className }: { etiqueta: string; children: R
 }
 
 /**
- * Cabecera de la ficha: lo que entró (cliente o proveedor, tipo de café, fecha, kilos y bultos), la calidad medida
+ * Cabecera de la ficha: lo que entró (cliente o proveedor, tipo de café, fecha y kilos), la calidad medida
  * contra los rangos de ese día, los servicios contratados con su check y la compra (marca propia). El avance, la merma
  * y dónde está el café van en sus propios bloques de la ficha (A-17). Solo presenta lo que ya calculó la base.
  */
@@ -72,7 +72,7 @@ export function LoteCabecera({ lote, etapas, zonaHoraria }: { lote: LoteFicha; e
           {horaLlegada(lote.creadoEn, zonaHoraria)}
         </Dato>
         <Dato etiqueta="Recibido" className="tabular-nums">
-          {formatearKg3(lote.pesoRecibidoKg)} kg · {lote.numBultos} {lote.numBultos === 1 ? "bulto" : "bultos"}
+          {formatearKg3(lote.pesoRecibidoKg)} kg
         </Dato>
 
         {calidad.length > 0 && (

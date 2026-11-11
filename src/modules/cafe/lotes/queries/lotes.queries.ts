@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
 import { getLineasEmpaque } from "../../empaque/queries/empaque.queries";
 import type { EtapaAvance } from "../lib/avance";
-import { mermaProcesada, type BultoPeso, type EtapaLote, type MermaProcesada } from "../lib/etapas";
+import { mermaProcesada, type EtapaLote, type MermaProcesada } from "../lib/etapas";
 import { aplicarFiltrosLotes, LOTES_POR_PAGINA, type FiltrosLotes } from "../lib/filtros";
 import {
   construirLineaDeTiempo,
@@ -43,7 +43,6 @@ export interface LoteListado {
   /** Instante de registro (`created_at`): la hora de llegada. */
   llegadaEn: string;
   pesoRecibidoKg: number;
-  numBultos: number;
   pesoActualKg: number;
   mermaTotalKg: number;
   alertasCalidad: string[];
@@ -62,7 +61,7 @@ export interface PaginaLotes {
 }
 
 const COLUMNAS_LISTADO =
-  "id, codigo, linea, servicios, servicios_requeridos, servicios_completados, avance_texto, estado, tercero_id, tercero_nombre, tipo_cafe_nombre, fecha_recepcion, created_at, peso_recibido_kg, num_bultos, peso_actual_kg, merma_total_kg, alertas_calidad, tiene_desvio";
+  "id, codigo, linea, servicios, servicios_requeridos, servicios_completados, avance_texto, estado, tercero_id, tercero_nombre, tipo_cafe_nombre, fecha_recepcion, created_at, peso_recibido_kg, peso_actual_kg, merma_total_kg, alertas_calidad, tiene_desvio";
 
 /**
  * Una página del listado de lotes con los filtros de la URL. Orden: línea (marca propia primero, así la pestaña
@@ -99,21 +98,22 @@ export async function listarLotes(filtros: FiltrosLotes): Promise<PaginaLotes> {
   const { data: etapas, error: errorEtapas } = await supabase
     .schema("cafe")
     .from("v_lote_etapas")
-    .select("lote_id, tipo, bultos_procesados, bultos_total, completo, parcial, peso_entrada, merma_kg")
+    .select("lote_id, tipo, kg_base, kg_procesados, kg_pendientes, completo, parcial, peso_entrada, merma_kg")
     .in("lote_id", data.map((l) => l.id));
   if (errorEtapas) throw new Error("No se pudo cargar el avance de los lotes");
 
   const porLote = new Map<string, EtapaAvance[]>();
-  const pesosPorLote = new Map<string, { tipo: TipoProceso; pesoEntradaKg: number; mermaKg: number }[]>();
+  const pesosPorLote = new Map<string, { tipo: TipoProceso; pesoEntradaKg: number; mermaKg: number | null }[]>();
   for (const e of etapas ?? []) {
     const pesos = pesosPorLote.get(e.lote_id) ?? [];
-    pesos.push({ tipo: e.tipo, pesoEntradaKg: num(e.peso_entrada), mermaKg: num(e.merma_kg) });
+    pesos.push({ tipo: e.tipo, pesoEntradaKg: num(e.peso_entrada), mermaKg: e.merma_kg === null ? null : num(e.merma_kg) });
     pesosPorLote.set(e.lote_id, pesos);
     const lista = porLote.get(e.lote_id) ?? [];
     lista.push({
       tipo: e.tipo,
-      bultosProcesados: num(e.bultos_procesados),
-      bultosTotal: num(e.bultos_total),
+      kgBase: num(e.kg_base),
+      kgProcesados: num(e.kg_procesados),
+      kgPendientes: num(e.kg_pendientes),
       completo: e.completo === true,
       parcial: e.parcial === true,
     });
@@ -136,7 +136,6 @@ export async function listarLotes(filtros: FiltrosLotes): Promise<PaginaLotes> {
       fechaRecepcion: l.fecha_recepcion,
       llegadaEn: l.created_at,
       pesoRecibidoKg: num(l.peso_recibido_kg),
-      numBultos: l.num_bultos,
       pesoActualKg: num(l.peso_actual_kg),
       mermaTotalKg: num(l.merma_total_kg),
       alertasCalidad: l.alertas_calidad,
@@ -163,7 +162,8 @@ export interface LoteFicha {
   tipoCafe: string | null;
   fechaRecepcion: string;
   pesoRecibidoKg: number;
-  numBultos: number;
+  /** Hay tostiones sin empaque: el peso actual incluye un estimado. */
+  pesoActualEstimado: boolean;
   humedadPct: number | null;
   densidad: number | null;
   alertasCalidad: string[];
@@ -174,6 +174,9 @@ export interface LoteFicha {
   serviciosCompletados: number;
   avanceTexto: string | null;
   nivelTueste: NivelTueste | null;
+  /** Perfil de tueste guardado al recibir (snapshot, B-18): temperatura y tiempo; `null` si no se pidieron. */
+  perfilTempC: number | null;
+  perfilTiempoMin: number | null;
   precioCompraKg: number | null;
   valorCompra: number | null;
   facturaProveedor: string | null;
@@ -204,7 +207,7 @@ export const getLote = cache(async (id: string): Promise<LoteFicha | null> => {
     tipoCafe: l.tipo_cafe_nombre,
     fechaRecepcion: l.fecha_recepcion,
     pesoRecibidoKg: num(l.peso_recibido_kg),
-    numBultos: l.num_bultos,
+    pesoActualEstimado: l.peso_actual_estimado === true,
     humedadPct: l.humedad_pct,
     densidad: l.densidad,
     alertasCalidad: l.alertas_calidad,
@@ -214,6 +217,8 @@ export const getLote = cache(async (id: string): Promise<LoteFicha | null> => {
     serviciosCompletados: num(l.servicios_completados),
     avanceTexto: l.avance_texto,
     nivelTueste: l.nivel_tueste,
+    perfilTempC: l.perfil_temp_c === null ? null : Number(l.perfil_temp_c),
+    perfilTiempoMin: l.perfil_tiempo_min === null ? null : Number(l.perfil_tiempo_min),
     precioCompraKg: l.precio_compra_kg,
     valorCompra: l.valor_compra,
     facturaProveedor: l.factura_proveedor,
@@ -236,44 +241,36 @@ export async function getEtapas(loteId: string): Promise<EtapaLote[]> {
   if (error) throw new Error("No se pudieron cargar las etapas del lote");
   return (data ?? []).map((e) => ({
     tipo: e.tipo,
-    bultosProcesados: num(e.bultos_procesados),
-    bultosTotal: num(e.bultos_total),
+    kgBase: num(e.kg_base),
+    kgProcesados: num(e.kg_procesados),
+    kgPendientes: num(e.kg_pendientes),
     completo: e.completo === true,
     parcial: e.parcial === true,
     pesoEntradaKg: num(e.peso_entrada),
-    pesoSalidaKg: num(e.peso_salida),
-    mermaKg: num(e.merma_kg),
+    pesoSalidaKg: e.peso_salida === null ? null : num(e.peso_salida),
+    mermaKg: e.merma_kg === null ? null : num(e.merma_kg),
     valor: num(e.valor),
     desvios: num(e.desvios),
     numProcesos: num(e.num_procesos),
   }));
 }
 
-/** Un bulto con los pasos por los que ya pasó y lo que pesa ahora (`v_bultos_estado`). */
-export interface BultoFicha extends BultoPeso {
-  id: string;
-  numero: number;
-  pesoKg: number;
-  pasos: TipoProceso[];
+/** Saldo por origen (`v_origenes_disponibles`): lo que queda de cada paso del lote, en kilos (sin bultos: ADR 0002). */
+export interface OrigenFicha {
+  tipo: TipoProceso | null;
+  saldoKg: number;
+  estimado: boolean;
 }
 
-export async function getBultos(loteId: string): Promise<BultoFicha[]> {
+export async function getOrigenes(loteId: string): Promise<OrigenFicha[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .schema("cafe")
-    .from("v_bultos_estado")
-    .select("bulto_id, numero, peso_kg, pasos, ultimo_tipo, peso_actual_kg")
-    .eq("lote_id", loteId)
-    .order("numero", { ascending: true });
-  if (error) throw new Error("No se pudieron cargar los bultos del lote");
-  return (data ?? []).map((b) => ({
-    id: b.bulto_id,
-    numero: b.numero,
-    pesoKg: num(b.peso_kg),
-    pasos: b.pasos ?? [],
-    ultimoTipo: b.ultimo_tipo,
-    pesoActualKg: num(b.peso_actual_kg),
-  }));
+    .from("v_origenes_disponibles")
+    .select("tipo, saldo_kg, estimado")
+    .eq("lote_id", loteId);
+  if (error) throw new Error("No se pudo cargar el saldo del lote");
+  return (data ?? []).map((o) => ({ tipo: o.tipo, saldoKg: num(o.saldo_kg), estimado: o.estimado === true }));
 }
 
 /**
@@ -288,7 +285,7 @@ export async function getResponsables(loteId: string): Promise<Map<string, strin
 }
 
 /**
- * La historia completa del lote, ordenada: recepción → procesos (con baches y bultos) → movimientos de inventario
+ * La historia completa del lote, ordenada: recepción → procesos (con baches) → movimientos de inventario
  * con `ref_tipo = 'cafe.lote'` → remisiones de entrega → anulación. `usuarios` (id → email) viene de `getResponsables()`.
  * Las remisiones (CO-32) y las reaperturas (CO-33) las lee quien llama (`remisiones/`, `reapertura/`) y llegan ya como
  * eventos: así `lotes` no depende de esos módulos. El movimiento de inventario de una reapertura NO sale como evento
@@ -296,7 +293,6 @@ export async function getResponsables(loteId: string): Promise<Map<string, strin
  */
 export async function getTimeline(
   lote: LoteFicha,
-  bultos: readonly BultoFicha[],
   usuarios: ReadonlyMap<string, string>,
   remisiones: readonly RemisionLinea[] = [],
   reaperturas: readonly ReaperturaLinea[] = [],
@@ -304,14 +300,13 @@ export async function getTimeline(
   const supabase = await createClient();
   const cafe = supabase.schema("cafe");
 
-  const [procesosRes, procesoBultosRes, movimientosRes] = await Promise.all([
+  const [procesosRes, movimientosRes] = await Promise.all([
     cafe
       .from("procesos")
       .select(
-        "id, tipo, fecha, created_at, created_by, peso_entrada_kg, peso_salida_kg, merma_kg, tarifa_kg, valor, merma_referencia_pct, tolerancia_pts, desvio, nivel_tueste, observaciones, diferencia_kg, diferencia_destino, anulado_at, anulado_por, motivo_anulacion, reapertura_id",
+        "id, tipo, fecha, created_at, created_by, peso_entrada_kg, peso_salida_kg, merma_kg, tarifa_kg, valor, merma_referencia_pct, tolerancia_pts, desvio, nivel_tueste, observaciones, diferencia_kg, diferencia_destino, anulado_at, anulado_por, motivo_anulacion, reapertura_id, origen_proceso_id",
       )
       .eq("lote_id", lote.id),
-    cafe.from("proceso_bultos").select("proceso_id, bulto_id").eq("lote_id", lote.id),
     supabase
       .from("movimientos_inventario")
       .select("id, articulo_id, fecha, cantidad, motivo, observaciones, created_at, created_by")
@@ -320,7 +315,6 @@ export async function getTimeline(
       .neq("motivo", "reapertura"),
   ]);
   if (procesosRes.error) throw new Error("No se pudieron cargar los procesos del lote");
-  if (procesoBultosRes.error) throw new Error("No se pudieron cargar los bultos de los procesos");
   if (movimientosRes.error) throw new Error("No se pudieron cargar los movimientos del lote");
 
   const procesos = procesosRes.data ?? [];
@@ -330,7 +324,7 @@ export async function getTimeline(
     procesos.length > 0
       ? cafe
           .from("baches")
-          .select("proceso_id, numero, peso_entrada_kg, peso_salida_kg, temperatura_c, observaciones")
+          .select("proceso_id, numero, peso_entrada_kg, temperatura_c, tiempo_min, nivel_tueste, observaciones")
           .in("proceso_id", procesos.map((p) => p.id))
           .order("numero", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
@@ -341,25 +335,17 @@ export async function getTimeline(
   if (bachesRes.error) throw new Error("No se pudieron cargar los baches");
   if (articulosRes.error) throw new Error("No se pudieron cargar los artículos de los movimientos");
 
-  const numeroDeBulto = new Map(bultos.map((b) => [b.id, b.numero]));
-  const bultosDe = new Map<string, number[]>();
-  for (const pb of procesoBultosRes.data ?? []) {
-    const n = numeroDeBulto.get(pb.bulto_id);
-    if (n === undefined) continue;
-    bultosDe.set(pb.proceso_id, [...(bultosDe.get(pb.proceso_id) ?? []), n]);
-  }
   const bachesDe = new Map<string, BacheLinea[]>();
   for (const b of bachesRes.data ?? []) {
     const entrada = num(b.peso_entrada_kg);
-    const salida = num(b.peso_salida_kg);
     bachesDe.set(b.proceso_id, [
       ...(bachesDe.get(b.proceso_id) ?? []),
       {
         numero: b.numero,
         pesoEntradaKg: entrada,
-        pesoSalidaKg: salida,
-        mermaKg: Math.round((entrada - salida) * 1000) / 1000,
         temperaturaC: b.temperatura_c,
+        tiempoMin: b.tiempo_min,
+        nivelTueste: b.nivel_tueste,
         observaciones: b.observaciones,
       },
     ]);
@@ -376,10 +362,9 @@ export async function getTimeline(
       fecha: p.fecha,
       creadoEn: p.created_at,
       creadoPor: quien(p.created_by),
-      bultos: (bultosDe.get(p.id) ?? []).sort((a, b) => a - b),
       pesoEntradaKg: num(p.peso_entrada_kg),
-      pesoSalidaKg: num(p.peso_salida_kg),
-      mermaKg: num(p.merma_kg),
+      pesoSalidaKg: p.peso_salida_kg === null ? null : num(p.peso_salida_kg),
+      mermaKg: p.merma_kg === null || (p.tipo !== "trilla" && p.tipo !== "tostion") ? null : num(p.merma_kg),
       tarifaKg: num(p.tarifa_kg),
       valor: num(p.valor),
       mermaReferenciaPct: p.merma_referencia_pct,
@@ -392,6 +377,7 @@ export async function getTimeline(
       diferenciaKg: p.tipo === "empaque" && p.diferencia_kg !== null ? num(p.diferencia_kg) : null,
       diferenciaDestino: p.diferencia_destino,
       reaperturaId: p.reapertura_id,
+      origenProcesoId: p.origen_proceso_id,
       anulacion: p.anulado_at ? { en: p.anulado_at, por: quien(p.anulado_por), motivo: p.motivo_anulacion ?? "" } : null,
     }),
   );
@@ -417,9 +403,9 @@ export async function getTimeline(
       tercero: lote.tercero,
       tipoCafe: lote.tipoCafe,
       pesoRecibidoKg: lote.pesoRecibidoKg,
-      numBultos: lote.numBultos,
+      precioCompraKg: lote.precioCompraKg,
+      humedadPct: lote.humedadPct,
     },
-    numBultosLote: lote.numBultos,
     procesos: procesosLinea,
     movimientos: movimientosLinea,
     remisiones,

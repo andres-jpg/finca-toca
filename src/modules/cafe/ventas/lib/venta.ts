@@ -2,8 +2,8 @@
 // `cafe.registrar_venta` (subtotal = cantidad × precio; total = Σ subtotales; la cortesía vale 0) y las usan el
 // formulario (total en vivo y avisos de stock), el schema y los tests. Todo se cuenta en CENTAVOS enteros para no
 // arrastrar errores de coma flotante.
-import { enteroConMiles } from "../../empaque/lib/empaque";
-import { formatearCOP } from "../../compras/lib/compra";
+import { formatCOP } from "@/modules/core/formato/numeros";
+import { enteroConMiles, parsearUnidades } from "../../empaque/lib/empaque";
 import { COPY } from "../../copy";
 import type { EstadoFactura, EstadoVenta, TipoVenta } from "../types";
 
@@ -38,22 +38,25 @@ export function enteroSigno(n: number): string {
   return n < 0 ? `−${texto}` : texto;
 }
 
-export interface AvisoStock {
-  /** Lo que quedaría en inventario si se guarda (puede ser negativo). */
-  resto: number;
-  texto: string;
+/** Unidades vendibles de un producto: su stock entero, nunca negativo (un stock heredado negativo cuenta como 0). */
+export function maximoVendible(stock: number): number {
+  return Number.isFinite(stock) ? Math.max(0, Math.floor(stock)) : 0;
 }
 
+/** Producto sin existencias: su tarjeta se deshabilita con «Agotado» (B-11). */
+export const estaAgotado = (stock: number): boolean => maximoVendible(stock) === 0;
+
+/** «Máximo disponible: 14», la ayuda que sale cuando la línea llega al stock. */
+export const textoMaximoDisponible = (stock: number): string => `Máximo disponible: ${enteroConMiles(maximoVendible(stock))}`;
+
 /**
- * Aviso de una línea que supera el inventario: «Hay 5 en inventario; quedarán −3. Puedes guardar igualmente.»
- * `null` si alcanza (o no hay cantidad todavía). Avisar no bloquea (decisión de la tarea): la venta se guarda y el
- * stock queda negativo, en rojo.
+ * Limita la cantidad tecleada al stock (B-11). Solo toca un entero válido por encima del máximo; lo que aún no es un
+ * número (vacío, letras) se deja tal cual para que el formulario lo señale. El servidor valida igual: esto es comodidad.
  */
-export function avisoStock(stock: number, cantidad: number): AvisoStock | null {
-  if (!Number.isFinite(cantidad) || cantidad <= 0) return null;
-  const resto = stock - Math.round(cantidad);
-  if (resto >= 0) return null;
-  return { resto, texto: `Hay ${enteroSigno(stock)} en inventario; quedarán ${enteroSigno(resto)}. Puedes guardar igualmente.` };
+export function limitarCantidadTexto(texto: string, stock: number): string {
+  const n = parsearUnidades(texto);
+  const max = maximoVendible(stock);
+  return n !== null && n > max ? String(max) : texto;
 }
 
 export function etiquetaTipoVenta(tipo: TipoVenta): string {
@@ -74,7 +77,7 @@ export function textoFactura(estado: EstadoFactura, numero: string | null): stri
 
 /** Texto del toast tras guardar: «Venta VT-2026-0001 guardada · $98.000» / «Cortesía VT-2026-0005 registrada». */
 export function textoVentaGuardada(tipo: TipoVenta, numero: string, total: number): string {
-  return tipo === "cortesia" ? `Cortesía ${numero} registrada` : `Venta ${numero} guardada · ${formatearCOP(total)}`;
+  return tipo === "cortesia" ? `Cortesía ${numero} registrada` : `Venta ${numero} guardada · ${formatCOP(total)}`;
 }
 
 /** «Consumo 500 g × 3» para listas cortas de líneas. */

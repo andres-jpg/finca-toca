@@ -19,6 +19,8 @@ interface ResumenMermaProps {
   /** Fecha del proceso distinta de hoy: la tarifa que cuenta es la vigente ese día. */
   fechaDistintaDeHoy: boolean;
   puedeConfigurarTarifas: boolean;
+  /** Pasos sin merma propia (tostión: se calcula en el empaque; molienda: no tiene): texto en lugar de la merma. */
+  sinMerma?: string | null;
 }
 
 /**
@@ -26,14 +28,16 @@ interface ResumenMermaProps {
  * igual y queda marcado. El valor es de solo lectura: lo calcula la base con la tarifa vigente en la fecha del
  * proceso (HU-09 c2); aquí es una vista previa con la tarifa de hoy.
  */
-export function ResumenMerma({ tipo, merma, valor, empaqueIncluido, fechaDistintaDeHoy, puedeConfigurarTarifas }: ResumenMermaProps) {
+export function ResumenMerma({ tipo, merma, valor, empaqueIncluido, fechaDistintaDeHoy, puedeConfigurarTarifas, sinMerma }: ResumenMermaProps) {
   const aviso = merma ? textoDesvio(merma) : null;
 
   return (
     <section aria-label="Merma" className="space-y-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <h2 className="text-base font-semibold text-gray-800">Merma de {etiquetaServicio(tipo).toLowerCase()}</h2>
+      <h2 className="text-base font-semibold text-gray-800">{sinMerma ? etiquetaServicio(tipo) : `Merma de ${etiquetaServicio(tipo).toLowerCase()}`}</h2>
 
-      {merma ? (
+      {sinMerma ? (
+        <p className="text-sm text-gray-600">{sinMerma}</p>
+      ) : merma ? (
         <div role="status" aria-live="polite" className="space-y-2">
           <p className="flex items-baseline gap-3">
             <span className="text-3xl font-bold tabular-nums text-gray-900">{formatearPorcentaje(merma.mermaPct)} %</span>
@@ -60,7 +64,7 @@ export function ResumenMerma({ tipo, merma, valor, empaqueIncluido, fechaDistint
           )}
         </div>
       ) : (
-        <p className="text-sm text-gray-500">Indica el peso de entrada y el de salida para ver la merma.</p>
+        <p className="text-sm text-gray-500">Indicar el peso de entrada y el peso final para ver la merma.</p>
       )}
 
       {valor && (

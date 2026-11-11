@@ -7,7 +7,7 @@
 -- los bloqueos que los lotes aplican tras el primer proceso.
 begin;
 
-select plan(112);
+select plan(92);
 
 -- 0. Preparación --------------------------------------------------------------------------------------------
 insert into auth.users (id, aud, role, email) values
@@ -58,8 +58,7 @@ select case when i.clave = 'a' then 'xa' else 'xb' end, t.id
   from cafe.tipos_cafe t join ids i on i.id = t.tenant_id and i.clave in ('a', 'b')
  where t.nombre = 'Excelso';
 
--- Crea un lote (y, con p_bultos, sus bultos repartidos en partes iguales a gramos: el último absorbe el
--- resto, como `repartirPeso()` de TypeScript). Va como el usuario que la llame (SECURITY INVOKER).
+-- Crea un lote. Va como el usuario que la llame (SECURITY INVOKER).
 create or replace function pg_temp.ins_lote(
   p_codigo text, p_linea cafe.linea_lote,
   p_tipo text default null, p_precio numeric default null,
@@ -78,11 +77,7 @@ begin
           current_date, p_peso, p_n, p_servicios, p_nivel, p_precio)
   returning id into v_id;
 
-  if p_bultos then
-    insert into cafe.lote_bultos (lote_id, numero, peso_kg)
-    select v_id, g, case when g < p_n then trunc(p_peso / p_n, 3) else p_peso - trunc(p_peso / p_n, 3) * (p_n - 1) end
-      from generate_series(1, p_n) g;
-  end if;
+  -- `p_bultos` se conserva por compatibilidad de las llamadas: los bultos salieron del flujo (ADR 0002) y ya no se crean.
   return v_id;
 end $$;
 grant execute on function pg_temp.ins_lote(text, cafe.linea_lote, text, numeric, cafe.tipo_proceso[], cafe.nivel_tueste,
@@ -117,11 +112,6 @@ select ok(
   not has_column_privilege('authenticated', 'cafe.lotes', 'anulado_por', 'insert')
   and not has_column_privilege('authenticated', 'cafe.lotes', 'anulado_at', 'insert'),
   'un lote no nace anulado (INSERT por columnas)'
-);
-select ok(
-  has_column_privilege('authenticated', 'cafe.lote_bultos', 'peso_kg', 'update')
-  and not has_column_privilege('authenticated', 'cafe.lote_bultos', 'lote_id', 'update'),
-  'de un bulto solo se corrige el peso'
 );
 select is(
   (select p.prosecdef from pg_proc p where p.oid = 'cafe.servicios_requeridos(cafe.lotes)'::regprocedure),
@@ -166,11 +156,6 @@ select lives_ok(
 select is(
   (select l.valor_compra from cafe.lotes l where l.codigo = 'MP-2026-0001'), 6937500.00::numeric,
   'valor_compra = peso × precio redondeado a pesos: 375 kg × 18.500 = 6.937.500'
-);
-select is(
-  (select array_agg(b.peso_kg order by b.numero) from cafe.lote_bultos b
-    where b.lote_id = (select id from cafe.lotes where codigo = 'MP-2026-0001')),
-  array[62.5, 62.5, 62.5, 62.5, 62.5, 62.5]::numeric[], '6 bultos de 62,5 kg'
 );
 select is(
   (select l.tenant_id from cafe.lotes l where l.codigo = 'MP-2026-0001'), (select id from ids where clave = 'a'),
@@ -298,95 +283,14 @@ select throws_ok(
   'código duplicado en el mismo cliente: 23505'
 );
 
--- 4. Los bultos suman el peso del lote (constraint trigger diferido) -------------------------------------------------------
--- Cada caso va en un DO que fuerza la comprobación (`set constraints all immediate`) para no esperar al COMMIT.
-select throws_ok(
-  $$do $x$ begin
-      perform pg_temp.ins_lote('B-1', 'servicio', p_servicios => '{trilla}', p_peso => 100, p_n => 3::smallint);
-      insert into cafe.lote_bultos (lote_id, numero, peso_kg)
-      select id, g, 33 from cafe.lotes, generate_series(1, 3) g where codigo = 'B-1';
-      set constraints all immediate;
-    end $x$ $$,
-  'P0001', 'bultos_no_cuadran', '3 bultos de 33 kg en un lote de 100 kg: bultos_no_cuadran'
-);
+-- 4. Los bultos ya no existen en el flujo (ADR 0002): el lote no los exige ni los cuadra ------------------------------------
 select lives_ok(
-  $$do $x$ begin
-      perform pg_temp.ins_lote('B-2', 'servicio', p_servicios => '{trilla}', p_peso => 100, p_n => 3::smallint, p_bultos => true);
-      set constraints all immediate;
-      set constraints all deferred;
-    end $x$ $$,
-  '100 kg repartidos en 33,333 + 33,333 + 33,334 cuadran'
+  $$select pg_temp.ins_lote('B-3', 'servicio', p_servicios => '{trilla}', p_peso => 100)$$,
+  'un lote se registra solo con su peso: sin bultos que cuadrar'
 );
-select is(
-  (select array_agg(b.peso_kg order by b.numero) from cafe.lote_bultos b where b.lote_id = (select id from cafe.lotes where codigo = 'B-2')),
-  array[33.333, 33.333, 33.334]::numeric[], 'el último bulto absorbe el resto'
-);
-select lives_ok(
-  $$do $x$ begin
-      perform pg_temp.ins_lote('B-3', 'servicio', p_servicios => '{trilla}', p_peso => 100, p_n => 3::smallint);
-      insert into cafe.lote_bultos (lote_id, numero, peso_kg)
-      select id, g, 33.333 from cafe.lotes, generate_series(1, 3) g where codigo = 'B-3';
-      set constraints all immediate;
-      set constraints all deferred;
-    end $x$ $$,
-  'un gramo de diferencia se tolera (99,999 kg en un lote de 100)'
-);
-select throws_ok(
-  $$do $x$ begin
-      perform pg_temp.ins_lote('B-4', 'servicio', p_servicios => '{trilla}', p_peso => 100, p_n => 3::smallint);
-      insert into cafe.lote_bultos (lote_id, numero, peso_kg)
-      select id, g, 50 from cafe.lotes, generate_series(1, 2) g where codigo = 'B-4';
-      set constraints all immediate;
-    end $x$ $$,
-  'P0001', 'bultos_no_cuadran', 'dos bultos que suman bien pero el lote declara tres: bultos_no_cuadran'
-);
-select throws_ok(
-  $$do $x$ begin
-      perform pg_temp.ins_lote('B-5', 'servicio', p_servicios => '{trilla}', p_peso => 90, p_n => 3::smallint);
-      insert into cafe.lote_bultos (lote_id, numero, peso_kg)
-      select id, g, 30 from cafe.lotes, unnest(array[1, 2, 4]) g where codigo = 'B-5';
-      set constraints all immediate;
-    end $x$ $$,
-  'P0001', 'bultos_no_cuadran', 'bultos numerados 1, 2, 4 (con hueco): bultos_no_cuadran'
-);
-select throws_ok(
-  $$do $x$ begin
-      perform pg_temp.ins_lote('B-6', 'servicio', p_servicios => '{trilla}', p_peso => 90, p_n => 3::smallint);
-      set constraints all immediate;
-    end $x$ $$,
-  'P0001', 'bultos_no_cuadran', 'un lote sin bultos no cuadra'
-);
-select throws_ok(
-  $$do $x$ begin
-      update cafe.lote_bultos set peso_kg = peso_kg + 1 where lote_id = (select id from cafe.lotes where codigo = 'B-2') and numero = 1;
-      set constraints all immediate;
-    end $x$ $$,
-  'P0001', 'bultos_no_cuadran', 'corregir el peso de un bulto sin corregir el lote no cuadra'
-);
-select throws_ok(
-  $$do $x$ begin
-      update cafe.lotes set peso_recibido_kg = 120 where codigo = 'B-2';
-      set constraints all immediate;
-    end $x$ $$,
-  'P0001', 'bultos_no_cuadran', 'corregir el peso del lote sin corregir sus bultos no cuadra'
-);
-select lives_ok(
-  $$do $x$ begin
-      update cafe.lotes set peso_recibido_kg = 120 where codigo = 'B-2';
-      update cafe.lote_bultos set peso_kg = peso_kg + 20 where lote_id = (select id from cafe.lotes where codigo = 'B-2') and numero = 3;
-      set constraints all immediate;
-      set constraints all deferred;
-    end $x$ $$,
-  'corregir el lote y sus bultos a la vez cuadra'
-);
-
--- La comprobación es diferida: el INSERT del lote solo no falla, falla al final de la transacción.
-savepoint sp_diferido;
-select lives_ok(
-  $$select pg_temp.ins_lote('B-7', 'servicio', p_servicios => '{trilla}', p_peso => 90, p_n => 3::smallint)$$,
-  'insertar el lote antes que sus bultos no falla en el momento'
-);
-rollback to savepoint sp_diferido;
+select is((select count(*)::int from cafe.lote_bultos where lote_id = (select id from cafe.lotes where codigo = 'B-3')), 0, 'y no se crea ninguno');
+select pg_temp.ins_lote('B-2', 'servicio', p_servicios => '{trilla}', p_peso => 100);
+select pg_temp.ins_lote('B-4', 'servicio', p_servicios => '{trilla}', p_peso => 100);
 
 -- 5. Anulación ------------------------------------------------------------------------------------------------------------------
 select lives_ok(
@@ -400,10 +304,6 @@ select ok(
 );
 select throws_ok(
   $$update cafe.lotes set observaciones = 'x' where codigo = 'B-3'$$, 'P0001', 'lote_anulado', 'un lote anulado no se modifica'
-);
-select throws_ok(
-  $$update cafe.lote_bultos set peso_kg = 34 where lote_id = (select id from cafe.lotes where codigo = 'B-3') and numero = 1$$,
-  'P0001', 'lote_anulado', 'ni sus bultos'
 );
 select throws_ok($$update cafe.lotes set anulado_at = now() where codigo = 'B-2'$$, '23514', null, 'anular exige motivo');
 select throws_ok(
@@ -440,20 +340,12 @@ select throws_ok(
   'con procesos no se cambia el peso'
 );
 select throws_ok(
-  $$update cafe.lotes set num_bultos = 9 where codigo = 'MQ-2026-0002'$$, 'P0001', 'lote_bloqueado',
-  'ni el número de bultos'
-);
-select throws_ok(
   $$update cafe.lotes set tercero_id = (select id from ids where clave = 'ta2') where codigo = 'MQ-2026-0002'$$, 'P0001', 'lote_bloqueado',
   'ni el tercero'
 );
 select throws_ok(
   $$update cafe.lotes set servicios = '{trilla,tostion}' where codigo = 'MQ-2026-0002'$$, 'P0001', 'lote_bloqueado',
   'ni se quitan servicios'
-);
-select throws_ok(
-  $$update cafe.lote_bultos set peso_kg = 61 where lote_id = (select id from cafe.lotes where codigo = 'MQ-2026-0002') and numero = 1$$,
-  'P0001', 'lote_bloqueado', 'ni se corrige el peso de sus bultos'
 );
 select lives_ok(
   $$update cafe.lotes set observaciones = 'Nota posterior', humedad_pct = 11.5 where codigo = 'MQ-2026-0002'$$,
@@ -486,8 +378,11 @@ select lives_ok(
 
 -- servicios_requeridos de marca propia cuenta la molienda solo si se hizo.
 reset role;
-insert into cafe.procesos (tenant_id, lote_id, tipo, fecha, peso_entrada_kg, peso_salida_kg)
-select tenant_id, id, 'molienda', current_date, 100, 100 from cafe.lotes where codigo = 'MP-2026-0001';
+insert into cafe.procesos (tenant_id, lote_id, tipo, fecha, peso_entrada_kg, nivel_tueste)
+select tenant_id, id, 'tostion', current_date, 100, 'medio' from cafe.lotes where codigo = 'MP-2026-0001';
+insert into cafe.procesos (tenant_id, lote_id, tipo, fecha, peso_entrada_kg, origen_proceso_id, origen_tipo)
+select p.tenant_id, p.lote_id, 'molienda', current_date, 100, p.id, 'tostion' from cafe.procesos p
+ where p.lote_id = (select id from cafe.lotes where codigo = 'MP-2026-0001') and p.tipo = 'tostion';
 select tests.autenticar_como('owner-a@lotes.test');
 select is(
   (select cafe.servicios_requeridos(l) from cafe.lotes l where l.codigo = 'MP-2026-0001'),
@@ -504,7 +399,6 @@ select ok(
   'set_updated rellena updated_at/updated_by'
 );
 select throws_ok($$delete from cafe.lotes where codigo = 'MP-2026-0001'$$, '42501', null, 'el admin no borra lotes');
-select throws_ok($$delete from cafe.lote_bultos$$, '42501', null, 'ni bultos');
 
 reset role;
 select tests.autenticar_como('operativo-a@lotes.test');
@@ -517,16 +411,11 @@ select is(
   tests.filas_afectadas($$update cafe.lotes set observaciones = 'Cambiado' where codigo = 'MQ-2026-0010'$$), 0,
   'el operativo no corrige lotes (ni anula)'
 );
-select is(
-  tests.filas_afectadas($$update cafe.lote_bultos set peso_kg = 60 where lote_id = (select id from cafe.lotes where codigo = 'MQ-2026-0010')$$), 0,
-  'ni bultos'
-);
 select throws_ok($$delete from cafe.lotes where codigo = 'MQ-2026-0010'$$, '42501', null, 'ni borra');
 
 reset role;
 select tests.autenticar_como('viewer-a@lotes.test');
 select ok((select count(*) from cafe.lotes) >= 6, 'el viewer (gerencia) consulta los lotes');
-select ok((select count(*) from cafe.lote_bultos) >= 6, 'y los bultos');
 select throws_ok(
   $$select pg_temp.ins_lote('MQ-2026-0011', 'servicio', p_servicios => '{trilla}', p_bultos => true)$$, '42501', null,
   'pero no registra lotes'
@@ -561,15 +450,6 @@ select throws_ok(
   $$select pg_temp.ins_lote('X-22', 'marca_propia', 'xa', 1000, p_ter => 'tb')$$, '23503', null,
   'ni de un tipo de café de A'
 );
-select throws_ok(
-  $$insert into cafe.lote_bultos (lote_id, numero, peso_kg) values ((select id from ids where clave = 'lote_a'), 9, 1)$$,
-  '23503', null, 'ni añadir bultos a un lote de A'
-);
-select throws_ok(
-  format($$insert into cafe.lote_bultos (tenant_id, lote_id, numero, peso_kg) values (%L, (select id from ids where clave = 'lote_a'), 9, 1)$$,
-         (select id from ids where clave = 'a')),
-  '42501', null, 'ni con tenant_id de A (WITH CHECK)'
-);
 
 -- 9. El módulo cafe.recepcion se exige en la base ---------------------------------------------------------------------------------------
 reset role;
@@ -599,13 +479,6 @@ select ok(
       and l.registro_id = (select id::text from cafe.lotes where codigo = 'MP-2026-0001' and tenant_id = (select id from ids where clave = 'a'))
       and l.tenant_id = (select id from ids where clave = 'a')),
   'crear un lote queda en audit.log con su tenant'
-);
-select is(
-  (select count(*)::int from audit.log l
-    where l.tabla = 'cafe.lote_bultos' and l.accion = 'INSERT'
-      and l.tenant_id = (select id from ids where clave = 'a')
-      and l.registro_id in (select id::text from cafe.lote_bultos where lote_id = (select id from cafe.lotes where codigo = 'MP-2026-0001' and tenant_id = (select id from ids where clave = 'a')))),
-  6, 'y cada bulto'
 );
 select ok(
   (select count(*) = 1 from audit.log l

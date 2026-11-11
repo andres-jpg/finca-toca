@@ -1,5 +1,4 @@
 import type { LineaLote, NivelTueste, TipoProceso } from "../types";
-import { pctDeMerma } from "./formato";
 
 // Línea de tiempo de la ficha (HU-F1-05 c3, HU-F1-12 c3): recepción → procesos (con sus baches) → movimientos de
 // inventario ligados al lote (los empaques de CO-30) → anulación del lote. Aquí solo se ordena y se normaliza lo
@@ -9,9 +8,10 @@ import { pctDeMerma } from "./formato";
 export interface BacheLinea {
   numero: number;
   pesoEntradaKg: number;
-  pesoSalidaKg: number;
-  mermaKg: number;
   temperaturaC: number | null;
+  tiempoMin?: number | null;
+  /** Nivel de tueste del bache (para detectar los que se apartan del perfil del lote). */
+  nivelTueste?: NivelTueste | null;
   observaciones: string | null;
 }
 
@@ -21,11 +21,11 @@ export interface ProcesoLinea {
   fecha: string;
   creadoEn: string;
   creadoPor: string | null;
-  /** Números de los bultos que pasaron por el proceso. */
-  bultos: number[];
   pesoEntradaKg: number;
-  pesoSalidaKg: number;
-  mermaKg: number;
+  /** `null` en una tostión sin empaque (su salida es la báscula del empaque, B-08) y en la molienda. */
+  pesoSalidaKg: number | null;
+  /** Solo trilla y tostión con salida; molienda y empaque no tienen merma. */
+  mermaKg: number | null;
   tarifaKg: number;
   valor: number;
   mermaReferenciaPct: number | null;
@@ -42,6 +42,8 @@ export interface ProcesoLinea {
   diferenciaDestino?: string | null;
   /** Reapertura de la que cuelga (molienda o empaque de un café reabierto, CO-33); `null`/ausente = del lote. */
   reaperturaId?: string | null;
+  /** Tostión de la que sale (empaque, molienda): la tanda a la que pertenece. */
+  origenProcesoId?: string | null;
   anulacion: { en: string; por: string | null; motivo: string } | null;
 }
 
@@ -65,7 +67,10 @@ export interface RecepcionLinea {
   tercero: string | null;
   tipoCafe: string | null;
   pesoRecibidoKg: number;
-  numBultos: number;
+  /** Solo marca propia: precio pagado por kilo. */
+  precioCompraKg?: number | null;
+  /** Humedad medida al recibir (puntos porcentuales). */
+  humedadPct?: number | null;
 }
 
 /** La remisión de entrega (CO-32): una tarjeta por remisión, también las anuladas (tachadas, con su motivo). */
@@ -115,7 +120,6 @@ export type EventoLinea =
       fecha: string;
       creadoEn: string;
       datos: ProcesoLinea;
-      numBultosLote: number;
       /** La reapertura de la que cuelga este proceso, si es de una. */
       reapertura: ReaperturaLinea | null;
     }
@@ -128,11 +132,6 @@ export type EventoLinea =
 // reapertura queda antes de la molienda o el empaque que se hacen sobre ella.
 const RANGO: Readonly<Record<EventoLinea["clase"], number>> = { recepcion: 0, proceso: 1, reapertura: 1, movimiento: 2, remision: 3, anulacion_lote: 4 };
 
-/** Merma de un bache como la muestra la pantalla (desde los kilos, igual que en todo el módulo). */
-export function mermaPctBache(bache: Pick<BacheLinea, "mermaKg" | "pesoEntradaKg">): number | null {
-  return pctDeMerma(bache.mermaKg, bache.pesoEntradaKg);
-}
-
 /**
  * Ordena los eventos del lote de más antiguo a más reciente: por día, y dentro del día la recepción primero, luego
  * los procesos y las reaperturas (entre sí, por instante de creación), los movimientos, la remisión de entrega y la
@@ -141,7 +140,6 @@ export function mermaPctBache(bache: Pick<BacheLinea, "mermaKg" | "pesoEntradaKg
  */
 export function construirLineaDeTiempo(entrada: {
   recepcion: RecepcionLinea;
-  numBultosLote: number;
   procesos: readonly ProcesoLinea[];
   movimientos: readonly MovimientoLinea[];
   /** Remisiones de entrega del lote (vigente y anuladas). Opcional: un lote de marca propia no tiene. */
@@ -159,7 +157,6 @@ export function construirLineaDeTiempo(entrada: {
       fecha: p.fecha,
       creadoEn: p.creadoEn,
       datos: p,
-      numBultosLote: entrada.numBultosLote,
       reapertura: p.reaperturaId ? (reaperturaPorId.get(p.reaperturaId) ?? null) : null,
     })),
     ...(entrada.reaperturas ?? []).map((r): EventoLinea => ({
@@ -204,13 +201,6 @@ export function construirLineaDeTiempo(entrada: {
     if (a.creadoEn !== b.creadoEn) return a.creadoEn < b.creadoEn ? -1 : 1;
     return a.clave < b.clave ? -1 : a.clave > b.clave ? 1 : 0;
   });
-}
-
-/** Números de bulto en texto: «1, 2, 3», o «todos (6)» cuando fueron todos los del lote. */
-export function listaBultos(bultos: readonly number[], total: number): string {
-  if (bultos.length === 0) return "—";
-  if (bultos.length === total && total > 1) return `todos (${total})`;
-  return [...bultos].sort((a, b) => a - b).join(", ");
 }
 
 const ETIQUETA_MOTIVO: Readonly<Record<string, string>> = {

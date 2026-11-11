@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { AlertTriangle, Minus, Plus, Trash2 } from "lucide-react";
+import { Minus, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,17 +12,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { TerceroCombobox } from "@/modules/core/terceros/components/tercero-combobox";
 import { COPY } from "../../copy";
-import { formatearCOP, parsearPrecio } from "../../compras/lib/compra";
+import { formatCOP } from "@/modules/core/formato/numeros";
+import { parsearPrecio } from "../../compras/lib/compra";
 import { enteroConMiles, parsearUnidades } from "../../empaque/lib/empaque";
 import { registrarVenta } from "../actions/ventas.actions";
-import { avisoStock, subtotalLinea, textoVentaGuardada, totalUnidades, totalVenta } from "../lib/venta";
+import { estaAgotado, limitarCantidadTexto, maximoVendible, subtotalLinea, textoMaximoDisponible, textoVentaGuardada, totalUnidades, totalVenta } from "../lib/venta";
 import { ventaSchema } from "../schemas/venta.schema";
 import type { ProductoVenta, TipoVenta } from "../types";
 
 // Formulario de venta o cortesía de marca propia, pensado para tablet en la puerta: campos y botones de 44 px como
-// mínimo, teclado numérico (`inputMode`) y ninguna pista que dependa del hover. El total y los avisos de stock se
-// calculan en vivo con las mismas cuentas que la RPC; vender más de lo que hay AVISA y no bloquea (el stock queda
-// negativo, en rojo). La venta NO emite factura electrónica: solo guarda el número de la que se emite en Aliados.
+// mínimo, teclado numérico (`inputMode`) y ninguna pista que dependa del hover. El total y los límites de stock se
+// calculan en vivo con las mismas cuentas que la RPC. No se vende lo que no hay (B-11): el producto agotado no se puede
+// agregar y la cantidad no pasa del stock; la RPC lo vuelve a validar. La venta NO emite factura electrónica: solo guarda el número de la que se emite en Aliados.
 const CAMPO = "h-11 text-base";
 
 interface FilaForm {
@@ -75,16 +76,19 @@ export function VentaForm({ productos, fechaHoy, consumidorFinalId }: VentaFormP
 
   /** Un toque agrega la línea (con el precio vigente, editable); otro toque suma una unidad. */
   function tocarProducto(p: ProductoVenta) {
+    const max = maximoVendible(p.stock);
+    if (max === 0) return;
     setFilas((prev) => {
       const actual = prev.find((f) => f.articuloId === p.articuloId);
       if (!actual) return [...prev, { articuloId: p.articuloId, cantidad: "1", precio: textoPrecio(p.precio) }];
-      return prev.map((f) => (f.articuloId === p.articuloId ? { ...f, cantidad: String((parsearUnidades(f.cantidad) ?? 0) + 1) } : f));
+      return prev.map((f) => (f.articuloId === p.articuloId ? { ...f, cantidad: String(Math.min(max, (parsearUnidades(f.cantidad) ?? 0) + 1)) } : f));
     });
   }
 
   function paso(articuloId: string, delta: number) {
     const f = filas.find((x) => x.articuloId === articuloId);
-    const n = Math.max(1, (parsearUnidades(f?.cantidad ?? "") ?? 0) + delta);
+    const max = maximoVendible(porId.get(articuloId)?.stock ?? 0);
+    const n = Math.min(Math.max(1, max), Math.max(1, (parsearUnidades(f?.cantidad ?? "") ?? 0) + delta));
     cambiar(articuloId, { cantidad: String(n) });
   }
 
@@ -136,9 +140,6 @@ export function VentaForm({ productos, fechaHoy, consumidorFinalId }: VentaFormP
       return;
     }
     toast.success(textoVentaGuardada(parsed.data.tipo, r.data.numero, r.data.total));
-    for (const a of r.data.advertencias) {
-      toast.warning(`${a.articulo ?? "Un producto"} quedó en ${enteroConMiles(a.stock_resultante)} en el inventario.`);
-    }
     if (parsed.data.requiereFactura && !parsed.data.numeroFactura) {
       toast.info("La factura quedó pendiente: completa el número de Aliados cuando la emitas.");
     }
@@ -209,7 +210,7 @@ export function VentaForm({ productos, fechaHoy, consumidorFinalId }: VentaFormP
             Productos
           </h2>
           <p className="text-xs text-gray-500">
-            Toca un producto para agregarlo; vuelve a tocarlo para sumar una unidad. Si no alcanza el inventario, el sistema avisa pero no bloquea.
+            Seleccionar un producto para agregarlo; volver a seleccionarlo suma una unidad, hasta el máximo disponible.
           </p>
         </div>
 
@@ -225,25 +226,29 @@ export function VentaForm({ productos, fechaHoy, consumidorFinalId }: VentaFormP
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
               {lista.map((p) => {
                 const n = enCarrito.get(p.articuloId) ?? 0;
+                const agotado = estaAgotado(p.stock);
                 return (
                   <button
                     key={p.articuloId}
                     type="button"
                     onClick={() => tocarProducto(p)}
-                    disabled={enviando}
+                    disabled={enviando || agotado}
                     aria-label={`Agregar ${p.nombre}`}
                     className={cn(
                       "relative flex min-h-24 flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors",
-                      n > 0 ? "border-amber-600 bg-amber-50" : "border-gray-300 bg-white hover:bg-gray-50",
+                      agotado && "cursor-not-allowed border-gray-200 bg-gray-50 opacity-70",
+                      !agotado && (n > 0 ? "border-amber-600 bg-amber-50" : "border-gray-300 bg-white hover:bg-gray-50"),
                     )}
                   >
                     <span className="text-base font-semibold text-gray-900">{p.nombre}</span>
                     <span className="text-sm tabular-nums text-gray-600">
-                      {esCortesia ? "Sin valor" : p.precio === null ? "Precio por definir" : formatearCOP(p.precio)}
+                      {esCortesia ? "Sin valor" : p.precio === null ? "Precio por definir" : formatCOP(p.precio)}
                     </span>
-                    <span className={cn("text-xs tabular-nums", p.stock <= 0 ? "font-medium text-red-600" : "text-gray-500")}>
-                      {enteroConMiles(p.stock)} en inventario
-                    </span>
+                    {agotado ? (
+                      <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-800">Agotado</span>
+                    ) : (
+                      <span className="text-xs tabular-nums text-gray-500">{enteroConMiles(p.stock)} disponibles</span>
+                    )}
                     {n > 0 && (
                       <span className="absolute right-2 top-2 rounded-full bg-amber-600 px-2 py-0.5 text-xs font-semibold tabular-nums text-white">{n}</span>
                     )}
@@ -262,7 +267,8 @@ export function VentaForm({ productos, fechaHoy, consumidorFinalId }: VentaFormP
               const hayCantidad = f.cantidad.trim() !== "";
               const precioNum = parsearPrecio(f.precio);
               const hayPrecio = f.precio.trim() !== "";
-              const aviso = p && cantidad ? avisoStock(p.stock, cantidad) : null;
+              const max = maximoVendible(p?.stock ?? 0);
+              const enMaximo = p !== undefined && (cantidad ?? 0) >= max;
               const subtotal = subtotalLinea(cantidad ?? 0, esCortesia ? 0 : (precioNum ?? 0));
               return (
                 <li key={f.articuloId} className="space-y-2 py-3">
@@ -282,9 +288,9 @@ export function VentaForm({ productos, fechaHoy, consumidorFinalId }: VentaFormP
                         className={cn(CAMPO, "w-16 text-center tabular-nums")}
                         aria-invalid={hayCantidad && cantidad === null}
                         value={f.cantidad}
-                        onChange={(e) => cambiar(f.articuloId, { cantidad: e.target.value })}
+                        onChange={(e) => cambiar(f.articuloId, { cantidad: limitarCantidadTexto(e.target.value, p?.stock ?? 0) })}
                       />
-                      <Button type="button" variant="outline" className="h-11 w-11 p-0" onClick={() => paso(f.articuloId, 1)} disabled={enviando}>
+                      <Button type="button" variant="outline" className="h-11 w-11 p-0" onClick={() => paso(f.articuloId, 1)} disabled={enviando || enMaximo}>
                         <Plus className="h-4 w-4" />
                         <span className="sr-only">Una unidad más</span>
                       </Button>
@@ -307,7 +313,7 @@ export function VentaForm({ productos, fechaHoy, consumidorFinalId }: VentaFormP
                       />
                     </div>
 
-                    <p className="flex h-11 items-center justify-end text-base font-semibold tabular-nums text-gray-900">{formatearCOP(subtotal)}</p>
+                    <p className="flex h-11 items-center justify-end text-base font-semibold tabular-nums text-gray-900">{formatCOP(subtotal)}</p>
 
                     <Button type="button" variant="ghost" className="h-11 w-11 shrink-0 justify-self-end p-0 text-gray-500 hover:text-red-600" onClick={() => quitarFila(f.articuloId)} disabled={enviando}>
                       <Trash2 className="h-5 w-5" />
@@ -315,10 +321,9 @@ export function VentaForm({ productos, fechaHoy, consumidorFinalId }: VentaFormP
                     </Button>
                   </div>
                   {p && !esCortesia && p.precio === null && <p className="text-xs text-amber-800">Precio por definir: escribe el valor.</p>}
-                  {aviso && (
-                    <p role="status" className="flex items-start gap-1.5 text-sm text-amber-900">
-                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                      {aviso.texto}
+                  {enMaximo && (
+                    <p role="status" className="text-sm text-amber-900">
+                      {textoMaximoDisponible(p.stock)}
                     </p>
                   )}
                   {hayCantidad && cantidad === null && (
@@ -398,7 +403,7 @@ export function VentaForm({ productos, fechaHoy, consumidorFinalId }: VentaFormP
             </>
           ) : (
             <>
-              Total <span className="text-xl font-bold tabular-nums text-gray-900">{formatearCOP(total)}</span> · {enteroConMiles(unidades)} {unidades === 1 ? "unidad" : "unidades"}
+              Total <span className="text-xl font-bold tabular-nums text-gray-900">{formatCOP(total)}</span> · {enteroConMiles(unidades)} {unidades === 1 ? "unidad" : "unidades"}
             </>
           )}
         </p>

@@ -79,14 +79,15 @@ describe("textos del tiquete", () => {
     expect(lineaSuelto(3.5)).toBe("3,5 kg");
   });
 
-  it("perfil pedido: nada sin tostión", () => {
+  it("perfil de tueste: nada sin tostión", () => {
     expect(lineaPerfil({ nivelTueste: null, perfilTempC: null, perfilTiempoMin: null })).toBeNull();
-    expect(lineaPerfil({ nivelTueste: "medio", perfilTempC: 205, perfilTiempoMin: 12 })).toBe("medio · 205 °C · 12 min");
+    expect(lineaPerfil({ nivelTueste: "medio", perfilTempC: 205, perfilTiempoMin: 12 })).toBe("Medio · 205 °C · 12 min");
   });
 
-  it("llegada: fecha, hora en la zona del cliente, kilos y bultos", () => {
-    const t = lineaLlegada({ llegadaEn: "2026-11-12T13:42:00Z", fechaRecepcion: "2026-11-12", numBultos: 8 }, 500, "America/Bogota");
+  it("llegada: fecha, hora en la zona del cliente y kilos, sin bultos", () => {
+    const t = lineaLlegada({ llegadaEn: "2026-11-12T13:42:00Z", fechaRecepcion: "2026-11-12" }, 500, "America/Bogota");
     expect(t).toContain("8:42");
-    expect(t).toContain("500,0 kg · 8 bultos");
+    expect(t).toContain("500,0 kg");
+    expect(t).not.toMatch(/bulto/i);
   });
 });

@@ -44,8 +44,9 @@ function revalidarVentas(ventaId?: string) {
 
 /**
  * Registra una venta de café ya empacado (o una cortesía) con una o varias líneas. La base saca el número `VT`,
- * guarda el precio de cada línea (snapshot) y descuenta del producto terminado: si no alcanza el inventario AVISA y
- * no bloquea (`advertencias`; el stock queda negativo, en rojo). Todo o nada.
+ * guarda el precio de cada línea (snapshot) y descuenta del producto terminado. No se vende lo que no hay (B-11): si
+ * una línea supera el stock la RPC rechaza con `stock_insuficiente` («Stock insuficiente para Excelso 2.500 g molido.
+ * Disponible: 14.»), también en una cortesía, y no queda nada escrito. Todo o nada.
  */
 export async function registrarVenta(input: VentaFormInput): Promise<Result<ResultadoVenta>> {
   await requireModulo("cafe.ventas");

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DetalleServicio, Remision } from "../types";
-import { filaServicio, filasServicios, lineaApilada, lineaCliente, lineaRecibido, resumenEntrega, valorReferencia } from "./tiquete";
+import { bloqueServicio, bloquesServicios, lineaCliente, resumenEntrega, valorReferencia } from "./tiquete";
 
 // El ejemplo del informe y de la tarea FIN-113: 500 kg, 8 bultos, trilla + tostión + molienda (+ empaque incluido).
 const base = { tarifaKg: null, nivelTueste: null, incluido: false, pendiente: false } as const;
@@ -9,70 +9,75 @@ const tostion: DetalleServicio = { ...base, servicio: "tostion", kgEntrada: 405,
 const molienda: DetalleServicio = { ...base, servicio: "molienda", kgEntrada: 332, kgSalida: 330, mermaKg: 2, tarifaKg: 1000, valor: 332000 };
 const empaque: DetalleServicio = { ...base, servicio: "empaque", kgEntrada: 330, kgSalida: 330, mermaKg: 0, tarifaKg: 0, valor: 0, incluido: true };
 
-describe("filaServicio", () => {
-  it("trilla: kilos con tres decimales y merma desde los kilos", () => {
-    expect(filaServicio(trilla)).toEqual({ servicio: "Trilla", entra: "500,0", sale: "405,0", merma: "19,0 %" });
+describe("bloqueServicio", () => {
+  it("trilla: kg entra → sale y merma de trilla (calculada desde los kilos)", () => {
+    expect(bloqueServicio(trilla)).toEqual({
+      titulo: "Trilla",
+      lineas: [
+        { etiqueta: "Entra → sale", valor: "500,0 → 405,0 kg" },
+        { etiqueta: "Merma de trilla", valor: "19,0 %" },
+      ],
+    });
   });
 
-  it("tostión: lleva el nivel de tueste y su merma a dos decimales (73 de 405 kg = 18,02 %, no 18,03)", () => {
-    expect(filaServicio(tostion)).toEqual({ servicio: "Tostión · tueste medio", entra: "405,0", sale: "332,0", merma: "18,0 %" });
+  it("trilla con humedad y densidad (B-04): las dos líneas al final", () => {
+    expect(bloqueServicio({ ...trilla, kgEntrada: 250, kgSalida: 202.5, mermaKg: 47.5, humedadPct: 11.2, densidadGl: 720 }).lineas).toEqual([
+      { etiqueta: "Entra → sale", valor: "250,0 → 202,5 kg" },
+      { etiqueta: "Merma de trilla", valor: "19,0 %" },
+      { etiqueta: "Humedad", valor: "11,2 %" },
+      { etiqueta: "Densidad", valor: "720,0 g/L" },
+    ]);
   });
 
-  it("molienda: 2 de 332 kg = 0,6 %", () => {
-    expect(filaServicio(molienda)).toEqual({ servicio: "Molienda", entra: "332,0", sale: "330,0", merma: "0,6 %" });
+  it("tostión: perfil de tueste, kg entra → sale y merma de tostión", () => {
+    expect(bloqueServicio(tostion, "Medio · 222 °C · 17 min")).toEqual({
+      titulo: "Tostión",
+      lineas: [
+        { etiqueta: "Perfil de tueste", valor: "Medio · 222 °C · 17 min" },
+        { etiqueta: "Entra → sale", valor: "405,0 → 332,0 kg" },
+        { etiqueta: "Merma de tostión", valor: "18,0 %" },
+      ],
+    });
   });
 
-  it("empaque de maquila: solo «incluido», sin cifras", () => {
-    expect(filaServicio(empaque)).toEqual({ servicio: "Empaque", entra: "incluido", sale: "", merma: "" });
+  it("B-17: 27,0 kg tostados → 22,1 kg imprime merma de tostión 18,1 % y entregado 22,1 kg", () => {
+    const t: DetalleServicio = { ...tostion, kgEntrada: 27, kgSalida: 22.1, mermaKg: 4.9 };
+    const b = bloqueServicio(t);
+    expect(b.lineas).toContainEqual({ etiqueta: "Entra → sale", valor: "27,0 → 22,1 kg" });
+    expect(b.lineas).toContainEqual({ etiqueta: "Merma de tostión", valor: "18,1 %" });
+    expect(resumenEntrega({ pesoRecibidoKg: 40, pesoEntregadoKg: 22.1, mermaTotalKg: 17.9 }).entregado).toBe("22,1 kg");
+  });
+
+  it("molienda: kg molidos y valor, SIN merma", () => {
+    const b = bloqueServicio({ ...molienda, kgSalida: 20, valor: 20000 });
+    expect(b).toEqual({ titulo: "Molienda", lineas: [{ etiqueta: "Molido", valor: "20,0 kg · $20.000" }] });
+    expect(JSON.stringify(b)).not.toMatch(/merma/i);
+  });
+
+  it("empaque de maquila: solo «Incluido», sin merma", () => {
+    const b = bloqueServicio(empaque);
+    expect(b).toEqual({ titulo: "Empaque", lineas: [{ etiqueta: "Costo", valor: "Incluido" }] });
   });
 
   it("un servicio pendiente (entrega forzada) sale sin cifras, nunca con ceros", () => {
     const pendiente: DetalleServicio = { ...base, servicio: "molienda", kgEntrada: null, kgSalida: null, mermaKg: null, valor: null, pendiente: true };
-    expect(filaServicio(pendiente)).toEqual({ servicio: "Molienda", entra: "—", sale: "—", merma: "Pendiente" });
-  });
-
-  it("el empaque pendiente también sale «Pendiente», no «incluido»", () => {
-    const pendiente: DetalleServicio = { ...empaque, kgEntrada: null, kgSalida: null, mermaKg: null, pendiente: true };
-    expect(filaServicio(pendiente).merma).toBe("Pendiente");
-  });
-
-  it("un servicio parcial (algunos bultos) conserva sus cifras", () => {
-    expect(filaServicio({ ...tostion, pendiente: true }).entra).toBe("405,0");
+    expect(bloqueServicio(pendiente)).toEqual({ titulo: "Molienda", lineas: [{ etiqueta: "Estado", valor: "Pendiente" }] });
   });
 
   it("miles con punto: 1.234,5", () => {
-    expect(filaServicio({ ...trilla, kgEntrada: 1234.5, kgSalida: 1000, mermaKg: 234.5 }).entra).toBe("1.234,5");
+    expect(bloqueServicio({ ...trilla, kgEntrada: 1234.5, kgSalida: 1000, mermaKg: 234.5 }).lineas[0].valor).toBe("1.234,5 → 1.000,0 kg");
+  });
+
+  it("ningún bloque del tiquete menciona merma de molienda o de empaque", () => {
+    const texto = JSON.stringify(bloquesServicios([trilla, tostion, molienda, empaque], "Medio"));
+    expect(texto).not.toMatch(/merma de (molienda|empaque)/i);
+    expect(texto).not.toMatch(/bulto/i);
   });
 });
 
-describe("filasServicios", () => {
+describe("bloquesServicios", () => {
   it("conserva el orden recibido", () => {
-    expect(filasServicios([trilla, tostion, molienda, empaque]).map((f) => f.servicio)).toEqual([
-      "Trilla",
-      "Tostión · tueste medio",
-      "Molienda",
-      "Empaque",
-    ]);
-  });
-});
-
-describe("lineaApilada (rollo de 58 mm)", () => {
-  it("servicio con kilos: título, «entra → sale» y la merma a la derecha", () => {
-    expect(lineaApilada(tostion)).toEqual({ titulo: "Tostión · tueste medio", cuerpo: "405,0 → 332,0", derecha: "18,0 %" });
-  });
-
-  it("cuerpo y merma caben juntos en una línea del rollo de 58 mm (~26 caracteres)", () => {
-    const l = lineaApilada({ ...trilla, kgEntrada: 405, kgSalida: 332, mermaKg: 73 });
-    expect(`${l.cuerpo} ${l.derecha}`.length).toBeLessThanOrEqual(26);
-  });
-
-  it("empaque incluido y servicio pendiente: una sola línea", () => {
-    expect(lineaApilada(empaque)).toEqual({ titulo: "Empaque", cuerpo: null, derecha: "incluido" });
-    expect(lineaApilada({ ...base, servicio: "molienda", kgEntrada: null, kgSalida: null, mermaKg: null, valor: null, pendiente: true })).toEqual({
-      titulo: "Molienda",
-      cuerpo: null,
-      derecha: "Pendiente",
-    });
+    expect(bloquesServicios([trilla, tostion, molienda, empaque]).map((b) => b.titulo)).toEqual(["Trilla", "Tostión", "Molienda", "Empaque"]);
   });
 });
 
@@ -105,10 +110,5 @@ describe("textos sueltos", () => {
     const r: Pick<Remision, "clienteNombre" | "clienteIdentificacion"> = { clienteNombre: "Juan Pérez", clienteIdentificacion: "1234567" };
     expect(lineaCliente(r)).toBe("Juan Pérez · 1234567");
     expect(lineaCliente({ ...r, clienteIdentificacion: null })).toBe("Juan Pérez");
-  });
-
-  it("línea de recibido: fecha, kilos y bultos (singular y plural)", () => {
-    expect(lineaRecibido("2026-11-12", 500, 8)).toBe("12/11/2026 · 500,0 kg · 8 bultos");
-    expect(lineaRecibido("2026-11-12", 62.5, 1)).toBe("12/11/2026 · 62,5 kg · 1 bulto");
   });
 });

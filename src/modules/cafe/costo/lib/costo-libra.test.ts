@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  calcularCostoLibra,
   costoBolsaYEtiqueta,
   estadoCosto,
   leerCostoLibra,
@@ -20,6 +21,7 @@ const COMPLETO = {
   merma_tostion: 0.183,
   merma_molienda: null,
   costo_cafe: 18359.6,
+  costo_empaque: 900,
   costo_bolsa: 700,
   costo_etiqueta: 200,
   costo_libra: 19260,
@@ -120,5 +122,36 @@ describe("leerCostoLibraPanel", () => {
   });
   it("lo que no es lista → []", () => {
     expect(leerCostoLibraPanel(null)).toEqual([]);
+  });
+});
+
+describe("calcularCostoLibra · B-13 (ejemplo MP-2026-0007)", () => {
+  // Excelso a $28.500/kg, merma acumulada 18,1 % (118,0 → 96,7 kg), precio $29.000 por libra.
+  // El ticket usa la merma ya redondeada a 18,1 % (la exacta, 21,3 / 118,0 = 18,05 %, daría café $17.389).
+  const merma = 0.181;
+  const base = { precioCompraKg: 28500, mermaTostion: merma, bolsa: 1200, etiqueta: 370 };
+
+  it("500 g: café 17.399 · costo 18.969 · margen 34,6 %", () => {
+    const r = calcularCostoLibra({ ...base, gramos: 500, precioUnidad: 29000 });
+    expect(Math.round(r.cafe)).toBe(17399);
+    expect(r.empaque).toBe(1570);
+    expect(r.costo).toBe(18969);
+    expect(r.margenPct).toBe(34.6);
+  });
+
+  it("2.500 g: empaque (3.700 + 370) ÷ 5 = 814 · costo 18.213 · margen 37,2 %", () => {
+    const r = calcularCostoLibra({ ...base, bolsa: 3700, gramos: 2500, precioUnidad: 145000 });
+    expect(r.empaque).toBe(814);
+    expect(r.costo).toBe(18213);
+    expect(r.precioLibra).toBe(29000);
+    expect(r.margenPct).toBe(37.2);
+  });
+
+  it("sin precio no hay margen", () => {
+    expect(calcularCostoLibra({ ...base, gramos: 500 }).margen).toBeNull();
+  });
+
+  it("el costo de insumos del empaque de la tanda 2 son $123.040", () => {
+    expect(68 * (1200 + 370) + 4 * (3700 + 370)).toBe(123040);
   });
 });

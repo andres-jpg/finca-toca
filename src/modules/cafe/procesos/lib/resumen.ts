@@ -4,7 +4,6 @@ import type { LineaLote, NivelTueste, TipoProceso } from "../../lotes/types";
 import type { EstadoLote } from "../types";
 import { calcularMerma, esDesvio, estadoMerma, type EstadoMerma } from "./merma";
 import { formatearCompacto, formatearPeso, formatearPorcentaje } from "./numero";
-import { PARTICIPIO_PASO } from "./pasos";
 
 // Lo que la pantalla de planta calcula MIENTRAS el operario escribe (merma, desvío, valor) y los textos con que
 // lo cuenta. Usa los mismos `calcularMerma`/`esDesvio` que las columnas generadas de `cafe.procesos`, así que lo
@@ -36,7 +35,7 @@ export interface MermaEnVivo {
   toleranciaPts: number;
 }
 
-/** Merma y desvío con lo escrito hasta ahora; `null` mientras falte la entrada o la salida, o no sean coherentes. */
+/** Merma y desvío con lo escrito hasta ahora (trilla: la tostión no tiene salida al registrarse, B-05); `null` mientras falte la entrada o la salida, o no sean coherentes. */
 export function mermaEnVivo(
   tipo: TipoProceso,
   entradaKg: number | null,
@@ -89,17 +88,13 @@ export function valorDelServicio(
 }
 
 /**
- * Cómo queda el lote tras guardar, para el aviso: «Lote parcial: 2 de 6 bultos tostados», «Lote listo…».
- * `procesados` = bultos que ya pasaron por ese paso incluyendo los que se acaban de registrar.
+ * Cómo queda el lote tras guardar, para el aviso: «Lote parcial: quedan 202,0 kg por tostar», «Lote listo…».
+ * `pendienteKg` = kilos que aún faltan en ese paso tras lo que se acaba de registrar.
  */
-export function textoEstadoLote(
-  estado: EstadoLote,
-  avanceTexto: string,
-  paso: { tipo: TipoProceso; procesados: number; total: number },
-): string {
+export function textoEstadoLote(estado: EstadoLote, avanceTexto: string, paso: { tipo: TipoProceso; pendienteKg: number }): string {
   switch (estado) {
     case "parcial":
-      return `Lote parcial: ${paso.procesados} de ${paso.total} bultos ${PARTICIPIO_PASO[paso.tipo]}`;
+      return `Lote parcial: quedan ${formatearPeso(paso.pendienteKg)} kg por ${VERBO_PASO[paso.tipo]}`;
     case "listo":
       return "Lote listo: todos los pasos están completos";
     case "en_proceso":
@@ -111,12 +106,16 @@ export function textoEstadoLote(
   }
 }
 
+const VERBO_PASO: Record<TipoProceso, string> = { trilla: "trillar", tostion: "tostar", molienda: "moler", empaque: "empacar" };
+
 /** Concordancia con el paso: la trilla, la tostión y la molienda son «registrada/anulada»; el empaque, «registrado/anulado». */
 export function participioDe(tipo: TipoProceso, base: "registrad" | "anulad"): string {
   return `${base}${tipo === "empaque" ? "o" : "a"}`;
 }
 
-/** Aviso del toast al guardar: «Tostión registrada · merma 18,0 % (73,000 kg)». */
-export function textoProcesoRegistrado(tipo: TipoProceso, mermaPct: number, mermaKg: number): string {
-  return `${etiquetaServicio(tipo)} ${participioDe(tipo, "registrad")} · merma ${formatearPorcentaje(mermaPct)} % (${formatearPeso(mermaKg)} kg)`;
+/** Aviso del toast al guardar: «Trilla registrada · merma 19,0 % (95,000 kg)»; la tostión no tiene merma hasta su empaque. */
+export function textoProcesoRegistrado(tipo: TipoProceso, mermaPct: number | null, mermaKg: number | null, entradaKg?: number): string {
+  const base = `${etiquetaServicio(tipo)} ${participioDe(tipo, "registrad")}`;
+  if (mermaPct !== null && mermaKg !== null) return `${base} · merma ${formatearPorcentaje(mermaPct)} % (${formatearPeso(mermaKg)} kg)`;
+  return entradaKg !== undefined ? `${base} · ${formatearPeso(entradaKg)} kg` : base;
 }

@@ -31,6 +31,8 @@ export function leerDetalle(json: Json | null | undefined): DetalleServicio[] {
       tarifaKg: numero(elemento.tarifa_kg),
       valor: numero(elemento.valor),
       nivelTueste: typeof nivel === "string" && NIVELES.includes(nivel) ? (nivel as NivelTueste) : null,
+      humedadPct: numero(elemento.humedad_pct),
+      densidadGl: numero(elemento.densidad_gl),
       incluido: elemento.incluido === true,
       pendiente: elemento.pendiente === true,
     });

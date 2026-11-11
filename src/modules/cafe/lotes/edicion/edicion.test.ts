@@ -5,6 +5,7 @@ const ZONA = "America/Bogota";
 const datos: DatosEdicion = {
   loteId: "l1", codigo: "MP-2026-0001", linea: "marca_propia", fechaRecepcion: "2026-11-05", llegadaEn: "2026-11-05T12:15:00.000Z",
   precioCompraKg: 20000, facturaProveedor: null, observaciones: null,
+  pesoRecibidoKg: 27,
   procesos: [
     { id: "p1", tipo: "tostion", fecha: "2026-11-05", pesoEntradaKg: 27, pesoSalidaKg: 22, observaciones: null,
       baches: [{ id: "b1", numero: 1, pesoEntradaKg: 13.5, pesoSalidaKg: 11, temperaturaC: 205, tiempoMin: null }, { id: "b2", numero: 2, pesoEntradaKg: 13.5, pesoSalidaKg: 11, temperaturaC: null, tiempoMin: 12 }] },
@@ -35,6 +36,19 @@ describe("construirPayload", () => {
       procesos: [{ id: "p2", peso_entrada_kg: 21 }],
     });
   });
+  it("corregir el peso recibido manda solo ese campo", () => {
+    const f = formularioInicial(datos, ZONA);
+    f.pesoRecibidoKg = "25,5";
+    expect(construirPayload(datos, f, ZONA)).toEqual({ lote: { peso_recibido_kg: 25.5 } });
+  });
+  it("sin tocar el peso recibido no se manda", () => {
+    expect(construirPayload(datos, formularioInicial(datos, ZONA), ZONA).lote).toBeUndefined();
+  });
+  it("un peso recibido vacío se manda como null (la base lo rechaza con su mensaje)", () => {
+    const f = formularioInicial(datos, ZONA);
+    f.pesoRecibidoKg = "";
+    expect(construirPayload(datos, f, ZONA).lote?.peso_recibido_kg).toBeNull();
+  });
   it("vaciar la temperatura la manda como null", () => {
     const f = formularioInicial(datos, ZONA);
     f.procesos.p1.baches.b1.temperaturaC = "";
@@ -49,6 +63,12 @@ describe("describirImpacto", () => {
       { merma_tostion_pct: 18.1, valor_servicios: 89100, costo_libra: 14000 },
     )).toEqual(["merma de tostión (19,3 % → 18,1 %)", "costo por libra (— → $14.000)"]);
   });
+  it("incluye el peso recibido y el valor de la compra", () => {
+    expect(describirImpacto({ peso_recibido_kg: 27, valor_compra: 540000 }, { peso_recibido_kg: 25.5, valor_compra: 510000 })).toEqual([
+      "peso recibido (27,0 kg → 25,5 kg)",
+      "valor de la compra ($540.000 → $510.000)",
+    ]);
+  });
   it("sin cambios, vacío", () => expect(describirImpacto({ merma_tostion_pct: 1 }, { merma_tostion_pct: 1 })).toEqual([]));
 });
 
@@ -57,5 +77,6 @@ describe("valorLegible", () => {
     expect(valorLegible("fecha", "2026-11-05", ZONA)).toBe("05/11/2026");
     expect(valorLegible("llegada_at", "2026-11-05T12:15:00Z", ZONA)).toBe("05/11/2026 07:15");
     expect(valorLegible("observaciones", null, ZONA)).toBe("—");
+    expect(valorLegible("peso_recibido_kg", "25.500", ZONA)).toBe("25,5 kg");
   });
 });

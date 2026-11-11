@@ -7,16 +7,17 @@ import { PARAMETROS_CAFE } from "../../parametros";
 import type { DestinoDiferencia } from "../../empaque/lib/empaque";
 import { getLineasEmpaque } from "../../empaque/queries/empaque.queries";
 import type { TipoProceso } from "../../lotes/types";
-import { getStock } from "@/modules/core/inventario/queries/inventario.queries";
-import { bultosPorEtapa } from "../lib/cola";
-import { procesadosPorTipo, siguientePaso } from "../lib/pasos";
+import { kgPorEtapa } from "../lib/cola";
+import type { ModoMolienda } from "../lib/molienda";
+import { evaluarPasos, siguientePaso, type EtapaKg, type OrigenPlanta } from "../lib/pasos";
 import type { AlertaCalidad } from "../../recepciones/lib/calidad";
 import type { EstadoLote } from "../types";
-import type { BultoPlanta, ConfigPlanta, LoteParaProceso, ProcesoHistorial, TarjetaLotePlanta } from "../types-planta";
+import type { ConfigPlanta, LoteParaProceso, ProcesoHistorial, TarjetaLotePlanta } from "../types-planta";
 
 // Módulo plano (no "use server"): solo lo llama código de servidor. La autorización es el RLS (vistas
 // `security_invoker`): sin el módulo `cafe.procesos`, o sin membresía en el cliente actual, todo sale vacío.
-// Nada de estados guardados: el estado y el avance de cada lote salen de `cafe.v_lotes` / `v_lote_etapas`.
+// Nada de estados guardados: el estado y el avance de cada lote salen de `cafe.v_lotes` / `v_lote_etapas`, y el saldo por kilos
+// de `cafe.v_origenes_disponibles` (ADR 0002: sin bultos).
 
 /**
  * Estados con trabajo pendiente en la planta. Un lote de SERVICIO `listo` (todo procesado, sin remisión) sigue
@@ -25,7 +26,7 @@ import type { BultoPlanta, ConfigPlanta, LoteParaProceso, ProcesoHistorial, Tarj
 const FILTRO_TABLERO = "estado.in.(recibido,en_proceso,parcial),and(estado.eq.listo,linea.eq.servicio)";
 
 const COLUMNAS_COLA =
-  "id, codigo, linea, tercero_nombre, tipo_cafe_nombre, fecha_recepcion, created_at, peso_recibido_kg, peso_actual_kg, num_bultos, nivel_tueste, perfil_temp_c, perfil_tiempo_min, alertas_calidad, tiene_desvio, estado, avance_texto, servicios_requeridos, servicios, anulado_at";
+  "id, codigo, linea, tercero_nombre, tipo_cafe_nombre, fecha_recepcion, created_at, peso_recibido_kg, peso_actual_kg, tipo_cafe_id, nivel_tueste, perfil_temp_c, perfil_tiempo_min, alertas_calidad, tiene_desvio, estado, avance_texto, servicios_requeridos, servicios, anulado_at";
 
 /** Trozos de `n` para no pasar de la longitud de URL de PostgREST con `.in()` sobre muchos ids. */
 function trozos<T>(lista: readonly T[], n: number): T[][] {
@@ -56,13 +57,19 @@ export async function getColaPlanta(): Promise<TarjetaLotePlanta[]> {
 
   const ids = lotes.map((l) => l.id as string);
 
-  // Pasos por los que ya pasó cada bulto, por lote.
-  const bultosPorLote = new Map<string, { pasos: TipoProceso[] }[]>();
+  // Saldo por origen y etapas en kilos, por lote.
+  const origenesPorLote = await cargarOrigenes(supabase, ids);
+  const etapasPorLote = new Map<string, EtapaKg[]>();
+  const completosPorLote = new Map<string, Partial<Record<TipoProceso, boolean>>>();
   for (const grupo of trozos(ids, 50)) {
     const filas = await fetchAllPaginado((desde, hasta) =>
-      cafe.from("v_bultos_estado").select("lote_id, bulto_id, pasos").in("lote_id", grupo).order("bulto_id").range(desde, hasta),
+      cafe.from("v_lote_etapas").select("lote_id, tipo, kg_base, kg_pendientes, completo").in("lote_id", grupo).order("lote_id").order("tipo").range(desde, hasta),
     );
-    for (const b of filas) bultosPorLote.set(b.lote_id as string, [...(bultosPorLote.get(b.lote_id as string) ?? []), { pasos: (b.pasos ?? []) as TipoProceso[] }]);
+    for (const e of filas) {
+      const id = e.lote_id as string;
+      etapasPorLote.set(id, [...(etapasPorLote.get(id) ?? []), { tipo: e.tipo as TipoProceso, kgBase: Number(e.kg_base ?? 0), kgPendientes: Number(e.kg_pendientes ?? 0) }]);
+      completosPorLote.set(id, { ...(completosPorLote.get(id) ?? {}), [e.tipo as TipoProceso]: e.completo === true });
+    }
   }
 
   // «Listo desde»: la fecha del último proceso vigente de cada lote listo.
@@ -81,8 +88,8 @@ export async function getColaPlanta(): Promise<TarjetaLotePlanta[]> {
   return lotes.map((l) => {
     const id = l.id as string;
     const requeridos = (l.servicios_requeridos ?? []) as TipoProceso[];
-    const bultos = bultosPorLote.get(id) ?? [];
-    const procesados = procesadosPorTipo(bultos.map((b, i) => ({ id: String(i), numero: i + 1, pasos: b.pasos })));
+    const pesoRecibidoKg = Number(l.peso_recibido_kg);
+    const evaluaciones = evaluarPasos({ linea: l.linea, servicios: (l.servicios ?? []) as TipoProceso[] }, origenesPorLote.get(id) ?? []);
     return {
       id,
       codigo: l.codigo as string,
@@ -91,9 +98,8 @@ export async function getColaPlanta(): Promise<TarjetaLotePlanta[]> {
       tipoCafe: l.tipo_cafe_nombre,
       fechaRecepcion: l.fecha_recepcion as string,
       llegadaEn: l.created_at as string,
-      pesoRecibidoKg: Number(l.peso_recibido_kg),
+      pesoRecibidoKg,
       pesoActualKg: Number(l.peso_actual_kg ?? l.peso_recibido_kg),
-      numBultos: l.num_bultos as number,
       nivelTueste: l.nivel_tueste,
       perfilTempC: l.perfil_temp_c,
       perfilTiempoMin: l.perfil_tiempo_min,
@@ -101,13 +107,55 @@ export async function getColaPlanta(): Promise<TarjetaLotePlanta[]> {
       tieneDesvio: l.tiene_desvio ?? false,
       estado: l.estado as EstadoLote, // vista: solo estos valores
       avanceTexto: l.avance_texto ?? "",
-      siguiente: siguientePaso(requeridos, l.num_bultos as number, procesados),
+      siguiente: siguientePaso(requeridos, etapasPorLote.get(id) ?? [], pesoRecibidoKg),
       serviciosRequeridos: requeridos,
-      procesados,
-      bultosPorEtapa: bultosPorEtapa(requeridos, bultos),
+      completos: completosPorLote.get(id) ?? {},
+      kgPorEtapa: kgPorEtapa(evaluaciones),
       listoDesde: listoDesde.get(id) ?? null,
     };
   });
+}
+
+/**
+ * Saldo por origen de los lotes (`v_origenes_disponibles`) con la fecha de cada proceso de origen y si la tostión ya tiene
+ * su molienda. Una sola fuente del saldo: nadie repite la cuenta.
+ */
+export async function cargarOrigenes(supabase: Awaited<ReturnType<typeof createClient>>, loteIds: readonly string[]): Promise<Map<string, OrigenPlanta[]>> {
+  const cafe = supabase.schema("cafe");
+  const resultado = new Map<string, OrigenPlanta[]>();
+  for (const grupo of trozos(loteIds, 50)) {
+    const [origenes, procesos] = await Promise.all([
+      fetchAllPaginado((desde, hasta) =>
+        cafe.from("v_origenes_disponibles").select("lote_id, proceso_id, tipo, base_kg, consumido_kg, saldo_kg, estimado").in("lote_id", grupo).order("lote_id").order("proceso_id", { nullsFirst: true }).range(desde, hasta),
+      ),
+      fetchAllPaginado((desde, hasta) =>
+        cafe.from("procesos").select("id, lote_id, tipo, fecha, origen_proceso_id, molienda_modo, molienda_kg").in("lote_id", grupo).is("anulado_at", null).is("reapertura_id", null).order("id").range(desde, hasta),
+      ),
+    ]);
+    const fechaDe = new Map(procesos.map((p) => [p.id as string, p.fecha as string]));
+    const moliendaDe = new Map(procesos.map((p) => [p.id as string, { modo: (p.molienda_modo as ModoMolienda | null) ?? null, kg: p.molienda_kg === null ? null : Number(p.molienda_kg) }]));
+    const conMolienda = new Set(procesos.filter((p) => p.tipo === "molienda" && p.origen_proceso_id).map((p) => p.origen_proceso_id as string));
+    for (const o of origenes) {
+      const id = o.lote_id as string;
+      const procesoId = (o.proceso_id as string | null) ?? null;
+      resultado.set(id, [
+        ...(resultado.get(id) ?? []),
+        {
+          procesoId,
+          tipo: (o.tipo as TipoProceso | null) ?? null,
+          fecha: procesoId ? (fechaDe.get(procesoId) ?? null) : null,
+          baseKg: Number(o.base_kg ?? 0),
+          consumidoKg: Number(o.consumido_kg ?? 0),
+          saldoKg: Number(o.saldo_kg ?? 0),
+          estimado: o.estimado === true,
+          conMolienda: procesoId ? conMolienda.has(procesoId) : false,
+          moliendaModo: procesoId ? (moliendaDe.get(procesoId)?.modo ?? null) : null,
+          moliendaKg: procesoId ? (moliendaDe.get(procesoId)?.kg ?? null) : null,
+        },
+      ]);
+    }
+  }
+  return resultado;
 }
 
 /** Cifras del día para el subtítulo de la cabecera de Planta (kg recibidos y tostados hoy). `hoy` = `YYYY-MM-DD` en la zona del cliente. */
@@ -121,12 +169,6 @@ export async function getKpisPlantaHoy(hoy: string): Promise<{ recibidoHoyKg: nu
   ]);
   const suma = (xs: readonly { [k: string]: unknown }[], k: string) => xs.reduce((a, x) => a + Number(x[k] ?? 0), 0);
   return { recibidoHoyKg: suma(lotes, "peso_recibido_kg"), tostadoHoyKg: suma(tostiones, "peso_entrada_kg") };
-}
-
-/** Nombres de los insumos activos por debajo de su mínimo (`v_stock.bajo_minimo`), para el aviso de la cabecera. */
-export async function getInsumosBajoMinimo(): Promise<string[]> {
-  const stock = await getStock({ tipo: "insumo", soloBajoMinimo: true });
-  return stock.map((s) => s.nombre);
 }
 
 /** Parámetros y tarifas que el formulario de proceso necesita (una consulta de parámetros por request). */
@@ -157,22 +199,22 @@ export async function getLoteParaProceso(loteId: string): Promise<LoteParaProces
   const supabase = await createClient();
   const cafe = supabase.schema("cafe");
 
-  const [lotes, bultos, procesos, vinculos, config] = await Promise.all([
+  const [lotes, procesos, config, perfilesLote, solicitada] = await Promise.all([
     cafe.from("v_lotes").select(COLUMNAS_COLA).eq("id", loteId).maybeSingle(),
-    cafe.from("v_bultos_estado").select("bulto_id, numero, peso_kg, peso_actual_kg, pasos").eq("lote_id", loteId).order("numero"),
     cafe
       .from("procesos")
       .select(
-        "id, tipo, fecha, peso_entrada_kg, peso_salida_kg, merma_kg, merma_pct, desvio, merma_referencia_pct, tolerancia_pts, valor, tarifa_kg, nivel_tueste, observaciones, diferencia_kg, diferencia_destino, anulado_at, motivo_anulacion, created_at",
+        "id, tipo, fecha, peso_entrada_kg, peso_salida_kg, merma_kg, merma_pct, desvio, merma_referencia_pct, tolerancia_pts, valor, tarifa_kg, nivel_tueste, observaciones, diferencia_kg, diferencia_destino, origen_proceso_id, molienda_modo, molienda_kg, anulado_at, motivo_anulacion, created_at",
       )
       .eq("lote_id", loteId)
       // Los procesos de una reapertura (CO-33) no son de los bultos del lote: se ven en su propia pantalla.
       .is("reapertura_id", null)
       .order("created_at", { ascending: true }),
-    cafe.from("proceso_bultos").select("proceso_id, bulto_id, tipo").eq("lote_id", loteId),
     getConfigPlanta(),
+    cafe.from("lote_perfil_tostion").select("orden, nivel, temp_c, tiempo_min, kg").eq("lote_id", loteId).order("orden", { ascending: true }),
+    cafe.from("lotes").select("molienda_solicitada_modo, molienda_solicitada_kg").eq("id", loteId).maybeSingle(),
   ]);
-  for (const r of [lotes, bultos, procesos, vinculos]) {
+  for (const r of [lotes, procesos, perfilesLote, solicitada]) {
     if (r.error) throw new Error(`No se pudo cargar el lote (${r.error.code ?? "sin código"})`);
   }
   const l = lotes.data;
@@ -190,41 +232,21 @@ export async function getLoteParaProceso(loteId: string): Promise<LoteParaProces
   // Líneas de bolsas del empaque (tamaño × unidades): marca propia con su producto; servicios, solo el tamaño.
   const lineasEmpaque = await getLineasEmpaque((procesos.data ?? []).filter((p) => p.tipo === "empaque").map((p) => p.id));
 
-  const procesosPorId = new Map((procesos.data ?? []).map((p) => [p.id, p]));
-  const numeroDeBulto = new Map((bultos.data ?? []).map((b) => [b.bulto_id, b.numero]));
-
-  // Qué bultos tiene cada proceso y cuándo pasó cada bulto por cada paso (solo procesos vigentes).
-  const bultosDeProceso = new Map<string, string[]>();
-  const hechos = new Map<string, BultoPlanta["hechos"]>();
-  for (const v of vinculos.data ?? []) {
-    bultosDeProceso.set(v.proceso_id, [...(bultosDeProceso.get(v.proceso_id) ?? []), v.bulto_id]);
-    const proceso = procesosPorId.get(v.proceso_id);
-    if (proceso && proceso.anulado_at === null) {
-      const h = hechos.get(v.bulto_id) ?? {};
-      h[v.tipo] = { fecha: proceso.fecha, procesoId: v.proceso_id };
-      hechos.set(v.bulto_id, h);
-    }
-  }
-
-  const bultosPlanta: BultoPlanta[] = (bultos.data ?? []).map((b) => ({
-    id: b.bulto_id,
-    numero: b.numero,
-    pesoKg: Number(b.peso_kg),
-    pesoActualKg: Number(b.peso_actual_kg ?? b.peso_kg),
-    pasos: b.pasos ?? [],
-    hechos: hechos.get(b.bulto_id) ?? {},
-  }));
+  const origenes = (await cargarOrigenes(supabase, [loteId])).get(loteId) ?? [];
+  const { data: etapasData, error: errorEtapas } = await cafe.from("v_lote_etapas").select("tipo, kg_base, kg_pendientes").eq("lote_id", loteId);
+  if (errorEtapas) throw new Error(`No se pudo cargar el avance del lote (${errorEtapas.code ?? "sin código"})`);
+  const etapas: EtapaKg[] = (etapasData ?? []).map((e) => ({ tipo: e.tipo as TipoProceso, kgBase: Number(e.kg_base ?? 0), kgPendientes: Number(e.kg_pendientes ?? 0) }));
 
   const historial: ProcesoHistorial[] = (procesos.data ?? []).map((p) => {
-    const ids = bultosDeProceso.get(p.id) ?? [];
     return {
       id: p.id,
       tipo: p.tipo,
       fecha: p.fecha,
       pesoEntradaKg: Number(p.peso_entrada_kg),
-      pesoSalidaKg: Number(p.peso_salida_kg),
-      mermaKg: Number(p.merma_kg),
-      mermaPct: Number(p.merma_pct),
+      pesoSalidaKg: p.peso_salida_kg === null ? null : Number(p.peso_salida_kg),
+      // Solo trilla y tostión (con su salida) tienen merma; molienda y empaque no.
+      mermaKg: p.merma_kg === null || (p.tipo !== "trilla" && p.tipo !== "tostion") ? null : Number(p.merma_kg),
+      mermaPct: p.merma_pct === null || (p.tipo !== "trilla" && p.tipo !== "tostion") ? null : Number(p.merma_pct),
       desvio: p.desvio ?? false,
       mermaReferenciaPct: p.merma_referencia_pct === null ? null : Number(p.merma_referencia_pct),
       toleranciaPts: p.tolerancia_pts === null ? null : Number(p.tolerancia_pts),
@@ -237,8 +259,9 @@ export async function getLoteParaProceso(loteId: string): Promise<LoteParaProces
       diferenciaKg: p.tipo === "empaque" && p.diferencia_kg !== null ? Number(p.diferencia_kg) : null,
       // Lo guarda la base con un CHECK (suelto | granel | muestra | perdida).
       diferenciaDestino: p.diferencia_destino as DestinoDiferencia | null,
-      bultos: ids.map((id) => numeroDeBulto.get(id) ?? 0).sort((a, b) => a - b),
-      bultoIds: ids,
+      origenProcesoId: p.origen_proceso_id,
+      moliendaModo: (p.molienda_modo as ModoMolienda | null) ?? null,
+      moliendaKg: p.molienda_kg === null ? null : Number(p.molienda_kg),
       anulado: p.anulado_at !== null,
       motivoAnulacion: p.motivo_anulacion,
       createdAt: p.created_at,
@@ -252,39 +275,42 @@ export async function getLoteParaProceso(loteId: string): Promise<LoteParaProces
       linea: l.linea,
       tercero: l.tercero_nombre ?? "—",
       tipoCafe: l.tipo_cafe_nombre,
+      tipoCafeId: l.tipo_cafe_id,
       fechaRecepcion: l.fecha_recepcion as string,
       pesoRecibidoKg: Number(l.peso_recibido_kg),
       pesoActualKg: Number(l.peso_actual_kg ?? l.peso_recibido_kg),
-      numBultos: l.num_bultos as number,
       servicios: l.servicios,
       serviciosRequeridos: l.servicios_requeridos ?? [],
       nivelTueste: l.nivel_tueste,
       perfilTempC: l.perfil_temp_c,
       perfilTiempoMin: l.perfil_tiempo_min,
+      perfiles: (perfilesLote.data ?? []).map((p) => ({
+        orden: p.orden,
+        nivel: p.nivel,
+        tempC: p.temp_c === null ? null : Number(p.temp_c),
+        tiempoMin: p.tiempo_min === null ? null : Number(p.tiempo_min),
+        kg: Number(p.kg),
+      })),
       alertasCalidad: (l.alertas_calidad ?? []) as AlertaCalidad[], // CHECK de la columna
       estado: l.estado as EstadoLote,
       avanceTexto: l.avance_texto ?? "",
       anulado: l.anulado_at !== null,
+      moliendaSolicitada: {
+        modo: (solicitada.data?.molienda_solicitada_modo as ModoMolienda | null) ?? null,
+        kg: solicitada.data?.molienda_solicitada_kg == null ? null : Number(solicitada.data.molienda_solicitada_kg),
+      },
     },
-    bultos: bultosPlanta,
+    origenes,
+    etapas,
     procesos: historial,
     config,
   };
 }
 
 /**
- * Peso que puede entrar a `tipo` con esos bultos (`cafe.peso_disponible`): la suma de los bultos si es el
- * primer paso, o, bulto a bulto, la parte de la SALIDA del paso previo que le toca (HU-03 c5: el operario no
- * vuelve a pesar). `data` es `null` cuando no se puede calcular (sin bultos, uno ajeno o sin el paso previo).
+ * Kilos que puede procesar `tipo` ahora (`cafe.peso_disponible`): Σ saldo de los orígenes de su paso de origen (la raíz si es el
+ * primer paso). `data` es `null` cuando no se puede calcular (el paso previo aún no se ha registrado).
  */
-export async function getPesoDisponible(
-  loteId: string,
-  tipo: TipoProceso,
-  bultoIds: readonly string[],
-): Promise<Result<number | null>> {
-  return callRpc<"cafe", "peso_disponible", number | null>("cafe", "peso_disponible", {
-    p_lote: loteId,
-    p_tipo: tipo,
-    p_bultos: [...bultoIds],
-  });
+export async function getPesoDisponible(loteId: string, tipo: TipoProceso): Promise<Result<number | null>> {
+  return callRpc<"cafe", "peso_disponible", number | null>("cafe", "peso_disponible", { p_lote: loteId, p_tipo: tipo });
 }

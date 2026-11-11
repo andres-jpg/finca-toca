@@ -6,7 +6,7 @@ import { requireSesion } from "@/modules/core/auth/guards";
 import { requireModuloPagina } from "@/modules/core/tenants/tenant.guards";
 import { fechaHoyEnZona } from "@/modules/cafe/insumos/lib/insumos";
 import { ETIQUETA_ALERTA_CALIDAD } from "@/modules/cafe/recepciones/lib/calidad";
-import { getConfigEmpaque, getSaldoGranel } from "@/modules/cafe/empaque/queries/empaque.queries";
+import { getConfigEmpaque, getSaldoGranel, getTostadoIncluible } from "@/modules/cafe/empaque/queries/empaque.queries";
 import { formatKg } from "@/modules/core/formato/numeros";
 import { LoteListoDialog } from "@/modules/cafe/empaque/components/lote-listo-dialog";
 import { HistorialProcesos } from "@/modules/cafe/procesos/components/historial-procesos";
@@ -14,13 +14,13 @@ import { NivelTuesteChip } from "@/modules/cafe/procesos/components/nivel-tueste
 import { ProcesoPlantaForm } from "@/modules/cafe/procesos/components/proceso-form";
 import { fechaCorta, formatearPeso } from "@/modules/cafe/procesos/lib/numero";
 import { evaluarPaso, pasoInicial } from "@/modules/cafe/procesos/lib/pasos";
-import { getLoteParaProceso, getPesoDisponible } from "@/modules/cafe/procesos/queries/planta.queries";
+import { getLoteParaProceso } from "@/modules/cafe/procesos/queries/planta.queries";
 
 const ETIQUETA_LINEA = { servicio: "Servicio (cliente)", marca_propia: "Marca propia" } as const;
 
 /**
- * Formulario de proceso de un lote (HU-F1-04): el siguiente paso preseleccionado, la selección de bultos, la
- * merma en vivo y, debajo, el historial con la anulación para owner/admin. Como la cola, es para owner/admin/
+ * Formulario de proceso de un lote (HU-F1-04): el siguiente paso preseleccionado, la tanda de la que sale cada paso, los
+ * kilos pendientes en vivo y, debajo, el historial con la anulación para owner/admin. Como la cola, es para owner/admin/
  * operativo; la ficha completa del lote (trazabilidad) es de CO-29.
  */
 export const metadata = { title: "Proceso del lote" };
@@ -30,7 +30,7 @@ export default async function ProcesoLotePage({
   searchParams,
 }: {
   params: Promise<{ loteId: string }>;
-  searchParams: Promise<{ listo?: string }>;
+  searchParams: Promise<{ listo?: string; paso?: string }>;
 }) {
   await requireModuloPagina("cafe.procesos");
   const { rolTenant, tenant } = await requireSesion();
@@ -39,20 +39,26 @@ export default async function ProcesoLotePage({
   const { loteId } = await params;
   if (!z.uuid().safeParse(loteId).success) notFound();
 
-  const { listo } = await searchParams;
+  const { listo, paso } = await searchParams;
   const datos = await getLoteParaProceso(loteId);
   if (!datos) notFound();
-  const { lote, bultos, procesos, config } = datos;
+  const { lote, origenes, etapas, procesos, config } = datos;
 
   const lotePasos = { linea: lote.linea, servicios: lote.servicios };
-  const tipoInicial = lote.anulado ? null : pasoInicial(lotePasos, bultos, lote.serviciosRequeridos);
-  const bultoIdsIniciales = tipoInicial ? evaluarPaso(lotePasos, tipoInicial, bultos).elegibles : [];
-  // El peso de entrada llega precargado: lo que salió del paso previo (HU-03 c5) o la suma de los bultos.
-  const pesoInicial = tipoInicial ? await getPesoDisponible(lote.id, tipoInicial, bultoIdsIniciales) : null;
+  // `?paso=` lo manda el recorrido de la ficha del lote (B-12): abre ese paso si se puede registrar; si no, el siguiente.
+  const pasoPedido = z.enum(["trilla", "tostion", "molienda", "empaque"]).safeParse(paso);
+  const tipoInicial = lote.anulado
+    ? null
+    : pasoPedido.success && evaluarPaso(lotePasos, pasoPedido.data, origenes).disponible
+      ? pasoPedido.data
+      : pasoInicial(lotePasos, origenes, lote.serviciosRequeridos, etapas, lote.pesoRecibidoKg);
 
   // El empaque de marca propia pide las presentaciones (bolsas activas) con el stock de bolsas y etiquetas; el de
   // servicios a terceros usa tamaños libres y no mueve inventario (A-01).
   const empaque = lote.anulado ? undefined : lote.linea === "marca_propia" ? await getConfigEmpaque(lote.id) : { presentaciones: [] };
+
+  // Tostado sin empacar del mismo tipo de café: se ofrece incluirlo en el empaque (B-09).
+  const incluibles = lote.linea === "marca_propia" && lote.tipoCafeId ? await getTostadoIncluible(lote.tipoCafeId) : [];
 
   // Tostado a granel que dejó el empaque de este lote (marca propia); lo consumirá el inventario (A-15).
   const granelKg = lote.linea === "marca_propia" ? await getSaldoGranel(lote.id) : 0;
@@ -82,8 +88,7 @@ export default async function ProcesoLotePage({
               <span className="text-gray-500"> · {ETIQUETA_LINEA[lote.linea]}</span>
             </p>
             <p className="text-sm text-gray-500">
-              Recibido el {fechaCorta(lote.fechaRecepcion, true)} · {lote.numBultos} {lote.numBultos === 1 ? "bulto" : "bultos"} ·{" "}
-              {formatearPeso(lote.pesoRecibidoKg)} kg recibidos · <span className="font-medium text-gray-700">{formatearPeso(lote.pesoActualKg)} kg disponibles</span>
+              Recibido el {fechaCorta(lote.fechaRecepcion, true)} · {formatearPeso(lote.pesoRecibidoKg)} kg recibidos · <span className="font-medium text-gray-700">{formatearPeso(lote.pesoActualKg)} kg disponibles</span>
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -100,7 +105,7 @@ export default async function ProcesoLotePage({
 
         {granelKg > 0 && (
           <p className="rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-700">
-            Tostado a granel de este lote: <span className="font-semibold tabular-nums">{formatKg(granelKg)}</span>
+            Tostado sin empacar de este lote: <span className="font-semibold tabular-nums">{formatKg(granelKg)}</span>
           </p>
         )}
 
@@ -120,13 +125,13 @@ export default async function ProcesoLotePage({
         <ProcesoPlantaForm
           key={clave}
           lote={lote}
-          bultos={bultos}
+          origenes={origenes}
+          procesos={procesos}
+          incluibles={incluibles}
           config={config}
           fechaHoy={fechaHoyEnZona(tenant.zonaHoraria)}
           puedeConfigurarTarifas={esAdmin}
           tipoInicial={tipoInicial}
-          bultoIdsIniciales={bultoIdsIniciales}
-          pesoDisponibleInicial={pesoInicial?.ok ? pesoInicial.data : null}
           empaque={empaque}
         />
       )}

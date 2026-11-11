@@ -13,6 +13,9 @@ export interface DetalleServicio {
   tarifaKg: number | null;
   valor: number | null;
   nivelTueste: NivelTueste | null;
+  /** Solo trilla (B-04): humedad (%) y densidad (g/L) medidas al terminar. */
+  humedadPct?: number | null;
+  densidadGl?: number | null;
   incluido: boolean;
   pendiente: boolean;
 }

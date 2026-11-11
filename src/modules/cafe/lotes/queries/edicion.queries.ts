@@ -21,7 +21,7 @@ export async function getDatosEdicion(loteId: string): Promise<DatosEdicion | nu
   const cafe = supabase.schema("cafe");
   const [{ data: bloqueo }, { data: lote }, { data: procesos }] = await Promise.all([
     cafe.rpc("lote_bloqueo_edicion", { p_lote: loteId }),
-    cafe.from("lotes").select("id, codigo, linea, fecha_recepcion, created_at, precio_compra_kg, factura_proveedor, observaciones").eq("id", loteId).maybeSingle(),
+    cafe.from("lotes").select("id, codigo, linea, fecha_recepcion, created_at, precio_compra_kg, factura_proveedor, observaciones, peso_recibido_kg").eq("id", loteId).maybeSingle(),
     cafe
       .from("procesos")
       .select("id, tipo, fecha, peso_entrada_kg, peso_salida_kg, observaciones, created_at, baches(id, numero, peso_entrada_kg, peso_salida_kg, temperatura_c, tiempo_min)")
@@ -41,6 +41,7 @@ export async function getDatosEdicion(loteId: string): Promise<DatosEdicion | nu
     precioCompraKg: lote.precio_compra_kg === null ? null : Number(lote.precio_compra_kg),
     facturaProveedor: lote.factura_proveedor,
     observaciones: lote.observaciones,
+    pesoRecibidoKg: Number(lote.peso_recibido_kg),
     procesos: (procesos ?? []).map(
       (p): ProcesoEditable => ({
         id: p.id,

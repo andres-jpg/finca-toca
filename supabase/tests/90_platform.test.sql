@@ -137,8 +137,8 @@ select is(
 select is(
   (select jsonb_object_agg(p.clave, p.valor)
      from public.parametros p join public.tenants t on t.id = p.tenant_id where t.slug = 'cofradia-demo'),
-  '{"cafe.capacidad_tostadora_kg": 13.5, "cafe.merma_referencia_trilla_pct": 19, "cafe.merma_referencia_tostion_pct": 18, "cafe.peso_bulto_kg": 62.5}'::jsonb,
-  'parámetros: tostadora 13,5 kg, mermas 19/18 y bulto 62,5 kg (humedad y densidad sin configurar)'
+  '{"cafe.capacidad_tostadora_kg": 13.5, "cafe.merma_referencia_trilla_pct": 19, "cafe.merma_referencia_tostion_pct": 18}'::jsonb,
+  'parámetros: tostadora 13,5 kg, mermas 19/18 (sin bulto sugerido; humedad y densidad sin configurar)'
 );
 select is(
   (select array_agg(s.serie order by s.serie)
@@ -179,7 +179,7 @@ select is(
            (select count(*) from public.terceros where tenant_id = t.id),
            (select count(*) from public.articulos where tenant_id = t.id))::text
      from public.tenants t where t.slug = 'cofradia-demo'),
-  '(5,4,4,1,8)', 'no duplica tarifas (3 de proceso + 2 precios), parámetros, series, consumidor final ni artículos (4 insumos + 4 productos terminados)'
+  '(5,3,4,1,8)', 'no duplica tarifas (3 de proceso + 2 precios), parámetros, series, consumidor final ni artículos (4 insumos + 4 productos terminados)'
 );
 select is(
   (select p.valor from public.parametros p join public.tenants t on t.id = p.tenant_id

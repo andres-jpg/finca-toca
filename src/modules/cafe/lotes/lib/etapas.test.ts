@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { filasEtapas, mermaProcesada, quedaDisponible, type EtapaLote } from "./etapas";
+import { filasEtapas, mermaProcesada, type EtapaLote } from "./etapas";
 
 const etapa = (tipo: EtapaLote["tipo"], entrada: number, salida: number, extra: Partial<EtapaLote> = {}): EtapaLote => ({
   tipo,
-  bultosProcesados: 8,
-  bultosTotal: 8,
+  kgBase: 500,
+  kgProcesados: 500,
+  kgPendientes: 0,
   completo: true,
   parcial: false,
   pesoEntradaKg: entrada,
@@ -40,65 +41,38 @@ describe("filasEtapas", () => {
   });
 });
 
-describe("quedaDisponible", () => {
-  it("todo en tostión: un solo grupo con el total", () => {
-    const bultos = Array.from({ length: 8 }, () => ({ ultimoTipo: "tostion" as const, pesoActualKg: 41.5 }));
-    expect(quedaDisponible(bultos)).toEqual([{ paso: "tostion", texto: "tostado", pesoKg: 332 }]);
-  });
-  it("a medias: del paso más avanzado al menos, con los sin procesar al final", () => {
-    const d = quedaDisponible([
-      { ultimoTipo: null, pesoActualKg: 62.5 },
-      { ultimoTipo: "tostion", pesoActualKg: 50.625 },
-      { ultimoTipo: "tostion", pesoActualKg: 50.625 },
-      { ultimoTipo: "trilla", pesoActualKg: 50.625 },
-    ]);
-    expect(d).toEqual([
-      { paso: "tostion", texto: "tostado", pesoKg: 101.25 },
-      { paso: "trilla", texto: "trillado", pesoKg: 50.625 },
-      { paso: null, texto: "sin procesar", pesoKg: 62.5 },
-    ]);
-  });
-  it("suma en gramos, sin ruido de coma flotante", () => {
-    const d = quedaDisponible([
-      { ultimoTipo: "molienda", pesoActualKg: 0.1 },
-      { ultimoTipo: "molienda", pesoActualKg: 0.2 },
-    ]);
-    expect(d[0].pesoKg).toBe(0.3);
-  });
-  it("sin bultos, nada", () => {
-    expect(quedaDisponible([])).toEqual([]);
-  });
-});
-
 describe("mermaProcesada (A-03)", () => {
   const etapa = (tipo: EtapaLote["tipo"], entrada: number, salida: number): EtapaLote => ({
     tipo,
-    bultosProcesados: 1,
-    bultosTotal: 6,
+    kgBase: 375,
+    kgProcesados: 125,
+    kgPendientes: 250,
     completo: false,
     parcial: true,
     pesoEntradaKg: entrada,
     pesoSalidaKg: salida,
-    mermaKg: entrada - salida,
+    mermaKg: tipo === "trilla" || tipo === "tostion" ? entrada - salida : null,
     valor: 0,
     desvios: 0,
     numProcesos: 1,
   });
 
-  it("2 de 6 bultos (125 kg de 375): mide esos bultos, 20 %, no 6,7 % sobre lo recibido", () => {
+  it("125 kg de 375 procesados: mide esos kilos, 20 %, no 6,7 % sobre lo recibido", () => {
     const r = mermaProcesada([etapa("trilla", 125, 100)]);
     expect(r).toEqual({ entradaKg: 125, mermaKg: 25, pct: 20 });
   });
 
-  it("suma las etapas hechas (Σ merma / Σ entrada) y no cuenta el empaque", () => {
-    const r = mermaProcesada([etapa("trilla", 500, 405), etapa("tostion", 405, 332), etapa("empaque", 332, 332)]);
+  it("suma trilla y tostión (Σ merma / Σ entrada); molienda y empaque no tienen merma", () => {
+    const r = mermaProcesada([etapa("trilla", 500, 405), etapa("tostion", 405, 332), etapa("empaque", 332, 332), etapa("molienda", 332, 330)]);
     expect(r?.mermaKg).toBe(168);
     expect(r?.entradaKg).toBe(905);
     expect(r?.pct).toBe(18.56);
   });
 
-  it("sin procesos no hay merma", () => {
+  it("sin procesos con merma no hay merma", () => {
     expect(mermaProcesada([])).toBeNull();
     expect(mermaProcesada([etapa("empaque", 10, 10)])).toBeNull();
+    // una tostión sin empacar (sin salida) todavía no tiene merma
+    expect(mermaProcesada([{ tipo: "tostion", pesoEntradaKg: 54, mermaKg: null }])).toBeNull();
   });
 });

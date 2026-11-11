@@ -1,46 +1,64 @@
 "use client";
 
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { formatearCOP } from "../../compras/lib/compra";
-import { abreviarCOP, diaCorto } from "../lib/formato";
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis, LabelList } from "recharts";
+import { formatCOP } from "@/modules/core/formato/numeros";
+import { diaCorto, millonesTexto } from "../lib/formato";
 import type { PuntoIngreso } from "../lib/series";
-import type { LineaPanel } from "../types";
 import { MarcoGrafico } from "./marco-grafico";
 
 const COLOR_MARCA = "#b45309";
 const COLOR_SERVICIOS = "#0284c7";
 
+interface EtiquetaProps {
+  x?: number | string;
+  y?: number | string;
+  width?: number | string;
+  value?: unknown;
+}
+
+/** El total del día sobre la barra apilada, en millones con 1 decimal. Los días sin ingreso no llevan etiqueta. */
+function EtiquetaTotal({ x = 0, y = 0, width = 0, value }: EtiquetaProps) {
+  const total = Number(value ?? 0);
+  if (!(total > 0)) return null;
+  return (
+    <text x={Number(x) + Number(width) / 2} y={Number(y) - 5} textAnchor="middle" fontSize={11} fontWeight={600} fill="#44403c">
+      {millonesTexto(total)}
+    </text>
+  );
+}
+
 /**
- * Gráfico 3: ingreso diario, marca propia (ventas) frente a servicios (valor de los procesos). Con «Todo» las barras se
- * apilan; con una línea elegida solo se pinta la serie que le corresponde.
+ * Ingreso diario de los últimos 14 días: barras apiladas marca propia / servicios a terceros con el total sobre cada barra
+ * (millones, 1 decimal) y leyenda. Un solo eje (en millones): sin doble eje. El acumulado del periodo va en el encabezado.
  */
-export function GraficoIngreso({ datos, linea }: { datos: PuntoIngreso[]; linea: LineaPanel | null }) {
-  const verMarca = linea === null || linea === "marca_propia";
-  const verServicios = linea === null || linea !== "marca_propia";
-  const hayDatos = datos.some((d) => (verMarca && d.marcaPropia > 0) || (verServicios && d.servicios > 0));
-  const apilado = verMarca && verServicios ? "ingreso" : undefined;
+export function GraficoIngreso({ datos, acumulado, etiquetaAcumulado }: { datos: PuntoIngreso[]; acumulado: number; etiquetaAcumulado: string }) {
+  const hayDatos = datos.some((d) => d.total > 0);
   return (
     <MarcoGrafico
-      titulo="Ingreso diario"
-      subtitulo={linea === null ? "marca propia (ventas) y servicios (procesos), apilados" : linea === "marca_propia" ? "ventas de marca propia" : "valor de los servicios"}
+      titulo="Ingresos diarios · últimos 14 días"
+      subtitulo={`${etiquetaAcumulado}: ${formatCOP(acumulado)} · cifras en millones de pesos`}
       vacio={!hayDatos}
-      textoVacio="Sin ingresos en este periodo"
+      textoVacio="Sin ingresos en estos 14 días"
     >
-      <ResponsiveContainer width="100%" height={260}>
-        <BarChart data={datos} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-          <XAxis dataKey="fecha" tickFormatter={diaCorto} tick={{ fontSize: 11 }} minTickGap={14} />
-          <YAxis tick={{ fontSize: 11 }} width={56} tickFormatter={(v: number) => abreviarCOP(v)} />
-          <Tooltip
-            labelFormatter={(f) => diaCorto(String(f))}
-            formatter={(valor, nombre) => [formatearCOP(Number(valor)), String(nombre)]}
-            contentStyle={{ fontSize: 12, borderRadius: 8 }}
-          />
-          {apilado && <Legend wrapperStyle={{ fontSize: 12 }} />}
-          {verMarca && <Bar dataKey="marcaPropia" name="Marca propia" stackId={apilado} fill={COLOR_MARCA} />}
-          {verServicios && <Bar dataKey="servicios" name="Servicios" stackId={apilado} fill={COLOR_SERVICIOS} radius={[2, 2, 0, 0]} />}
-        </BarChart>
-      </ResponsiveContainer>
+      <div data-testid="grafico-ingreso">
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart data={datos} margin={{ top: 20, right: 12, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <XAxis dataKey="fecha" tickFormatter={diaCorto} tick={{ fontSize: 11 }} minTickGap={8} />
+            <YAxis tick={{ fontSize: 11 }} width={40} tickFormatter={(v: number) => millonesTexto(v)} />
+            <Tooltip
+              labelFormatter={(f) => diaCorto(String(f))}
+              formatter={(valor, nombre) => [formatCOP(Number(valor)), String(nombre)]}
+              contentStyle={{ fontSize: 12, borderRadius: 8 }}
+            />
+            <Legend wrapperStyle={{ fontSize: 12 }} />
+            <Bar dataKey="marcaPropia" name="Ventas marca propia" stackId="ingreso" fill={COLOR_MARCA} />
+            <Bar dataKey="servicios" name="Servicios a terceros" stackId="ingreso" fill={COLOR_SERVICIOS} radius={[2, 2, 0, 0]}>
+              <LabelList dataKey="total" content={EtiquetaTotal} />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </MarcoGrafico>
   );
 }

@@ -1,75 +1,67 @@
 import { expect, test, usarRol } from "../fixtures/test";
 import { crearRecepcion, registrarTrilla } from "../helpers/api";
-import { abrirPlanta, conComa, elegirTueste, irA, NAVEGACION_LENTA, numeroDelCampo, registrarPaso, textoDelAviso } from "../helpers/ui";
+import { abrirPlanta, elegirTueste, irA, NAVEGACION_LENTA, registrarPaso, textoDelAviso } from "../helpers/ui";
 
 test.use(usarRol("cafeAdmin"));
 
 // QA FIN-140 · escenario 1 «Terceros a crédito»: 220 kg de pergamino con trilla, tostión (medio, 205 °C, 12 min) y molienda;
-// tostión con pesaje agrupado en dos baches; empaque 12 × 10 kg + 5 × 5 kg con la diferencia «se entrega suelto»; entrega
+// tostión sin peso de salida; empaque 12 × 10 kg + 5 × 5 kg con báscula y sobrante entregado a granel; entrega
 // junto con otro lote listo del mismo cliente (UNA remisión). Por la interfaz, salvo el segundo lote (punto de partida).
 
-test("terceros a crédito: recepción, trilla, tostión agrupada, molienda, empaque y entrega de dos lotes @tablet", async ({ page }) => {
+test("terceros a crédito: recepción, trilla, tostión por tandas, molienda, empaque y entrega de dos lotes @tablet", async ({ page }) => {
   // El otro lote listo del mismo cliente (solo trilla, ya trillado) para entregarlo en la misma remisión.
-  const otro = await crearRecepcion({ servicios: ["trilla"], bultos: 2, pesoKg: 125 });
+  const otro = await crearRecepcion({ servicios: ["trilla"], pesoKg: 125 });
   await registrarTrilla(otro, 125, 101.25);
 
-  // --- 1. Recepción: 4 bultos, 220 kg, trilla + tostión (medio, 205 °C, 12 min) + molienda ----------------------------------
+  // --- 1. Recepción: 220 kg, trilla + tostión (medio, 205 °C, 12 min) + molienda ----------------------------------
   await irA(page, "/dashboard/cafe/recibir?tipo=servicios");
   await page.getByText("Selecciona o crea el cliente").click();
   await page.getByRole("option", { name: /Cliente E2E/ }).click();
-  await page.getByLabel("Número de bultos").fill("4");
-  await page.getByLabel("Peso total (kg)").fill("220");
+  await page.getByLabel("Peso recibido (kg)").fill("220");
   for (const servicio of ["Trilla", "Tostión", "Molienda"]) {
     await page.getByRole("button", { name: servicio, exact: true }).click();
   }
   await elegirTueste(page, "Medio");
-  await page.getByLabel("Temperatura pedida (°C) · opcional").fill("205");
-  await page.getByLabel("Tiempo pedido (min) · opcional").fill("12");
+  // B-02: el perfil pedido vive en el panel de perfil de tueste (precargado con el de maquila: se cambia).
+  const panelPerfil = page.getByTestId("panel-perfil-tueste");
+  await panelPerfil.getByLabel("Temperatura (°C)").fill("205");
+  await panelPerfil.getByLabel("Tiempo (min)").fill("12");
+  // B-03: cantidad a moler con estimado (220 kg → trilla 19 % → tostión 18 % = 146,1 kg; mitad = 73,1 kg).
+  await page.getByRole("radio", { name: "Mitad" }).click();
+  await expect(page.getByText("Estimado: 146,1 kg tostados, de los cuales 73,1 kg molidos y 73,0 kg en grano.")).toBeVisible();
   await page.getByRole("button", { name: "Guardar y enviar a planta" }).click();
   const codigo = (await textoDelAviso(page, /Recepción registrada: MQ-/)).match(/MQ-\d{4}-\d+/)?.[0];
   expect(codigo, "el aviso trae el código del lote MQ").toBeTruthy();
 
   // --- 2. Trilla 220 → 178,2 kg (19 %) --------------------------------------------------------------------------------------
   await abrirPlanta(page, codigo!);
-  await expect(page.getByLabel("Peso de entrada (kg)")).toHaveValue("220");
-  await page.getByLabel("Peso de salida (kg)").fill("178,2");
+  await expect(page.getByLabel("Entrada: pergamino del lote (kg)")).toHaveValue("220");
+  await page.getByLabel("Peso final (kg)").fill("178,2");
   await registrarPaso(page, "Registrar trilla");
 
-  // --- 3. Tostión: el pedido del cliente se ve y dos baches se pesan juntos ---------------------------------------------------
+  // --- 3. Tostión: el pedido del cliente se ve en los baches y no hay peso de salida (B-05) -------------------------------------
   await abrirPlanta(page, codigo!);
-  await page.getByRole("button", { name: "Sugerir baches" }).click();
-  await expect(page.getByText(/Pedido del cliente:.*205,0 °C.*12,0 min/)).toBeVisible();
-  const entradas = page.getByLabel(/^Bache \d+, kg de entrada$/);
-  const n = await entradas.count();
-  expect(n).toBeGreaterThan(2);
+  await expect(page.getByLabel("Kilos a tostar ahora")).toHaveValue("178,2");
+  await expect(page.getByText(/Perfil de tueste:.*205,0 °C.*12,0 min/)).toBeVisible();
+  await expect(page.getByLabel("Bache 1, temperatura en grados (opcional)")).toHaveValue("205");
+  await expect(page.getByRole("status").filter({ hasText: "Cuadra con los kilos a tostar" })).toBeVisible();
+  await registrarPaso(page, /Registrar tostión/);
 
-  await page.getByRole("radio", { name: "Agrupado", exact: true }).click();
-  await page.getByRole("checkbox", { name: "Seleccionar el bache 1 para agrupar" }).check();
-  await page.getByRole("checkbox", { name: "Seleccionar el bache 2 para agrupar" }).check();
-  await page.getByRole("button", { name: /^Agrupar seleccionados \(2\)/ }).click();
-  const juntos = (await numeroDelCampo(entradas.nth(0))) + (await numeroDelCampo(entradas.nth(1)));
-  await page.getByLabel("Grupo 1, kg de salida del grupo").fill(conComa(Math.round(juntos * 82 * 10) / 1000));
-  for (let i = 3; i <= n; i++) {
-    const entrada = await numeroDelCampo(page.getByLabel(`Bache ${i}, kg de entrada`, { exact: true }));
-    await page.getByLabel(`Bache ${i}, kg de salida`, { exact: true }).fill(conComa(Math.round(entrada * 82 * 10) / 1000));
-  }
-  await expect(page.getByRole("status").filter({ hasText: "Cuadra con la entrada" })).toBeVisible();
-  await registrarPaso(page, "Registrar tostión");
-
-  // --- 4. Molienda: lo tostado (≈146,1 kg) → 146 kg -----------------------------------------------------------------------------
+  // --- 4. Molienda: sin pesos ni merma -------------------------------------------------------------------------------------------
   await abrirPlanta(page, codigo!);
-  await page.getByLabel("Peso de salida (kg)").fill("146");
-  await registrarPaso(page, "Registrar molienda");
+  await page.getByRole("radio", { name: /^Molienda/ }).click();
+  await expect(page.getByText("La molienda no genera merma.")).toBeVisible();
+  await registrarPaso(page, "Molienda realizada → Por empacar");
 
-  // --- 5. Empaque: 12 × 10 kg + 5 × 5 kg = 145 kg; el kilo que sobra se entrega suelto -----------------------------------------
+  // --- 5. Empaque: 12 × 10 kg + 5 × 5 kg = 145 kg; báscula 146,1 kg → sobrante 1,1 kg que se entrega a granel -------------------
   await abrirPlanta(page, codigo!);
-  await page.getByLabel("Peso de la bolsa (kg)").fill("10");
-  await page.getByLabel("Cantidad", { exact: true }).fill("12");
-  await page.getByRole("button", { name: "Otro tamaño de bolsa" }).click();
-  await page.getByLabel("Peso de la bolsa (kg)").nth(1).fill("5");
-  await page.getByLabel("Cantidad", { exact: true }).nth(1).fill("5");
-  await expect(page.getByRole("button", { name: "Registrar empaque" })).toBeDisabled(); // sobra café: falta decir adónde fue
-  await page.getByRole("radio", { name: "Se entrega suelto al cliente" }).click();
+  await page.getByRole("radio", { name: /^Empaque/ }).click();
+  await page.getByLabel("Número de bolsas").first().fill("12");
+  await page.getByRole("button", { name: "Agregar bolsas" }).click();
+  await page.getByRole("radio", { name: "5 kg" }).nth(1).click();
+  await page.getByLabel("Número de bolsas").nth(1).fill("5");
+  await page.getByLabel("Peso total en báscula (kg)").fill("146,1");
+  await expect(page.getByText("Se entrega a granel.")).toBeVisible();
   await page.getByRole("button", { name: "Registrar empaque" }).click();
 
   // Era el último servicio: se ofrece entregar ahora y llega con el lote preseleccionado.

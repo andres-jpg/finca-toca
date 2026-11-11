@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import type { Avance } from "../lib/avance";
 
 /**
- * Barra de avance del lote con su texto («2 de 3», «Tostado 4/6 bultos»). El texto va en la propia barra para
+ * Barra de avance del lote con su texto («2 de 3», «202,0 kg por tostar · de 320,0 kg»). El texto va en la propia barra para
  * lectores de pantalla (`role="progressbar"`): el color solo no dice nada.
  */
 export function AvanceBarra({ avance, completo = false, className }: { avance: Avance; completo?: boolean; className?: string }) {

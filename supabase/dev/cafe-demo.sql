@@ -83,10 +83,8 @@ declare
   v_r       jsonb;
   v_lote_mq uuid;
   v_lote_mp uuid;
-  v_bultos  uuid[];
+  v_tostion uuid;
   v_baches  jsonb;
-  v_in      numeric;
-  v_out     numeric;
   v_hoy     date := current_date;
   v_art     uuid;
 begin
@@ -118,60 +116,58 @@ begin
   end loop;
   update public.articulos set stock_minimo = 100 where tipo = 'insumo' and (atributos ->> 'clase') = 'bolsa';
 
-  -- Compra de marca propia: 375 kg de Excelso en 6 bultos a $18.500/kg -------------------------------------------
+  -- Precios vigentes de los insumos (B-13, confirmados por Cofradía): bolsa 500 g $1.200 · etiqueta 500 g $370 · bolsa 2.500 g
+  -- $3.700 · etiqueta 2.500 g $370. Solo en desarrollo: en cada cliente real los fija un administrador desde Insumos. Idempotente:
+  -- no repite un precio que ya es el vigente.
+  insert into cafe.insumo_precios (articulo_id, precio)
+  select a.id, p.precio
+    from public.articulos a
+    join (values ('bolsa', 500, 1200), ('etiqueta', 500, 370), ('bolsa', 2500, 3700), ('etiqueta', 2500, 370)) as p(clase, g, precio)
+      on a.atributos ->> 'clase' = p.clase and (a.atributos ->> 'presentacion_g')::integer = p.g
+   where a.tipo = 'insumo' and a.activo
+     and cafe.precio_insumo(a.id) is distinct from p.precio;
+
+  -- Compra de marca propia: 375 kg de Excelso a $18.500/kg -------------------------------------------
   v_r := cafe.registrar_compra(jsonb_build_object(
-    'tercero_id', v_prov, 'tipo_cafe_id', v_excelso, 'fecha', v_hoy - 6, 'peso_kg', 375, 'num_bultos', 6,
+    'tercero_id', v_prov, 'tipo_cafe_id', v_excelso, 'fecha', v_hoy - 6, 'peso_kg', 375,
     'precio_kg', 18500, 'factura_proveedor', 'FV-1234'));
   v_lote_mp := (v_r ->> 'id')::uuid;
 
   -- Recepciones de clientes ---------------------------------------------------------------------------------------
   -- 1) Ejemplo del informe: 500 kg, trilla + tostión + molienda (el empaque va incluido).
   v_r := cafe.registrar_recepcion(jsonb_build_object(
-    'tercero_id', v_cli, 'fecha', v_hoy - 5, 'peso_kg', 500, 'num_bultos', 8, 'humedad_pct', 11.5, 'densidad', 680,
+    'tercero_id', v_cli, 'fecha', v_hoy - 5, 'peso_kg', 500, 'humedad_pct', 11.5, 'densidad', 680,
     'servicios', jsonb_build_array('trilla', 'tostion', 'molienda'), 'nivel_tueste', 'medio'));
   v_lote_mq := (v_r ->> 'id')::uuid;
   -- 2) Solo trilla, sin procesar todavía (queda en la cola de la planta).
   perform cafe.registrar_recepcion(jsonb_build_object(
-    'tercero_id', v_cli2, 'fecha', v_hoy, 'peso_kg', 250, 'num_bultos', 4, 'humedad_pct', 12.8, 'densidad', 650,
+    'tercero_id', v_cli2, 'fecha', v_hoy, 'peso_kg', 250, 'humedad_pct', 12.8, 'densidad', 650,
     'servicios', jsonb_build_array('trilla')));
 
-  -- Procesos del lote de servicio (ejemplo del informe): trilla 500→405, tostión 405→332 (30 baches), molienda 332→330
-  select array_agg(id order by numero) into v_bultos from cafe.lote_bultos where lote_id = v_lote_mq;
+  -- Procesos del lote de servicio (ejemplo del informe): trilla 500→405, tostión de 405 kg (30 baches, sin peso de salida),
+  -- molienda y empaque con báscula de 332 kg (fija la salida de la tostión).
   perform cafe.registrar_proceso(jsonb_build_object(
-    'lote_id', v_lote_mq, 'tipo', 'trilla', 'fecha', v_hoy, 'bultos', to_jsonb(v_bultos),
-    'peso_entrada_kg', null, 'peso_salida_kg', 405));
+    'lote_id', v_lote_mq, 'tipo', 'trilla', 'fecha', v_hoy, 'peso_entrada_kg', null, 'peso_salida_kg', 405));
 
-  select jsonb_agg(jsonb_build_object('peso_entrada_kg', 13.5,
-                                      'peso_salida_kg', case when n < 30 then 11.066 else 11.086 end,
-                                      'temperatura_c', 210) order by n)
+  select jsonb_agg(jsonb_build_object('peso_entrada_kg', 13.5, 'temperatura_c', 210, 'tiempo_min', 17) order by n)
     into v_baches
     from generate_series(1, 30) n;
   perform cafe.registrar_proceso(jsonb_build_object(
-    'lote_id', v_lote_mq, 'tipo', 'tostion', 'fecha', v_hoy, 'bultos', to_jsonb(v_bultos),
-    'peso_entrada_kg', 405, 'peso_salida_kg', 332, 'nivel_tueste', 'medio', 'baches', v_baches));
-  perform cafe.registrar_proceso(jsonb_build_object(
-    'lote_id', v_lote_mq, 'tipo', 'molienda', 'fecha', v_hoy, 'bultos', to_jsonb(v_bultos),
-    'peso_entrada_kg', null, 'peso_salida_kg', 330));
-  perform cafe.registrar_proceso(jsonb_build_object(
-    'lote_id', v_lote_mq, 'tipo', 'empaque', 'fecha', v_hoy, 'bultos', to_jsonb(v_bultos),
-    'peso_entrada_kg', null, 'peso_salida_kg', 330));
+    'lote_id', v_lote_mq, 'tipo', 'tostion', 'fecha', v_hoy, 'peso_entrada_kg', 405, 'nivel_tueste', 'medio', 'baches', v_baches));
+  perform cafe.registrar_proceso(jsonb_build_object('lote_id', v_lote_mq, 'tipo', 'molienda', 'fecha', v_hoy, 'peso_entrada_kg', 330));
+  perform cafe.registrar_empaque(jsonb_build_object(
+    'lote_id', v_lote_mq, 'fecha', v_hoy, 'peso_bascula_kg', 332,
+    'lineas', jsonb_build_array(jsonb_build_object('presentacion_g', 10000, 'unidades', 33, 'bolsa_cliente', true))));
 
-  -- Procesos del lote de marca propia: tostión de 4 de los 6 bultos (queda «parcial») y empaque de esos 4 -------------
-  select array_agg(id order by numero) into v_bultos from (
-    select id, numero from cafe.lote_bultos where lote_id = v_lote_mp order by numero limit 4) b;
-  v_in := 250;   -- 4 bultos × 62,5 kg
-  v_out := 205;  -- 18 % de merma
-  select jsonb_agg(jsonb_build_object('peso_entrada_kg', e, 'peso_salida_kg', round(e * 0.82, 3)) order by n)
+  -- Lote de marca propia: una tanda de 250 kg tostada y empacada con báscula (queda «parcial»: faltan 125 kg por tostar) ----
+  select jsonb_agg(jsonb_build_object('peso_entrada_kg', e, 'temperatura_c', 216, 'tiempo_min', 17) order by n)
     into v_baches
     from (select n, case when n < 19 then 13.5 else 7 end as e from generate_series(1, 19) n) t;
-  perform cafe.registrar_proceso(jsonb_build_object(
-    'lote_id', v_lote_mp, 'tipo', 'tostion', 'fecha', v_hoy, 'bultos', to_jsonb(v_bultos),
-    'peso_entrada_kg', v_in,
-    'peso_salida_kg', (select sum((b ->> 'peso_salida_kg')::numeric) from jsonb_array_elements(v_baches) b),
-    'nivel_tueste', 'medio', 'baches', v_baches));
-  -- 200 kg en 500 g (400 uds) y el resto en 2.500 g
+  v_tostion := (cafe.registrar_proceso(jsonb_build_object(
+    'lote_id', v_lote_mp, 'tipo', 'tostion', 'fecha', v_hoy, 'peso_entrada_kg', 250, 'nivel_tueste', 'medio', 'baches', v_baches)) ->> 'id')::uuid;
+  -- 205 kg en báscula; 200 kg en 500 g (240 uds) y 2.500 g (32 uds) = 200 kg → sobrante de 5 kg a «Tostado sin empacar».
   perform cafe.registrar_empaque(jsonb_build_object(
-    'lote_id', v_lote_mp, 'fecha', v_hoy, 'bultos', to_jsonb(v_bultos), 'peso_entrada_kg', null,
+    'lote_id', v_lote_mp, 'fecha', v_hoy, 'origen_proceso_id', v_tostion, 'peso_bascula_kg', 205,
     'lineas', jsonb_build_array(jsonb_build_object('presentacion_g', 500, 'unidades', 240),
                                 jsonb_build_object('presentacion_g', 2500, 'unidades', 32))));
 

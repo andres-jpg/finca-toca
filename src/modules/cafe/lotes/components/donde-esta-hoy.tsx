@@ -1,16 +1,16 @@
 import { formatKg } from "@/modules/core/formato/numeros";
 import { enteroConMiles } from "../../empaque/lib/empaque";
-import type { GrupoBultos, UnidadesEmpacadas } from "../lib/donde-esta-hoy";
+import type { GrupoSaldo, UnidadesEmpacadas } from "../lib/donde-esta-hoy";
 
 interface Props {
-  grupos: GrupoBultos[];
+  grupos: GrupoSaldo[];
   /** `null` = no aplica (servicios a terceros). */
   granelKg: number | null;
   empacado: UnidadesEmpacadas[];
 }
 
 /**
- * «Dónde está hoy este café»: una lista por tipo de existencia (bultos en grano, kilos a granel, unidades empacadas).
+ * «Dónde está hoy este café»: una lista por tipo de existencia (café sin tostar o tostado, kilos de tostado sin empacar, unidades empacadas).
  * Cada línea tiene su propia unidad y NO hay total: sumar kilos con bolsas no significa nada.
  */
 export function DondeEstaHoy({ grupos, granelKg, empacado }: Props) {
@@ -27,14 +27,15 @@ export function DondeEstaHoy({ grupos, granelKg, empacado }: Props) {
           {grupos.map((g) => (
             <li key={g.paso ?? "sin"} className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-3 text-sm">
               <span className="text-gray-700">
-                {g.bultos} {g.bultos === 1 ? "bulto" : "bultos"} {g.texto}
+                Café {g.texto}
+                {g.estimado && <span className="ml-2 text-xs text-gray-500">Estimado</span>}
               </span>
               <span className="font-medium tabular-nums text-gray-900">{formatKg(g.pesoKg)}</span>
             </li>
           ))}
           {granelKg !== null && granelKg > 0 && (
             <li className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-3 text-sm">
-              <span className="text-gray-700">Tostado a granel</span>
+              <span className="text-gray-700">Tostado sin empacar</span>
               <span className="font-medium tabular-nums text-gray-900">{formatKg(granelKg)}</span>
             </li>
           )}

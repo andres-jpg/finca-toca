@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   construirLineaDeTiempo,
   etiquetaMotivoMovimiento,
-  listaBultos,
-  mermaPctBache,
   type ProcesoLinea,
   type ReaperturaLinea,
   type RecepcionLinea,
@@ -18,7 +16,6 @@ const recepcion: RecepcionLinea = {
   tercero: "Juan Pérez",
   tipoCafe: null,
   pesoRecibidoKg: 500,
-  numBultos: 8,
 };
 
 const proceso = (id: string, tipo: ProcesoLinea["tipo"], fecha: string, creadoEn: string, extra: Partial<ProcesoLinea> = {}): ProcesoLinea => ({
@@ -27,7 +24,6 @@ const proceso = (id: string, tipo: ProcesoLinea["tipo"], fecha: string, creadoEn
   fecha,
   creadoEn,
   creadoPor: null,
-  bultos: [1, 2, 3, 4, 5, 6, 7, 8],
   pesoEntradaKg: 500,
   pesoSalidaKg: 405,
   mermaKg: 95,
@@ -43,7 +39,7 @@ const proceso = (id: string, tipo: ProcesoLinea["tipo"], fecha: string, creadoEn
   ...extra,
 });
 
-const entrada = (procesos: ProcesoLinea[]) => ({ recepcion, numBultosLote: 8, procesos, movimientos: [], anulacionLote: null });
+const entrada = (procesos: ProcesoLinea[]) => ({ recepcion, procesos, movimientos: [], anulacionLote: null });
 
 describe("construirLineaDeTiempo", () => {
   it("recepción primero y los procesos por fecha", () => {
@@ -84,19 +80,7 @@ describe("construirLineaDeTiempo", () => {
   });
 });
 
-describe("listaBultos", () => {
-  it("lista, o «todos» cuando fueron todos los del lote", () => {
-    expect(listaBultos([3, 1, 2], 6)).toBe("1, 2, 3");
-    expect(listaBultos([1, 2, 3, 4, 5, 6], 6)).toBe("todos (6)");
-    expect(listaBultos([1], 1)).toBe("1");
-    expect(listaBultos([], 6)).toBe("—");
-  });
-});
-
-describe("mermaPctBache / etiquetaMotivoMovimiento", () => {
-  it("la merma de un bache sale de sus kilos", () => {
-    expect(mermaPctBache({ mermaKg: 2.43, pesoEntradaKg: 13.5 })).toBe(18);
-  });
+describe("etiquetaMotivoMovimiento", () => {
   it("etiqueta el motivo o lo deja como viene", () => {
     expect(etiquetaMotivoMovimiento("consumo")).toBe("Consumo");
     expect(etiquetaMotivoMovimiento("otro")).toBe("otro");
@@ -122,7 +106,6 @@ describe("construirLineaDeTiempo: remisión de entrega (CO-32)", () => {
   it("va después de los procesos del mismo día y antes de la anulación del lote", () => {
     const eventos = construirLineaDeTiempo({
       recepcion,
-      numBultosLote: 8,
       procesos: [proceso("p1", "trilla", "2026-11-12", "2026-11-12T14:00:00Z")],
       movimientos: [],
       remisiones: [remision("1", "2026-11-12")],
@@ -134,7 +117,6 @@ describe("construirLineaDeTiempo: remisión de entrega (CO-32)", () => {
   it("conserva las anuladas y ordena las remisiones por fecha de entrega", () => {
     const eventos = construirLineaDeTiempo({
       recepcion,
-      numBultosLote: 8,
       procesos: [],
       movimientos: [],
       remisiones: [
@@ -147,8 +129,8 @@ describe("construirLineaDeTiempo: remisión de entrega (CO-32)", () => {
   });
 
   it("sin remisiones (o sin el parámetro) la línea de tiempo no cambia", () => {
-    const sin = construirLineaDeTiempo({ recepcion, numBultosLote: 8, procesos: [], movimientos: [], anulacionLote: null });
-    const vacio = construirLineaDeTiempo({ recepcion, numBultosLote: 8, procesos: [], movimientos: [], remisiones: [], anulacionLote: null });
+    const sin = construirLineaDeTiempo({ recepcion, procesos: [], movimientos: [], anulacionLote: null });
+    const vacio = construirLineaDeTiempo({ recepcion, procesos: [], movimientos: [], remisiones: [], anulacionLote: null });
     expect(sin).toEqual(vacio);
     expect(sin.map((e) => e.clase)).toEqual(["recepcion"]);
   });
@@ -168,12 +150,12 @@ describe("construirLineaDeTiempo: reapertura de producto empacado (CO-33)", () =
     texto: "40 × Excelso 500 g (20 kg)",
     ...extra,
   });
-  const base = { recepcion, numBultosLote: 8, movimientos: [], anulacionLote: null };
+  const base = { recepcion, movimientos: [], anulacionLote: null };
 
   it("es un evento propio y queda antes de la molienda que se hace sobre ella el mismo día", () => {
     const eventos = construirLineaDeTiempo({
       ...base,
-      procesos: [proceso("m", "molienda", "2026-11-15", "2026-11-15T16:00:00Z", { bultos: [], reaperturaId: "r1" })],
+      procesos: [proceso("m", "molienda", "2026-11-15", "2026-11-15T16:00:00Z", { reaperturaId: "r1" })],
       reaperturas: [reapertura("r1", "2026-11-15", "2026-11-15T15:00:00Z")],
     });
     expect(eventos.map((e) => e.clave)).toEqual(["recepcion", "reapertura-r1", "proceso-m"]);
@@ -184,7 +166,7 @@ describe("construirLineaDeTiempo: reapertura de producto empacado (CO-33)", () =
       ...base,
       procesos: [
         proceso("t", "tostion", "2026-11-06", "2026-11-06T14:00:00Z"),
-        proceso("m", "molienda", "2026-11-15", "2026-11-15T16:00:00Z", { bultos: [], reaperturaId: "r1" }),
+        proceso("m", "molienda", "2026-11-15", "2026-11-15T16:00:00Z", { reaperturaId: "r1" }),
       ],
       reaperturas: [reapertura("r1", "2026-11-15", "2026-11-15T15:00:00Z")],
     });

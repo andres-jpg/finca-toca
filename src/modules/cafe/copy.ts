@@ -30,3 +30,22 @@ export const COPY = {
   /** Nombre de respaldo cuando un producto de una venta ya no tiene nombre. */
   productoRespaldo: "Producto",
 } as const;
+
+/**
+ * Glosario de tueste (B-20 · FIN-146). Tostión = el proceso. Tipo de café = Excelso o Consumo (solo marca propia).
+ * Nivel de tueste = Alto, Medio o Bajo. Perfil de tueste = nivel + temperatura + tiempo. Perfil 1, Perfil 2 = cada
+ * perfil con sus kilos en un lote de maquila con varios. La palabra «receta» no se usa en ninguna pantalla ni
+ * documento impreso (lo vigila `copy.test.ts`).
+ */
+export const COPY_TUESTE = {
+  tostion: "Tostión",
+  tipoDeCafe: "Tipo de café",
+  nivelDeTueste: "Nivel de tueste",
+  perfilDeTueste: "Perfil de tueste",
+  /** Configuración: los perfiles de tueste se definen por tipo de café. */
+  perfilesPorTipoDeCafe: "Perfiles de tueste por tipo de café",
+  /** Columna de la tabla de baches cuando el lote trae varios perfiles. */
+  columnaPerfil: "Perfil",
+  /** «Perfil 1», «Perfil 2»…: `n` es la posición 1-based. */
+  perfilN: (n: number) => `Perfil ${n}`,
+} as const;

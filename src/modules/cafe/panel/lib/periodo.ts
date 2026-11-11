@@ -1,55 +1,31 @@
-import { esFechaYmd } from "../../lotes/lib/filtros";
 import { fechaCorta } from "../../lotes/lib/formato";
 import type { LineaPanel, PeriodoPanel } from "../types";
 
-// Periodo y línea del panel de gerencia, en la URL (`?periodo=semana&linea=maquila` o `?periodo=rango&desde=…&hasta=…`).
-// Funciones puras: «hoy» llega como parámetro (el servidor lo calcula con la zona del cliente; aquí nunca se mira el reloj)
-// y las fechas se suman con aritmética de calendario UTC, sin pasar por la zona del navegador.
+// Periodo del panel de gerencia, en la URL (`?periodo=semana`). Funciones puras: «hoy» llega como parámetro (el servidor lo
+// calcula con la zona del cliente; aquí nunca se mira el reloj) y las fechas se suman con aritmética de calendario UTC, sin
+// pasar por la zona del navegador.
 
-export const PERIODOS: readonly PeriodoPanel[] = ["hoy", "semana", "mes", "rango"];
+export const PERIODOS: readonly PeriodoPanel[] = ["hoy", "semana", "mes"];
 export const LINEAS_PANEL: readonly LineaPanel[] = ["marca_propia", "trilla", "maquila"];
+export const PERIODO_POR_DEFECTO: PeriodoPanel = "mes";
 
-/** Un rango de más de un año no se pinta (la serie diaria sería ilegible); la base admite hasta dos. */
-export const MAX_DIAS_RANGO = 366;
-
-const ETIQUETA_PERIODO: Readonly<Record<PeriodoPanel, string>> = { hoy: "Hoy", semana: "Esta semana", mes: "Este mes", rango: "Rango" };
+const ETIQUETA_PERIODO: Readonly<Record<PeriodoPanel, string>> = { hoy: "Hoy", semana: "Semana", mes: "Mes" };
 const ETIQUETA_LINEA: Readonly<Record<LineaPanel, string>> = { marca_propia: "Marca propia", trilla: "Trilla", maquila: "Maquila" };
 
 export const etiquetaPeriodo = (p: PeriodoPanel): string => ETIQUETA_PERIODO[p];
-/** `null` = todas las líneas. */
-export const etiquetaLinea = (l: LineaPanel | null): string => (l ? ETIQUETA_LINEA[l] : "Todo");
+export const etiquetaLinea = (l: LineaPanel): string => ETIQUETA_LINEA[l];
 
 export interface ParamsPanel {
   periodo: PeriodoPanel;
-  linea: LineaPanel | null;
-  /** Solo con `periodo = rango`. */
-  desde?: string;
-  hasta?: string;
 }
 
 type Param = string | string[] | undefined;
 
-function primero(entrada: Record<string, Param>, clave: string): string | undefined {
-  const v = entrada[clave];
-  const s = Array.isArray(v) ? v[0] : v;
-  return s?.trim() ? s.trim() : undefined;
-}
-
-/** Lee `periodo`, `linea`, `desde` y `hasta`; lo inválido se descarta en silencio (una URL vieja no debe romper el panel). Por defecto: hoy, todo. */
+/** Lee `periodo`; lo inválido se descarta en silencio (una URL vieja, con `linea` o `desde`, no debe romper el panel). Por defecto: el mes. */
 export function parsearParamsPanel(entrada: Record<string, Param>): ParamsPanel {
-  const periodo = primero(entrada, "periodo");
-  const linea = primero(entrada, "linea");
-  const d = primero(entrada, "desde");
-  const h = primero(entrada, "hasta");
-  const desde = d && esFechaYmd(d) ? d : undefined;
-  const hasta = h && esFechaYmd(h) ? h : undefined;
-  const rango = (PERIODOS as readonly string[]).includes(periodo ?? "") ? (periodo as PeriodoPanel) : desde || hasta ? "rango" : "hoy";
-  return {
-    periodo: rango,
-    linea: (LINEAS_PANEL as readonly string[]).includes(linea ?? "") ? (linea as LineaPanel) : null,
-    ...(desde ? { desde } : {}),
-    ...(hasta ? { hasta } : {}),
-  };
+  const v = entrada.periodo;
+  const periodo = (Array.isArray(v) ? v[0] : v)?.trim();
+  return { periodo: (PERIODOS as readonly string[]).includes(periodo ?? "") ? (periodo as PeriodoPanel) : PERIODO_POR_DEFECTO };
 }
 
 const UN_DIA = 86_400_000;
@@ -65,6 +41,15 @@ const aYmd = (ms: number): string => {
 /** `ymd` más `n` días (negativo para restar). */
 export function sumarDias(ymd: string, n: number): string {
   return aYmd(aMs(ymd) + n * UN_DIA);
+}
+
+/**
+ * Inicio de «todo el histórico» para `costo_libra_panel`: la base admite rangos de hasta 731 días (`cafe.rango_panel`), así que no vale
+ * una fecha fija como 2000-01-01 (la función respondía `datos_invalidos` y el panel y el inventario caían en cuanto había una venta).
+ * Son 730 días hasta hoy: el costo de lo vendido en los últimos dos años.
+ */
+export function desdeHistorico(hoy: string): string {
+  return sumarDias(hoy, -730);
 }
 
 /** Días entre dos fechas, contando ambas (`2026-03-09`→`2026-03-09` = 1). */
@@ -83,38 +68,58 @@ export function listarDias(desde: string, hasta: string): string[] {
   return Array.from({ length: Math.max(0, diasInclusivos(desde, hasta)) }, (_, i) => sumarDias(desde, i));
 }
 
-export interface PeriodoResuelto {
-  periodo: PeriodoPanel;
+/** Cuántos días tiene el mes de `ymd` (28 a 31). */
+export function diasDelMes(ymd: string): number {
+  const [a, m] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(a, m, 0)).getUTCDate();
+}
+
+const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+/** Nombre del mes de `ymd` en minúscula: `2026-03-11` → `marzo`. */
+export function nombreMes(ymd: string): string {
+  return MESES[Number(ymd.split("-")[1]) - 1] ?? "";
+}
+
+export interface RangoPanel {
   desde: string;
   hasta: string;
-  /** Se ajustó algo de lo que pidió el usuario (rango demasiado largo): se le dice. */
-  aviso: string | null;
+}
+
+/** Hoy = el día; semana = del lunes a hoy; mes = del día 1 a hoy. */
+export function resolverPeriodo(periodo: PeriodoPanel, hoy: string): RangoPanel {
+  switch (periodo) {
+    case "semana":
+      return { desde: lunesDe(hoy), hasta: hoy };
+    case "mes":
+      return { desde: `${hoy.slice(0, 7)}-01`, hasta: hoy };
+    default:
+      return { desde: hoy, hasta: hoy };
+  }
 }
 
 /**
- * Convierte el periodo elegido en fechas. Hoy = el día; semana = del lunes a hoy; mes = del día 1 a hoy; rango = lo que
- * escribió (con una sola fecha, ese día hasta hoy o ese día; `desde > hasta` se intercambian; más de un año se recorta).
+ * El tramo equivalente anterior, para decir «+4,2 % vs. septiembre»: ayer; la semana pasada hasta el mismo día de la semana;
+ * el mes pasado hasta el mismo día del mes (o su último día si es más corto). Compara lo mismo con lo mismo: el mes en curso
+ * no se mide contra un mes entero.
  */
-export function resolverPeriodo(params: Pick<ParamsPanel, "periodo" | "desde" | "hasta">, hoy: string): PeriodoResuelto {
-  switch (params.periodo) {
-    case "semana":
-      return { periodo: "semana", desde: lunesDe(hoy), hasta: hoy, aviso: null };
-    case "mes":
-      return { periodo: "mes", desde: `${hoy.slice(0, 7)}-01`, hasta: hoy, aviso: null };
-    case "rango": {
-      let desde = params.desde ?? params.hasta ?? hoy;
-      let hasta = params.hasta ?? (params.desde && params.desde > hoy ? params.desde : hoy);
-      if (desde > hasta) [desde, hasta] = [hasta, desde];
-      let aviso: string | null = null;
-      if (diasInclusivos(desde, hasta) > MAX_DIAS_RANGO) {
-        desde = sumarDias(hasta, -(MAX_DIAS_RANGO - 1));
-        aviso = `El rango máximo es de un año: se muestra desde el ${fechaCorta(desde)}.`;
-      }
-      return { periodo: "rango", desde, hasta, aviso };
-    }
-    default:
-      return { periodo: "hoy", desde: hoy, hasta: hoy, aviso: null };
+export function periodoAnterior(periodo: PeriodoPanel, hoy: string): RangoPanel {
+  const { desde, hasta } = resolverPeriodo(periodo, hoy);
+  if (periodo === "mes") {
+    const anterior = sumarDias(desde, -1); // último día del mes pasado
+    const primero = `${anterior.slice(0, 7)}-01`;
+    const dia = Math.min(Number(hasta.slice(8, 10)), diasDelMes(anterior));
+    return { desde: primero, hasta: `${anterior.slice(0, 7)}-${String(dia).padStart(2, "0")}` };
   }
+  const dias = diasInclusivos(desde, hasta);
+  const atras = periodo === "semana" ? 7 : 1;
+  return { desde: sumarDias(desde, -atras), hasta: sumarDias(desde, -atras + dias - 1) };
+}
+
+/** Cómo se llama el tramo anterior en la frase de variación: «septiembre», «la semana pasada», «ayer». */
+export function etiquetaAnterior(periodo: PeriodoPanel, hoy: string): string {
+  if (periodo === "mes") return nombreMes(periodoAnterior("mes", hoy).desde);
+  return periodo === "semana" ? "la semana pasada" : "ayer";
 }
 
 /** El periodo en palabras: «29/10/2026» o «26/10/2026 – 29/10/2026». */
@@ -122,14 +127,14 @@ export function describirPeriodo(desde: string, hasta: string): string {
   return desde === hasta ? fechaCorta(desde) : `${fechaCorta(desde)} – ${fechaCorta(hasta)}`;
 }
 
-/** El query string del panel (sin `?`): solo lo que se aparta del valor por defecto, en orden fijo. */
+/** El query string del panel (sin `?`): solo lo que se aparta del valor por defecto. */
 export function serializarParamsPanel(params: Partial<ParamsPanel>): string {
   const p = new URLSearchParams();
-  if (params.periodo && params.periodo !== "hoy") p.set("periodo", params.periodo);
-  if (params.linea) p.set("linea", params.linea);
-  if (params.periodo === "rango") {
-    if (params.desde) p.set("desde", params.desde);
-    if (params.hasta) p.set("hasta", params.hasta);
-  }
+  if (params.periodo && params.periodo !== PERIODO_POR_DEFECTO) p.set("periodo", params.periodo);
   return p.toString();
+}
+
+/** Títulos de sección que dependen del periodo: «Producción del mes», «Producción de la semana», «Producción de hoy». */
+export function deLaPeriodo(periodo: PeriodoPanel): string {
+  return periodo === "mes" ? "del mes" : periodo === "semana" ? "de la semana" : "de hoy";
 }

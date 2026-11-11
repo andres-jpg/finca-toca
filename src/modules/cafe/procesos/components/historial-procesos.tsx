@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { formatCOP, formatKg } from "@/modules/core/formato/numeros";
 import { ETIQUETA_DESTINO } from "../../empaque/lib/empaque";
-import { ORDEN_PROCESO, etiquetaServicio, etiquetaTueste } from "../../lotes/lib/servicios";
+import { etiquetaServicio, etiquetaTueste } from "../../lotes/lib/servicios";
 import { anularProceso } from "../actions/procesos.actions";
 import { fechaCorta, formatearPeso, formatearPorcentaje } from "../lib/numero";
 import { participioDe } from "../lib/resumen";
@@ -25,19 +25,9 @@ interface HistorialProcesosProps {
   mostrarValor: boolean;
 }
 
-/** `1, 2, 3` → «1 a 3»; `1, 3` → «1 y 3»; muchos → «1 a 8». */
-function textoBultos(numeros: number[]): string {
-  if (numeros.length === 0) return "—";
-  const label = numeros.length === 1 ? "Bulto" : "Bultos";
-  const consecutivos = numeros.every((n, i) => i === 0 || n === numeros[i - 1] + 1);
-  if (numeros.length > 2 && consecutivos) return `${label} ${numeros[0]} a ${numeros.at(-1)}`;
-  if (numeros.length === 2) return `${label} ${numeros[0]} y ${numeros[1]}`;
-  return `${label} ${numeros.join(", ")}`;
-}
-
 /**
  * Procesos ya registrados del lote, en el orden en que se hicieron. Un proceso se puede anular (solo
- * owner/admin, con motivo) únicamente si ningún proceso posterior vigente usa alguno de sus bultos: se anula de
+ * owner/admin, con motivo) únicamente si ningún proceso posterior vigente parte de él (su tanda): se anula de
  * atrás hacia delante. Los anulados se quedan a la vista, tachados y con su motivo (auditoría).
  */
 export function HistorialProcesos({ procesos, puedeAnular, mostrarValor }: HistorialProcesosProps) {
@@ -52,7 +42,7 @@ export function HistorialProcesos({ procesos, puedeAnular, mostrarValor }: Histo
     puedeAnular &&
     !p.anulado &&
     !p.lineasEmpaque.some((l) => l.mueveInventario) &&
-    !vigentes.some((o) => ORDEN_PROCESO[o.tipo] > ORDEN_PROCESO[p.tipo] && o.bultoIds.some((id) => p.bultoIds.includes(id)));
+    !vigentes.some((o) => o.origenProcesoId === p.id);
 
   async function confirmar() {
     if (!objetivo) return;
@@ -63,7 +53,7 @@ export function HistorialProcesos({ procesos, puedeAnular, mostrarValor }: Histo
       toast.error(r.message);
       return;
     }
-    toast.success(`${etiquetaServicio(objetivo.tipo)} ${participioDe(objetivo.tipo, "anulad")}: los bultos quedaron libres para volver a registrar el paso`);
+    toast.success(`${etiquetaServicio(objetivo.tipo)} ${participioDe(objetivo.tipo, "anulad")}: los kilos quedaron libres para volver a registrar el paso`);
     setObjetivo(null);
     setMotivo("");
     router.refresh();
@@ -93,32 +83,41 @@ export function HistorialProcesos({ procesos, puedeAnular, mostrarValor }: Histo
               <p className={cn("text-base font-semibold text-gray-900", p.anulado && "line-through")}>
                 {etiquetaServicio(p.tipo)}
                 <span className="ml-2 text-sm font-normal text-gray-500">
-                  {fechaCorta(p.fecha, true)} · {p.anulado ? "anulado" : textoBultos(p.bultos)}
+                  {fechaCorta(p.fecha, true)}{p.anulado ? " · anulado" : ""}
                 </span>
               </p>
               {p.tipo === "empaque" ? (
-                // El empaque no tiene merma (A-01): lo que llegó = bolsas + diferencia, y la diferencia tiene destino.
+                // El empaque no tiene merma (B-08): la báscula incluye el sobrante; la merma de tostión es de la tanda.
                 <p className="text-sm tabular-nums text-gray-700">
-                  Llegaron {formatKg(p.pesoEntradaKg)} · en bolsas {formatKg(p.pesoSalidaKg)}
+                  Báscula {formatKg(p.pesoEntradaKg)} · en bolsas {formatKg(p.pesoSalidaKg ?? 0)}
                   {p.diferenciaKg !== null && p.diferenciaKg > 0 && (
                     <>
                       {" "}
-                      · diferencia {formatKg(p.diferenciaKg)}
+                      · sobrante {formatKg(p.diferenciaKg)}
                       {p.diferenciaDestino ? ` (${ETIQUETA_DESTINO[p.diferenciaDestino].toLowerCase()})` : ""}
                     </>
                   )}
                 </p>
               ) : (
                 <p className="text-sm tabular-nums text-gray-700">
-                  {formatearPeso(p.pesoEntradaKg)} kg → {formatearPeso(p.pesoSalidaKg)} kg · merma {formatearPorcentaje(p.mermaPct)} % (
-                  {formatearPeso(p.mermaKg)} kg)
+                  {p.tipo === "tostion" && p.pesoSalidaKg === null
+                    ? `${formatearPeso(p.pesoEntradaKg)} kg a tostar · peso final al empacar`
+                    : p.pesoSalidaKg === null
+                      ? `${formatearPeso(p.pesoEntradaKg)} kg`
+                      : `${formatearPeso(p.pesoEntradaKg)} kg → ${formatearPeso(p.pesoSalidaKg)} kg`}
+                  {p.mermaPct !== null && p.mermaKg !== null && (
+                    <>
+                      {" "}
+                      · merma {formatearPorcentaje(p.mermaPct)} % ({formatearPeso(p.mermaKg)} kg)
+                    </>
+                  )}
                   {mostrarValor && p.tarifaKg > 0 && <> · {formatCOP(p.valor)}</>}
                 </p>
               )}
               <div className="flex flex-wrap gap-2 text-xs text-gray-600">
                 {p.nivelTueste && <span className="rounded bg-gray-100 px-2 py-0.5">Tueste {etiquetaTueste(p.nivelTueste).toLowerCase()}</span>}
                 {p.numBaches > 0 && <span className="rounded bg-gray-100 px-2 py-0.5">{p.numBaches} baches</span>}
-                {!p.anulado && (
+                {!p.anulado && p.mermaPct !== null && (
                   <MermaBadge mermaPct={p.mermaPct} referenciaPct={p.mermaReferenciaPct} toleranciaPts={p.toleranciaPts} tipo={p.tipo} />
                 )}
               </div>
@@ -156,7 +155,7 @@ export function HistorialProcesos({ procesos, puedeAnular, mostrarValor }: Histo
           <DialogHeader>
             <DialogTitle>Anular {objetivo ? etiquetaServicio(objetivo.tipo).toLowerCase() : "proceso"}</DialogTitle>
             <DialogDescription>
-              El proceso se conserva en el historial como anulado y sus bultos quedan libres para registrarlo de nuevo.
+              El proceso se conserva en el historial como anulado y sus kilos quedan libres para registrarlo de nuevo.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">

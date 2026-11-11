@@ -6,8 +6,11 @@
 
 export const GRAMOS_LIBRA = 500;
 
+/** Presentaciones que muestra el costo por libra (B-13): 500 g y 2.500 g. */
+export const PRESENTACIONES_COSTO: readonly number[] = [500, 2500];
+
 /** Costo directo: lo que dice la nota de la ficha. */
-export const NOTA_COSTO_DIRECTO = "Costo directo. Energía, gas, mano de obra y arriendo entran con el módulo de gastos.";
+export const NOTA_COSTO_DIRECTO = "Costo directo; los gastos de operación se incorporan con el módulo de gastos.";
 
 export interface CostoLibra {
   loteId: string;
@@ -23,7 +26,12 @@ export interface CostoLibra {
   costoCafe: number | null;
   costoBolsa: number | null;
   costoEtiqueta: number | null;
+  /** Bolsa + etiqueta repartidos por libra de la presentación (500 g → bolsa + etiqueta; 2.500 g → ÷ 5). */
+  costoEmpaque: number | null;
+  /** `registrado` = precios de los empaques del lote; `vigente` = precio actual del insumo (aún no hay empaque). */
+  fuenteEmpaque: "registrado" | "vigente" | null;
   costoLibra: number | null;
+  /** Precio por libra (precio de la unidad ÷ libras de la presentación). */
   precioVenta: number | null;
   margen: number | null;
   /** Porcentaje (33,6), no fracción. */
@@ -55,8 +63,10 @@ export function leerCostoLibra(raw: unknown): CostoLibra {
     costoCafe: num(r.costo_cafe),
     costoBolsa: num(r.costo_bolsa),
     costoEtiqueta: num(r.costo_etiqueta),
+    costoEmpaque: num(r.costo_empaque),
+    fuenteEmpaque: r.fuente_empaque === "registrado" || r.fuente_empaque === "vigente" ? r.fuente_empaque : null,
     costoLibra: num(r.costo_libra),
-    precioVenta: num(r.precio_venta),
+    precioVenta: num(r.precio_libra ?? r.precio_venta),
     margen: num(r.margen),
     margenPct: num(r.margen_pct),
   };
@@ -73,6 +83,27 @@ export function estadoCosto(c: CostoLibra): EstadoCosto {
 /** Bolsa + etiqueta, o `null` si falta cualquiera de las dos (un costo a medias engaña). */
 export function costoBolsaYEtiqueta(c: Pick<CostoLibra, "costoBolsa" | "costoEtiqueta">): number | null {
   return c.costoBolsa === null || c.costoEtiqueta === null ? null : c.costoBolsa + c.costoEtiqueta;
+}
+
+/**
+ * Espejo TS de `cafe.costo_libra_lote` para una presentación (se prueba con los mismos casos que el pgTAP). Redondeo a pesos
+ * enteros solo al final. `mermaTostion` es una fracción 0..1 (la acumulada del lote).
+ */
+export function calcularCostoLibra(e: { precioCompraKg: number; mermaTostion: number; bolsa: number; etiqueta: number; gramos: number; precioUnidad?: number | null }) {
+  const libras = e.gramos / 500;
+  const cafe = (e.precioCompraKg / (1 - e.mermaTostion)) * 0.5;
+  const empaque = (e.bolsa + e.etiqueta) / libras;
+  const costo = Math.round(cafe + empaque);
+  const precioLibra = e.precioUnidad == null ? null : e.precioUnidad / libras;
+  const margen = precioLibra === null ? null : precioLibra - costo;
+  return {
+    cafe,
+    empaque,
+    costo,
+    precioLibra,
+    margen: margen === null ? null : Math.round(margen),
+    margenPct: margen === null || precioLibra === null ? null : Math.round((margen / precioLibra) * 1000) / 10,
+  };
 }
 
 /** Una fila del panel: el costo de un lote con los kg de esa presentación que se empacaron en el periodo. */
@@ -156,9 +187,9 @@ export function mensajeSinCosto(estado: EstadoCosto): string | null {
     case "sin_tostion":
       return "Se calcula al registrar la primera tostión.";
     case "sin_insumos":
-      return "Falta el precio de compra de la bolsa o la etiqueta de 500 g. Regístralo en Insumos al comprarlas.";
+      return "Falta el precio de la bolsa o la etiqueta de esta presentación. Fíjalo en Insumos.";
     case "sin_precio_venta":
-      return "Aún no hay una venta de este producto: sin precio de venta no se puede calcular el margen.";
+      return "Este producto aún no tiene precio de venta (ni ventas): sin él no se puede calcular el margen.";
     default:
       return null;
   }

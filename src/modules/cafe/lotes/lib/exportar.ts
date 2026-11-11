@@ -1,3 +1,4 @@
+import { COPY_TUESTE } from "@/modules/cafe/copy";
 import type { HojaExcel } from "@/modules/core/export/generar-excel";
 import { ETIQUETA_ALERTA_CALIDAD } from "@/modules/cafe/recepciones/lib/calidad";
 import type { LineaLote, NivelTueste, TipoProceso } from "../types";
@@ -20,7 +21,6 @@ export interface LoteExport {
   tipoCafe: string | null;
   /** `YYYY-MM-DD`. */
   fechaRecepcion: string;
-  numBultos: number;
   pesoRecibidoKg: number;
   /** En puntos porcentuales tal como se guarda (11,5 = 11,5 %). */
   humedadPct: number | null;
@@ -31,6 +31,9 @@ export interface LoteExport {
   valorCompra: number | null;
   pesoActualKg: number;
   mermaTotalKg: number;
+  /** Tostión (B-12): merma acumulada de las tandas empacadas y kilos que entraron en ellas; `null` si no hay tostión cerrada. */
+  mermaTostionKg: number | null;
+  entradaTostionKg: number | null;
   valorServicios: number;
   estado: string;
   avanceTexto: string | null;
@@ -45,11 +48,11 @@ export interface ProcesoExport {
   /** `YYYY-MM-DD`. */
   fecha: string;
   tipo: TipoProceso;
-  /** Bultos que pasaron; `null` en un proceso anulado (la anulación libera sus bultos). */
-  numBultos: number | null;
   pesoEntradaKg: number;
-  pesoSalidaKg: number;
-  mermaKg: number;
+  /** `null` en una tostión sin empaque y en la molienda. */
+  pesoSalidaKg: number | null;
+  /** Solo trilla y tostión (con salida): molienda y empaque no tienen merma. */
+  mermaKg: number | null;
   /** Merma de referencia (puntos porcentuales) con la que se midió; `null` en molienda y empaque. */
   mermaReferenciaPct: number | null;
   desvio: boolean;
@@ -127,26 +130,32 @@ export function construirHojasLotes(
       { header: "Tipo", key: (l: LoteExport) => etiquetaTipoLote(tipoVisibleLote(l.linea, l.servicios)), width: 17 },
       { header: "Cliente / Proveedor", key: "tercero" as const, width: 30 },
       { header: "Identificación", key: "identificacion" as const, width: 16 },
-      { header: "Tipo de café", key: "tipoCafe" as const, width: 14 },
+      { header: COPY_TUESTE.tipoDeCafe, key: "tipoCafe" as const, width: 14 },
       { header: "Fecha recepción", key: "fechaRecepcion" as const, formato: "fecha" as const },
-      { header: "Bultos", key: "numBultos" as const, formato: "entero" as const, width: 9 },
       { header: "Kg recibidos", key: "pesoRecibidoKg" as const, formato: "peso" as const },
       { header: "Humedad %", key: (l: LoteExport) => (l.humedadPct === null ? null : l.humedadPct / 100), formato: "porcentaje" as const },
       { header: "Densidad", key: "densidad" as const, formato: "decimal" as const, width: 11 },
       { header: "Alertas de calidad", key: (l: LoteExport) => textoAlertasCalidad(l.alertasCalidad), width: 26 },
       { header: "Servicios contratados", key: (l: LoteExport) => textoServicios(l.linea, l.servicios), width: 28 },
-      { header: "Nivel de tueste", key: (l: LoteExport) => (l.nivelTueste ? etiquetaTueste(l.nivelTueste) : ""), width: 14 },
+      { header: COPY_TUESTE.nivelDeTueste, key: (l: LoteExport) => (l.nivelTueste ? etiquetaTueste(l.nivelTueste) : ""), width: 14 },
       { header: "Precio compra/kg", key: "precioCompraKg" as const, formato: "moneda" as const },
       { header: "Valor compra", key: "valorCompra" as const, formato: "moneda" as const },
       { header: "Kg actuales", key: "pesoActualKg" as const, formato: "peso" as const },
       { header: "Merma total kg", key: "mermaTotalKg" as const, formato: "peso" as const },
       { header: "Merma total %", key: (l: LoteExport) => fraccionMerma(l.mermaTotalKg, l.pesoRecibidoKg), formato: "porcentaje" as const },
+      { header: "Merma tostión kg (acumulada)", key: "mermaTostionKg" as const, formato: "peso" as const, width: 16 },
+      {
+        header: "Merma tostión % (acumulada)",
+        key: (l: LoteExport) => (l.mermaTostionKg === null || l.entradaTostionKg === null ? null : fraccionMerma(l.mermaTostionKg, l.entradaTostionKg)),
+        formato: "porcentaje" as const,
+        width: 16,
+      },
       { header: "Valor servicios", key: "valorServicios" as const, formato: "moneda" as const },
       { header: "Estado", key: (l: LoteExport) => etiquetaEstado(l.estado), width: 13 },
       { header: "Avance", key: "avanceTexto" as const, width: 10 },
       { header: "Remisión", key: "remision" as const, width: 14 },
     ],
-    totales: ["numBultos", "pesoRecibidoKg", "valorCompra", "pesoActualKg", "mermaTotalKg", "valorServicios"] as (keyof LoteExport)[],
+    totales: ["pesoRecibidoKg", "valorCompra", "pesoActualKg", "mermaTotalKg", "valorServicios"] as (keyof LoteExport)[],
     subtotales: {
       agruparPor: (l: LoteExport) => l.linea,
       etiqueta: (g: string) => (g === "marca_propia" ? "Subtotal marca propia" : "Subtotal servicios (clientes)"),
@@ -163,14 +172,13 @@ export function construirHojasLotes(
       { header: "Línea", key: (p: ProcesoExport) => etiquetaLinea(p.linea), width: 14 },
       { header: "Fecha", key: "fecha" as const, formato: "fecha" as const },
       { header: "Proceso", key: (p: ProcesoExport) => etiquetaServicio(p.tipo), width: 12 },
-      { header: "Bultos", key: "numBultos" as const, formato: "entero" as const, width: 9 },
       { header: "Kg entrada", key: "pesoEntradaKg" as const, formato: "peso" as const },
       { header: "Kg salida", key: "pesoSalidaKg" as const, formato: "peso" as const },
       { header: "Merma kg", key: "mermaKg" as const, formato: "peso" as const },
-      { header: "Merma %", key: (p: ProcesoExport) => fraccionMerma(p.mermaKg, p.pesoEntradaKg), formato: "porcentaje" as const },
+      { header: "Merma %", key: (p: ProcesoExport) => (p.mermaKg === null ? null : fraccionMerma(p.mermaKg, p.pesoEntradaKg)), formato: "porcentaje" as const },
       { header: "Referencia %", key: (p: ProcesoExport) => (p.mermaReferenciaPct === null ? null : p.mermaReferenciaPct / 100), formato: "porcentaje" as const },
       { header: "Desvío", key: (p: ProcesoExport) => siNo(p.desvio), width: 9 },
-      { header: "Nivel de tueste", key: (p: ProcesoExport) => (p.nivelTueste ? etiquetaTueste(p.nivelTueste) : ""), width: 14 },
+      { header: COPY_TUESTE.nivelDeTueste, key: (p: ProcesoExport) => (p.nivelTueste ? etiquetaTueste(p.nivelTueste) : ""), width: 14 },
       { header: "Tarifa/kg", key: "tarifaKg" as const, formato: "moneda" as const },
       { header: "Valor", key: "valor" as const, formato: "moneda" as const },
       { header: "Registrado por", key: "registradoPor" as const, width: 30 },

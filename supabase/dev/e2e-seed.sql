@@ -129,6 +129,17 @@ begin
         false);
     end if;
   end loop;
+
+  -- Precios vigentes de los insumos (B-13, confirmados por Cofradía): bolsa 500 g $1.200 · etiqueta 500 g $370 · bolsa 2.500 g
+  -- $3.700 · etiqueta 2.500 g $370. Solo en desarrollo: en cada cliente real los fija un administrador desde Insumos. Idempotente:
+  -- no repite un precio que ya es el vigente.
+  insert into cafe.insumo_precios (articulo_id, precio)
+  select a.id, p.precio
+    from public.articulos a
+    join (values ('bolsa', 500, 1200), ('etiqueta', 500, 370), ('bolsa', 2500, 3700), ('etiqueta', 2500, 370)) as p(clase, g, precio)
+      on a.atributos ->> 'clase' = p.clase and (a.atributos ->> 'presentacion_g')::integer = p.g
+   where a.tipo = 'insumo' and a.activo
+     and cafe.precio_insumo(a.id) is distinct from p.precio;
 end $$;
 
 reset role;

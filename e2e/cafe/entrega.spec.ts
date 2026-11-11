@@ -9,8 +9,8 @@ test.use(usarRol("cafeAdmin"));
 // solo trilla ya trillados); lo que se prueba, por la interfaz.
 
 test("entrega multi-lote: dos lotes del cliente en una sola remisión con quién recibe", async ({ page }) => {
-  const a = await crearRecepcion({ servicios: ["trilla"], bultos: 2, pesoKg: 125 });
-  const b = await crearRecepcion({ servicios: ["trilla"], bultos: 2, pesoKg: 125 });
+  const a = await crearRecepcion({ servicios: ["trilla"], pesoKg: 125 });
+  const b = await crearRecepcion({ servicios: ["trilla"], pesoKg: 125 });
   await registrarTrilla(a, 125, 101.25);
   await registrarTrilla(b, 125, 101.25);
 
@@ -64,13 +64,16 @@ test("entrega multi-lote: dos lotes del cliente en una sola remisión con quién
 // Tras registrar el último servicio de un lote de terceros se ofrece «Lote listo · ¿Entregar ahora?». El diálogo lo pinta la
 // página (`?listo=1`), no el formulario, que la revalidación desmonta (bug corregido).
 test("empaque del último servicio: ofrece «Entregar ahora» y lleva a /planta/entregar con el lote", async ({ page }) => {
-  const lote = await crearRecepcion({ servicios: ["trilla", "tostion"], bultos: 1, pesoKg: 62.5 });
+  const lote = await crearRecepcion({ servicios: ["trilla", "tostion"], pesoKg: 62.5 });
   await registrarTrilla(lote, 62.5, 50.625);
   const tostado = await registrarTostion(lote, 50.625);
   await irA(page, `/dashboard/cafe/planta/${lote.id}`);
-  await page.getByLabel("Peso de la bolsa (kg)").fill("1");
-  await page.getByLabel("Cantidad", { exact: true }).fill(String(Math.floor(tostado)));
-  await page.getByRole("radio", { name: "Se entrega suelto al cliente" }).click();
+  await page.getByRole("radio", { name: /^Empaque/ }).click();
+  // Terceros: líneas de bolsas del cliente de peso libre y el peso total en báscula (incluye el sobrante).
+  await page.getByRole("radio", { name: "Otro (kg)" }).click();
+  await page.getByLabel("Peso por bolsa en kilos").fill("1");
+  await page.getByLabel("Número de bolsas").fill(String(Math.floor(tostado)));
+  await page.getByLabel("Peso total en báscula (kg)").fill(String(tostado).replace(".", ","));
   await page.getByRole("button", { name: "Registrar empaque" }).click();
   const dialogo = page.getByRole("dialog");
   await expect(dialogo).toContainText("Lote listo");

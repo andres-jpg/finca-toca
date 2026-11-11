@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diasEnPlanta, estadoPresentacion, hrefPestana, parsearPestana, resaltarSinRecoger, saldosPorLote } from "./inventario";
+import { alcanceVerde, coberturaBaja, coberturaDias, diasEnPlanta, etiquetaPestana, leerLibrasVendidas, librasDisponibles, librasPorTipoPresentacion, textoDias, estadoPresentacion, hrefPestana, parsearPestana, resaltarSinRecoger, saldosPorLote } from "./inventario";
 
 describe("pestañas del inventario", () => {
   it("lee la pestaña de la URL con marca propia por defecto", () => {
@@ -51,5 +51,48 @@ describe("saldos por lote", () => {
     expect(saldosPorLote([{ loteId: "L", articuloId: "A", unidades: 2 }], [], [{ loteId: "L", origenId: "A", destinoId: "B", unidadesOrigen: 2, unidadesDestino: 5 }])).toEqual([
       { loteId: "L", articuloId: "B", unidades: 5 },
     ]);
+  });
+});
+
+describe("libras y cobertura (B-10)", () => {
+  it("libras = Σ unidades × gramos / 500 (2.500 g = 5 lb)", () => {
+    expect(librasDisponibles([{ unidades: 310, gramos: 500 }, { unidades: 180, gramos: 500 }])).toBe(490);
+    expect(librasDisponibles([{ unidades: 22, gramos: 2500 }, { unidades: 14, gramos: 2500 }])).toBe(180);
+    expect(librasDisponibles([{ unidades: -3, gramos: 2500 }])).toBe(0);
+  });
+  it("cobertura = libras / promedio diario de 30 días; sin ventas «—»", () => {
+    // 450 lb vendidas en 30 días = 15 lb/día; 135 lb alcanzan 9 días.
+    expect(coberturaDias(135, 450)).toBe(9);
+    expect(textoDias(coberturaDias(135, 450))).toBe("9 días");
+    expect(coberturaDias(100, 0)).toBeNull();
+    expect(textoDias(null)).toBe("—");
+    expect(textoDias(1.4)).toBe("1 día");
+  });
+  it("menos de 10 días es alerta; 10 no; sin ventas no", () => {
+    expect(coberturaBaja(9, 10)).toBe(true);
+    expect(coberturaBaja(10, 10)).toBe(false);
+    expect(coberturaBaja(null, 10)).toBe(false);
+  });
+  it("café verde alcanza = kg × (1 − merma) × 2 / lb diarias", () => {
+    // 202 kg × 0,82 × 2 = 331,28 lb; con 30 lb/día (900 en 30 días) ≈ 11 días.
+    expect(Math.floor(alcanceVerde(202, 18, 900)!)).toBe(11);
+    expect(alcanceVerde(202, 18, 0)).toBeNull();
+  });
+  it("lee y agrupa las libras vendidas por tipo y presentación", () => {
+    const v = leerLibrasVendidas([
+      { articulo_pt_id: "a", tipo_cafe_id: "x", presentacion_g: 500, libras: "40" },
+      { articulo_pt_id: "b", tipo_cafe_id: "x", presentacion_g: 500, libras: 10 },
+      { articulo_pt_id: "c", tipo_cafe_id: "x", presentacion_g: 2500, libras: 25 },
+      null,
+    ]);
+    expect(v).toHaveLength(3);
+    expect(librasPorTipoPresentacion(v).get("x:500")).toBe(50);
+  });
+  it("etiquetas de pestaña con contador", () => {
+    expect(etiquetaPestana("servicios", { enPlanta: 6 })).toBe("Servicios a terceros · 6 en planta");
+    expect(etiquetaPestana("insumos", { bajos: 2 })).toBe("Insumos · 2 bajos");
+    expect(etiquetaPestana("insumos", { bajos: 1 })).toBe("Insumos · 1 bajo");
+    expect(etiquetaPestana("insumos", { bajos: 0 })).toBe("Insumos");
+    expect(etiquetaPestana("marca-propia")).toBe("Marca propia");
   });
 });

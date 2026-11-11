@@ -22,3 +22,18 @@ describe("leerProveedores", () => {
     expect(() => leerProveedores(null)).toThrow();
   });
 });
+
+import { estadoProveedor, HUMEDAD_PANEL_DEFECTO } from "./proveedores";
+
+describe("estadoProveedor (gris en rango, ámbar fuera)", () => {
+  it("humedad 10–12 y merma 18 ± 2, límites incluidos", () => {
+    expect(estadoProveedor({ humedadPct: 12, mermaTostionPct: 20 }, HUMEDAD_PANEL_DEFECTO, 18, 2)).toMatchObject({ humedad: "en_rango", merma: "en_rango", fuera: false });
+    const e = estadoProveedor({ humedadPct: 12.5, mermaTostionPct: 23 }, HUMEDAD_PANEL_DEFECTO, 18, 2);
+    expect(e).toMatchObject({ humedad: "fuera", merma: "fuera", fuera: true, sentidoMerma: "alta" });
+    expect(e.motivos).toEqual(["humedad", "merma de tostión"]);
+  });
+  it("sin dato o sin referencia no hay semáforo", () => {
+    expect(estadoProveedor({ humedadPct: null, mermaTostionPct: null }, HUMEDAD_PANEL_DEFECTO, 18, 2)).toMatchObject({ humedad: null, merma: null, fuera: false });
+    expect(estadoProveedor({ humedadPct: 11, mermaTostionPct: 30 }, HUMEDAD_PANEL_DEFECTO, null, 2).merma).toBeNull();
+  });
+});

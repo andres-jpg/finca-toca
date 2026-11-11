@@ -1,7 +1,7 @@
 import { formatCOP, formatKgNum } from "@/modules/core/formato/numeros";
 
-// Cálculos puros de la compra de café para marca propia. Lo que el operario ve en pantalla (valor total, suma
-// de los bultos) sale de aquí; la base lo recalcula por su cuenta (`valor_compra` es columna generada), y estas
+// Cálculos puros de la compra de café para marca propia. Lo que el operario ve en pantalla (valor total) sale
+// de aquí; la base lo recalcula por su cuenta (`valor_compra` es columna generada), y estas
 // funciones dan lo mismo que ella: `round(peso_kg * precio_kg, 0)`.
 
 /**
@@ -25,23 +25,6 @@ export function calcularValorCompra(pesoKg: number, precioKg: number): number {
 /** Pesos colombianos sin decimales (`$6.937.500`) y kilos con 1 decimal (`62,5`, sin unidad): ver `core/formato`. */
 export const formatearCOP = formatCOP;
 export const formatearKg = formatKgNum;
-
-/** Peso total a partir de «peso por bulto × número de bultos» (ayuda con `cafe.peso_bulto_kg`), a gramos. */
-export function pesoDesdeBultos(numBultos: number, pesoPorBultoKg: number): number {
-  if (!Number.isFinite(numBultos) || !Number.isFinite(pesoPorBultoKg) || numBultos <= 0 || pesoPorBultoKg <= 0) return 0;
-  return Math.round(numBultos * pesoPorBultoKg * 1000) / 1000;
-}
-
-/** Suma de pesos en kilos, sin deriva de coma flotante (a gramos). */
-export function sumaPesos(pesos: number[]): number {
-  return pesos.reduce((acc, p) => acc + Math.round((Number.isFinite(p) ? p : 0) * 1000), 0) / 1000;
-}
-
-/** Diferencia (kg) entre lo que suman los bultos y el total de la compra; 0 = cuadran (tolerancia de 1 g, como la base). */
-export function diferenciaPesos(pesos: number[], totalKg: number): number {
-  const dif = Math.round((sumaPesos(pesos) - totalKg) * 1000) / 1000;
-  return Math.abs(dif) <= 0.001 ? 0 : dif;
-}
 
 /**
  * Número tecleado en un campo de texto: acepta coma o punto decimal (el teclado numérico de la tablet puede dar

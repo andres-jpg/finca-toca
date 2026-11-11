@@ -2,18 +2,21 @@ import type { TipoProceso } from "../types";
 import { ORDEN_PROCESO } from "./servicios";
 import { pctDeMerma } from "./formato";
 
-// Resumen por etapa de la ficha (`v_lote_etapas`) y «lo que queda disponible» (`v_bultos_estado`). Puras.
+// Resumen por etapa de la ficha (`v_lote_etapas`, por kilos: ADR 0002). Puras.
 
 /** Fila de `v_lote_etapas` con números reales (la vista los entrega nulables). */
 export interface EtapaLote {
   tipo: TipoProceso;
-  bultosProcesados: number;
-  bultosTotal: number;
+  /** Lo que el paso puede procesar, lo ya procesado y lo que falta (kg). */
+  kgBase: number;
+  kgProcesados: number;
+  kgPendientes: number;
   completo: boolean;
   parcial: boolean;
   pesoEntradaKg: number;
-  pesoSalidaKg: number;
-  mermaKg: number;
+  pesoSalidaKg: number | null;
+  /** Solo trilla y tostión (con su salida): la molienda y el empaque no tienen merma. */
+  mermaKg: number | null;
   valor: number;
   desvios: number;
   numProcesos: number;
@@ -42,48 +45,8 @@ export function filasEtapas(requeridos: readonly TipoProceso[], etapas: readonly
   });
 }
 
-/** Lo que el pie de la ficha necesita de un bulto (fila de `v_bultos_estado`). */
-export interface BultoPeso {
-  ultimoTipo: TipoProceso | null;
-  pesoActualKg: number;
-}
-
-/** Cómo se dice que un bulto ya pasó por ese paso (y `null` = sin procesar). */
-export const ESTADO_FISICO: Readonly<Record<TipoProceso, string>> = {
-  trilla: "trillado",
-  tostion: "tostado",
-  molienda: "molido",
-  empaque: "empacado",
-};
-
-export interface Disponible {
-  /** `null` = café sin procesar todavía. */
-  paso: TipoProceso | null;
-  texto: string;
-  pesoKg: number;
-}
-
-/**
- * «Queda disponible»: el peso de cada bulto según su ÚLTIMO paso, agrupado por ese paso. Un lote con todo en
- * tostión da un solo grupo («332,000 kg tostado»); uno a medias da varios («133,000 kg tostado» y «250,000 kg sin
- * procesar»). Se suma en gramos. Orden: del paso más avanzado al menos.
- */
-export function quedaDisponible(bultos: readonly BultoPeso[]): Disponible[] {
-  const grupos = new Map<TipoProceso | null, number>();
-  for (const b of bultos) {
-    grupos.set(b.ultimoTipo, (grupos.get(b.ultimoTipo) ?? 0) + Math.round(b.pesoActualKg * 1000));
-  }
-  return [...grupos.entries()]
-    .sort(([a], [b]) => (b === null ? -1 : ORDEN_PROCESO[b]) - (a === null ? -1 : ORDEN_PROCESO[a]))
-    .map(([paso, gramos]) => ({
-      paso,
-      texto: paso ? ESTADO_FISICO[paso] : "sin procesar",
-      pesoKg: gramos / 1000,
-    }));
-}
-
 export interface MermaProcesada {
-  /** Σ entrada de los pasos con merma (trilla, tostión, molienda), en kg. */
+  /** Σ entrada de los pasos con merma (trilla y tostión con salida), en kg. */
   entradaKg: number;
   mermaKg: number;
   /** Σ(entrada − salida) / Σ entrada, en %. */
@@ -91,16 +54,14 @@ export interface MermaProcesada {
 }
 
 /**
- * Merma del lote SOLO sobre lo procesado (A-03): Σ(entrada − salida) / Σ entrada de las etapas que existen, no
- * dividida por todo lo recibido (un lote con 4 de 6 bultos tostados mide esos 4). El empaque no se cuenta: es
- * envasar, no una pérdida de proceso. Se suma en gramos. `null` si aún no hay nada procesado. El detalle por
- * proceso es cada fila del resumen por etapa.
+ * Merma del lote SOLO sobre lo procesado: Σ(entrada − salida) / Σ entrada de trilla y tostión (esta, cuando su empaque
+ * ya fijó la salida con la báscula). Molienda y empaque no tienen merma. Se suma en gramos. `null` si aún no hay nada.
  */
 export function mermaProcesada(etapas: readonly Pick<EtapaLote, "tipo" | "pesoEntradaKg" | "mermaKg">[]): MermaProcesada | null {
   let entrada = 0;
   let merma = 0;
   for (const e of etapas) {
-    if (e.tipo === "empaque") continue;
+    if ((e.tipo !== "trilla" && e.tipo !== "tostion") || e.mermaKg === null) continue;
     entrada += Math.round(e.pesoEntradaKg * 1000);
     merma += Math.round(e.mermaKg * 1000);
   }

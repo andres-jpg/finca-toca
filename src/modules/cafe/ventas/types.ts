@@ -84,8 +84,6 @@ export interface ResultadoVenta {
   id: string;
   numero: string;
   total: number;
-  /** Productos que quedaron en negativo: se avisa, no se bloquea. */
-  advertencias: { articulo_id: string; articulo: string | null; stock_resultante: number }[];
 }
 
 /** `ref_tipo` de los movimientos de una venta o de su anulación (`ref_id` = la venta). Lo define el inventario de producto terminado. */

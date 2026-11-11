@@ -6,23 +6,21 @@ import { elegirProductoDeVenta, esperarHidratacion, irA, NAVEGACION_LENTA } from
 test.use(usarRol("cafeAdmin"));
 
 // Escenario 6 (HU-F1-07): una cortesía descuenta café del inventario pero NO suma al ingreso del día. Se mide en el panel
-// de gerencia (tarjeta «Ingreso marca propia»): la cifra en pesos no cambia y el contador de unidades de cortesía sube.
+// de gerencia (tarjeta «Ingresos de hoy», fila «Marca propia»): la cifra en pesos no cambia.
 
-/** Lo que dice la tarjeta «Ingreso marca propia» del panel de hoy: la cifra en pesos y las unidades de cortesía. */
-async function leerIngresoMarcaPropia(page: Page): Promise<{ total: string; cortesias: number }> {
-  await irA(page, "/dashboard/cafe");
-  const tarjeta = page.locator("section").filter({ has: page.getByRole("heading", { name: "Ingreso marca propia" }) });
-  await expect(tarjeta).toContainText("Cortesías:");
-  const total = (await tarjeta.locator("p").first().innerText()).trim();
-  const unidades = (await tarjeta.innerText()).match(/Cortesías:\s*([\d.]+)\s*unidad/);
-  expect(unidades, "la tarjeta cuenta las unidades de cortesía").toBeTruthy();
-  return { total, cortesias: Number(unidades![1].replace(/\./g, "")) };
+/** Lo que dice la fila «Marca propia» de la tarjeta de ingresos del panel de hoy. */
+async function leerIngresoMarcaPropia(page: Page): Promise<{ total: string }> {
+  await irA(page, "/dashboard/cafe?periodo=hoy");
+  const tarjeta = page.locator("section").filter({ has: page.getByRole("heading", { name: "Ingresos de hoy" }) });
+  const fila = tarjeta.locator("div").filter({ has: page.getByText("Marca propia", { exact: true }) }).last();
+  await expect(fila).toContainText("$");
+  return { total: (await fila.innerText()).replace(/\s+/g, " ").trim() };
 }
 
 test("cortesía: no cambia el ingreso del panel y sí baja el stock", async ({ page }) => {
   const nota = `Cortesía de feria ${sufijo()}`;
   // Hay café empacado de sobra: 30 × 500 g.
-  const lote = await crearCompra({ bultos: 2, pesoKg: 125 });
+  const lote = await crearCompra({ pesoKg: 125 });
   await tostarYEmpacar(lote, 125, [{ presentacion_g: 500, unidades: 30 }]);
   const stockAntes = await stockDe("Excelso 500 g");
   const panelAntes = await leerIngresoMarcaPropia(page);
@@ -53,5 +51,4 @@ test("cortesía: no cambia el ingreso del panel y sí baja el stock", async ({ p
   expect(await stockDe("Excelso 500 g")).toBe(stockAntes - 5);
   const panelDespues = await leerIngresoMarcaPropia(page);
   expect(panelDespues.total).toBe(panelAntes.total);
-  expect(panelDespues.cortesias).toBe(panelAntes.cortesias + 5);
 });

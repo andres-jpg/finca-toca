@@ -10,7 +10,7 @@ test.use(usarRol("cafeAdmin"));
 
 test("reapertura: 40 × 500 g, molienda y empaque en 2.500 g @tablet", async ({ page }) => {
   const motivo = `Pedido molido ${sufijo()}`;
-  const lote = await crearCompra({ bultos: 2, pesoKg: 125 });
+  const lote = await crearCompra({ pesoKg: 125 });
   await tostarYEmpacar(lote, 125, [
     { presentacion_g: 500, unidades: 60 }, // 30 kg
     { presentacion_g: 2500, unidades: 20 }, // 50 kg (≤ 102,5 kg tostados)
@@ -51,15 +51,14 @@ test("reapertura: 40 × 500 g, molienda y empaque en 2.500 g @tablet", async ({ 
   // --- 3. Moler lo reabierto: 20 kg → 19,8 kg --------------------------------------------------------------------------------------
   await expect(page.getByRole("heading", { name: "Moler lo reabierto" })).toBeVisible();
   await page.getByLabel("Peso de salida (kg)").fill("19,8");
-  await expect(page.getByText(/Merma 0,2(00)? kg/)).toBeVisible();
-  await page.getByRole("button", { name: "Registrar molienda" }).click();
+    await page.getByRole("button", { name: "Registrar molienda" }).click();
   await expect(aviso(page, "Molienda registrada")).toBeVisible();
 
   // --- 4. Empacar la molienda en 2.500 g: 7 × 2,5 kg = 17,5 kg ---------------------------------------------------------------
   await page.getByRole("tab", { name: /^Empacar/ }).click();
   await expect(page.getByText(/^19,8 kg$/).first()).toBeVisible();
-  await page.getByLabel("Unidades de 2.500 g").fill("7");
-  // Sobran 2,3 kg de lo molido: la diferencia necesita destino para poder guardar.
+  await page.getByLabel("2.500 g grano, bolsas", { exact: true }).fill("7");
+  // Sobran 2,3 kg de lo molido: el sobrante de un café reabierto necesita destino para poder guardar.
   await page.getByRole("radio", { name: "Muestra", exact: true }).click();
   await registrarPaso(page, "Registrar empaque");
 

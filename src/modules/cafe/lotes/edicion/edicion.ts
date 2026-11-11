@@ -33,6 +33,8 @@ export interface DatosEdicion {
   precioCompraKg: number | null;
   facturaProveedor: string | null;
   observaciones: string | null;
+  /** Peso recibido actual del lote (kg). */
+  pesoRecibidoKg: number;
   procesos: ProcesoEditable[];
 }
 
@@ -44,6 +46,8 @@ export interface FormEdicion {
   precioCompraKg: string;
   facturaProveedor: string;
   observaciones: string;
+  /** Peso recibido del lote (kg): un solo campo (el saldo por kilos no lleva bultos). */
+  pesoRecibidoKg: string;
   procesos: Record<
     string,
     { fecha: string; pesoEntradaKg: string; pesoSalidaKg: string; observaciones: string; baches: Record<string, { pesoEntradaKg: string; pesoSalidaKg: string; temperaturaC: string; tiempoMin: string }> }
@@ -90,6 +94,7 @@ export function formularioInicial(d: DatosEdicion, zona: string): FormEdicion {
     precioCompraKg: d.precioCompraKg === null ? "" : String(d.precioCompraKg),
     facturaProveedor: d.facturaProveedor ?? "",
     observaciones: d.observaciones ?? "",
+    pesoRecibidoKg: String(d.pesoRecibidoKg),
     procesos: Object.fromEntries(
       d.procesos.map((p) => [
         p.id,
@@ -127,6 +132,8 @@ export function construirPayload(d: DatosEdicion, f: FormEdicion, zona: string):
   }
   if (f.facturaProveedor.trim() !== (d.facturaProveedor ?? "")) lote.factura_proveedor = f.facturaProveedor.trim() || null;
   if (f.observaciones.trim() !== (d.observaciones ?? "")) lote.observaciones = f.observaciones.trim() || null;
+  const peso = numero(f.pesoRecibidoKg);
+  if (peso !== d.pesoRecibidoKg) lote.peso_recibido_kg = peso;
 
   const procesos: NonNullable<PayloadEdicion["procesos"]> = [];
   for (const p of d.procesos) {
@@ -170,6 +177,7 @@ export function hayCambios(p: PayloadEdicion): boolean {
 // --- Impacto -------------------------------------------------------------------------------------------------------------
 
 export interface MetricasEdicion {
+  peso_recibido_kg?: number | null;
   fecha_recepcion?: string | null;
   llegada_at?: string | null;
   valor_compra?: number | null;
@@ -191,6 +199,7 @@ export function describirImpacto(antes: MetricasEdicion, despues: MetricasEdicio
     if (a != null && d != null && Math.abs(a - d) < 1e-9) return;
     lineas.push(`${etiqueta} (${a == null ? "—" : fmt(a)} → ${d == null ? "—" : fmt(d)})`);
   };
+  comparar("peso recibido", antes.peso_recibido_kg, despues.peso_recibido_kg, kg);
   comparar("merma de tostión", antes.merma_tostion_pct, despues.merma_tostion_pct, pct);
   comparar("merma de molienda", antes.merma_molienda_pct, despues.merma_molienda_pct, pct);
   comparar("valor del servicio", antes.valor_servicios, despues.valor_servicios, formatCOP);
@@ -208,6 +217,7 @@ const CAMPOS: Record<string, string> = {
   precio_compra_kg: "Precio de compra por kg",
   factura_proveedor: "Factura del proveedor",
   observaciones: "Observaciones",
+  peso_recibido_kg: "Peso recibido",
   fecha: "Fecha",
   peso_entrada_kg: "Peso de entrada",
   peso_salida_kg: "Peso de salida",
@@ -222,7 +232,7 @@ export function valorLegible(campo: string, valor: string | null, zona: string):
   if (valor === null || valor === "") return "—";
   if (campo === "llegada_at") return fechaHoraZona(valor, zona);
   if (campo === "fecha_recepcion" || campo === "fecha") return fechaCorta(valor);
-  if (campo === "peso_entrada_kg" || campo === "peso_salida_kg") return kg(Number(valor));
+  if (campo === "peso_entrada_kg" || campo === "peso_salida_kg" || campo === "peso_recibido_kg") return kg(Number(valor));
   if (campo === "precio_compra_kg") return formatCOP(Number(valor));
   if (campo === "temperatura_c" || campo === "tiempo_min") return String(Number(valor));
   return valor;

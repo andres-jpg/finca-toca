@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { abreviarCOP, cuentaLotes, cuentaProcesos, diaCorto, enteroTexto, kgTexto, mermaTexto } from "./formato";
+import { diaCorto, enteroTexto, kgTexto, librasTexto, millonesTexto, variacionTexto } from "./formato";
 
 describe("kgTexto", () => {
-  it("coma decimal, miles con punto y sin ceros sobrantes", () => {
+  it("1 decimal, coma decimal y miles con punto", () => {
     expect(kgTexto(500)).toBe("500,0 kg");
     expect(kgTexto(1234.5)).toBe("1.234,5 kg");
     expect(kgTexto(332.1)).toBe("332,1 kg");
@@ -10,53 +10,36 @@ describe("kgTexto", () => {
   });
 });
 
-describe("mermaTexto", () => {
-  it("la merma sale de los KILOS (no del porcentaje guardado a 3 decimales): 73 de 405 kg → 18,02 %", () => {
-    expect(mermaTexto({ mermaKg: 73, kgEntrada: 405, procesos: 1 })).toBe("18,0 %");
-    expect(mermaTexto({ mermaKg: 95, kgEntrada: 500, procesos: 1 })).toBe("19,0 %");
-  });
-  it("es la ponderada del conjunto, no el promedio de porcentajes: 94,6 de 525 kg → 18,02 %", () => {
-    expect(mermaTexto({ mermaKg: 94.6, kgEntrada: 525, procesos: 3 })).toBe("18,0 %");
-    // el promedio simple de 18,025 %, 18 % y 18 % sería 18,01 %
-  });
-  it("sin procesos no hay merma que mostrar", () => {
-    expect(mermaTexto({ mermaKg: 0, kgEntrada: 0, procesos: 0 })).toBe("—");
-  });
-  it("con procesos y merma 0, 0 %", () => {
-    expect(mermaTexto({ mermaKg: 0, kgEntrada: 330, procesos: 1 })).toBe("0,0 %");
-  });
-});
-
-describe("enteroTexto", () => {
-  it("separa los miles con punto", () => {
+describe("enteroTexto y librasTexto", () => {
+  it("puntos de miles", () => {
     expect(enteroTexto(1923000)).toBe("1.923.000");
-    expect(enteroTexto(98000)).toBe("98.000");
-    expect(enteroTexto(7)).toBe("7");
-    expect(enteroTexto(-1500)).toBe("-1.500");
+    expect(enteroTexto(999)).toBe("999");
+    expect(enteroTexto(-1500.4)).toBe("-1.500");
     expect(enteroTexto(Number.NaN)).toBe("0");
+    expect(librasTexto(2907)).toBe("2.907 lb");
   });
 });
 
-describe("abreviarCOP", () => {
-  it("abrevia los pesos de los ejes", () => {
-    expect(abreviarCOP(1923000)).toBe("$1,9 M");
-    expect(abreviarCOP(2000000)).toBe("$2 M");
-    expect(abreviarCOP(98000)).toBe("$98 mil");
-    expect(abreviarCOP(1500)).toBe("$1,5 mil");
-    expect(abreviarCOP(450)).toBe("$450");
-    expect(abreviarCOP(0)).toBe("$0");
-    expect(abreviarCOP(-98000)).toBe("-$98 mil");
+describe("millonesTexto", () => {
+  it("millones con 1 decimal y coma", () => {
+    expect(millonesTexto(1234000)).toBe("1,2");
+    expect(millonesTexto(98000)).toBe("0,1");
+    expect(millonesTexto(0)).toBe("0,0");
+    expect(millonesTexto(12_950_000)).toBe("13,0");
   });
 });
 
-describe("diaCorto y plurales", () => {
-  it("día y mes", () => {
+describe("diaCorto", () => {
+  it("dd/mm", () => {
     expect(diaCorto("2026-03-09")).toBe("09/03");
+    expect(diaCorto("raro")).toBe("raro");
   });
-  it("singular y plural", () => {
-    expect(cuentaProcesos(1)).toBe("1 proceso");
-    expect(cuentaProcesos(1500)).toBe("1.500 procesos");
-    expect(cuentaLotes(1)).toBe("1 lote");
-    expect(cuentaLotes(0)).toBe("0 lotes");
+});
+
+describe("variacionTexto", () => {
+  it("lleva el signo y 1 decimal", () => {
+    expect(variacionTexto(4.2)).toBe("+4,2 %");
+    expect(variacionTexto(-1)).toBe("−1,0 %");
+    expect(variacionTexto(0)).toBe("0,0 %");
   });
 });

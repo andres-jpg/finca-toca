@@ -333,7 +333,7 @@ select throws_ok(
   'P0001', 'datos_invalidos', 'una clave inválida falla con datos_invalidos'
 );
 select throws_ok(
-  $$ select public.guardar_parametro('cafe.peso_bulto_kg', null) $$,
+  $$ select public.guardar_parametro('cafe.capacidad_tostadora_kg', null) $$,
   'P0001', 'datos_invalidos', 'un valor NULL falla con datos_invalidos'
 );
 select throws_ok(

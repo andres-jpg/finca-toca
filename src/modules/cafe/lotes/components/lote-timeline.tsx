@@ -4,12 +4,12 @@ import { MermaBadge } from "../../components/merma-badge";
 import { calcularMerma } from "../../procesos/lib/merma";
 import { cn } from "@/lib/utils";
 import { formatearCOP, formatearKg } from "@/modules/cafe/compras/lib/compra";
+import { formatKg, formatPct } from "@/modules/core/formato/numeros";
 import { ETIQUETA_DESTINO, type DestinoDiferencia } from "@/modules/cafe/empaque/lib/empaque";
 import { fechaCorta, fechaHoraZona, formatearKg3, formatearMermaPct, formatearPct } from "../lib/formato";
+import { calcularTandas, resumenTostion, type InfoTanda, type PerfilTueste } from "../lib/tandas";
 import {
   etiquetaMotivoMovimiento,
-  listaBultos,
-  mermaPctBache,
   type EventoLinea,
   type MovimientoLinea,
   type ProcesoLinea,
@@ -77,72 +77,84 @@ function Detalle({ resumen = "Ver detalle", children }: { resumen?: string; chil
 }
 
 function Recepcion({ datos }: { datos: RecepcionLinea }) {
+  const compra = datos.linea === "marca_propia";
+  const partes = [
+    compra ? formatKg(datos.pesoRecibidoKg) : `${formatKg(datos.pesoRecibidoKg)} recibidos`,
+    compra && datos.precioCompraKg != null ? `${formatearCOP(datos.precioCompraKg)}/kg` : null,
+    datos.humedadPct != null ? `humedad ${formatPct(datos.humedadPct)}` : null,
+    datos.tipoCafe,
+    datos.tercero ? `${datos.linea === "servicio" ? "cliente" : "proveedor"}: ${datos.tercero}` : null,
+  ].filter(Boolean);
   return (
-    <Tarjeta config={CONFIG_RECEPCION} titulo={datos.linea === "marca_propia" ? "Compra" : "Recepción"} fecha={fechaCorta(datos.fecha)} quien={datos.creadoPor}>
-      <p className="text-sm text-gray-800">
-        <span className="tabular-nums font-medium">{formatearKg3(datos.pesoRecibidoKg)} kg</span> en {datos.numBultos}{" "}
-        {datos.numBultos === 1 ? "bulto" : "bultos"}
-        {datos.tipoCafe ? ` · ${datos.tipoCafe}` : ""}
-        {datos.tercero ? ` · ${datos.linea === "servicio" ? "cliente" : "proveedor"}: ${datos.tercero}` : ""}
-      </p>
+    <Tarjeta config={CONFIG_RECEPCION} titulo={compra ? "Compra" : "Recepción"} fecha={fechaCorta(datos.fecha)} quien={datos.creadoPor}>
+      <p className="text-sm tabular-nums text-gray-800">{partes.join(" · ")}</p>
     </Tarjeta>
   );
 }
 
-function Proceso({ datos, numBultosLote, reapertura }: { datos: ProcesoLinea; numBultosLote: number; reapertura: ReaperturaLinea | null }) {
+function Proceso({ datos, reapertura, tanda, perfil }: { datos: ProcesoLinea; reapertura: ReaperturaLinea | null; tanda: InfoTanda | null; perfil: PerfilTueste | null }) {
   const anulado = datos.anulacion !== null;
-  const mermaProceso = calcularMerma(datos.pesoEntradaKg, datos.pesoSalidaKg);
+  // Solo trilla y tostión (con su salida) tienen merma; molienda y empaque no.
+  const mermaProceso = datos.pesoSalidaKg !== null && datos.mermaKg !== null ? calcularMerma(datos.pesoEntradaKg, datos.pesoSalidaKg) : null;
   return (
     <Tarjeta
       config={CONFIG_PROCESO[datos.tipo]}
-      titulo={etiquetaServicio(datos.tipo)}
+      titulo={tanda && (datos.tipo === "tostion" || datos.tipo === "empaque") ? `${etiquetaServicio(datos.tipo)} · tanda ${tanda.numero}` : etiquetaServicio(datos.tipo)}
       fecha={fechaCorta(datos.fecha)}
       quien={datos.creadoPor}
       atenuada={anulado}
     >
       <div className={cn("space-y-1", anulado && "line-through decoration-gray-400")}>
-        <p className="text-sm text-gray-800">
-          <span className="tabular-nums">
-            {formatearKg3(datos.pesoEntradaKg)} → {formatearKg3(datos.pesoSalidaKg)} kg
-          </span>
-          {datos.tipo === "empaque" ? (
-            // El empaque no tiene merma (A-01): lo que llega = bolsas + diferencia, y la diferencia tiene destino.
-            <span className="tabular-nums text-gray-600">
-              {datos.diferenciaKg != null && datos.diferenciaKg > 0 && (
-                <>
-                  {" "}
-                  · diferencia {formatearKg3(datos.diferenciaKg)} kg
-                  {datos.diferenciaDestino && ETIQUETA_DESTINO[datos.diferenciaDestino as DestinoDiferencia]
-                    ? ` (${ETIQUETA_DESTINO[datos.diferenciaDestino as DestinoDiferencia].toLowerCase()})`
-                    : ""}
-                </>
-              )}
-            </span>
+        <p className="text-sm tabular-nums text-gray-800">
+          {datos.tipo === "tostion" ? (
+            <>
+              {formatKg(datos.pesoEntradaKg)}
+              {resumenTostion(datos.baches, perfil, datos.nivelTueste) && ` · ${resumenTostion(datos.baches, perfil, datos.nivelTueste)}`}
+            </>
+          ) : datos.tipo === "empaque" ? (
+            <>
+              {formatKg(datos.pesoEntradaKg)} en báscula
+              {tanda?.mermaTandaPct != null && ` · merma de tostión ${formatPct(tanda.mermaTandaPct)}`}
+              {tanda?.acumuladaPct != null && tanda.numero > 1 && ` · acumulada ${formatPct(tanda.acumuladaPct)}`}
+            </>
+          ) : datos.tipo === "molienda" && datos.pesoSalidaKg === null && !datos.reaperturaId ? (
+            // B-07: la molienda se confirma sin pesos; `peso_entrada_kg` guarda los kilos estimados a moler.
+            <>{formatKg(datos.pesoEntradaKg)} estimados · confirmada</>
+          ) : datos.pesoSalidaKg === null ? (
+            formatKg(datos.pesoEntradaKg)
           ) : (
-            <span className="tabular-nums text-gray-600">
-              {" "}
-              · merma {formatearKg3(datos.mermaKg)} kg ({formatearMermaPct(datos.mermaKg, datos.pesoEntradaKg)})
-            </span>
+            <>
+              {formatKg(datos.pesoEntradaKg)} → {formatKg(datos.pesoSalidaKg)}
+              {datos.mermaKg !== null && ` · merma ${formatKg(datos.mermaKg)} (${formatearMermaPct(datos.mermaKg, datos.pesoEntradaKg)})`}
+            </>
           )}
         </p>
+        {datos.tipo === "empaque" && ((datos.lineasEmpaque?.length ?? 0) > 0 || (datos.diferenciaKg ?? 0) > 0) && (
+          <p className="rounded-md bg-white/70 px-2 py-1 text-sm tabular-nums text-gray-700">
+            {(datos.lineasEmpaque ?? [])
+              .map((l) => `${l.unidades} u de ${l.presentacionG} g en ${l.forma === "molido" ? "molido" : "grano"} (${formatKg((l.unidades * l.presentacionG) / 1000)})`)
+              .join(" · ")}
+            {(datos.diferenciaKg ?? 0) > 0 && (
+              <>
+                {(datos.lineasEmpaque?.length ?? 0) > 0 ? " · " : ""}sobrante {formatKg(datos.diferenciaKg ?? 0)}
+                {datos.diferenciaDestino && ETIQUETA_DESTINO[datos.diferenciaDestino as DestinoDiferencia]
+                  ? ` a ${ETIQUETA_DESTINO[datos.diferenciaDestino as DestinoDiferencia].toLowerCase()}`
+                  : ""}
+              </>
+            )}
+          </p>
+        )}
         {datos.reaperturaId && (
           <p className="text-xs font-medium text-amber-800">
             De la reapertura{reapertura ? ` de ${reapertura.texto}` : ""}
           </p>
         )}
-        {datos.lineasEmpaque && datos.lineasEmpaque.length > 0 && (
-          <p className="text-sm font-medium text-gray-800">
-            Empacado: {datos.lineasEmpaque.map((l) => `${l.unidades} × ${l.producto}`).join(" · ")}
-          </p>
-        )}
         <Detalle>
           <p className="text-xs text-gray-600">
-            {datos.bultos.length > 0 && <>Bultos: {listaBultos(datos.bultos, numBultosLote)}</>}
-            {datos.nivelTueste && <> · Tueste {etiquetaTueste(datos.nivelTueste).toLowerCase()}</>}
+            {datos.nivelTueste && <>Tueste {etiquetaTueste(datos.nivelTueste).toLowerCase()}</>}
             {datos.valor > 0 && (
               <>
-                {" "}
-                · Valor <span className="tabular-nums">{formatearCOP(datos.valor)}</span> (tarifa{" "}
+                {datos.nivelTueste ? " · " : ""}Valor <span className="tabular-nums">{formatearCOP(datos.valor)}</span> (tarifa{" "}
                 <span className="tabular-nums">{formatearCOP(datos.tarifaKg)}</span>/kg)
               </>
             )}
@@ -186,9 +198,8 @@ function Proceso({ datos, numBultosLote, reapertura }: { datos: ProcesoLinea; nu
                 <tr>
                   <th className="px-2 py-1.5 font-medium">Bache</th>
                   <th className="px-2 py-1.5 text-right font-medium">Kg entrada</th>
-                  <th className="px-2 py-1.5 text-right font-medium">Kg salida</th>
-                  <th className="px-2 py-1.5 text-right font-medium">Merma</th>
                   <th className="px-2 py-1.5 text-right font-medium">Temp. °C</th>
+                  <th className="px-2 py-1.5 text-right font-medium">Tiempo min</th>
                 </tr>
               </thead>
               <tbody>
@@ -196,22 +207,8 @@ function Proceso({ datos, numBultosLote, reapertura }: { datos: ProcesoLinea; nu
                   <tr key={b.numero} className="border-t border-orange-100 tabular-nums">
                     <td className="px-2 py-1">{b.numero}</td>
                     <td className="px-2 py-1 text-right">{formatearKg3(b.pesoEntradaKg)}</td>
-                    <td className="px-2 py-1 text-right">{formatearKg3(b.pesoSalidaKg)}</td>
-                    <td className="px-2 py-1 text-right">
-                      <span className="inline-flex flex-wrap items-center justify-end gap-1">
-                        {formatearPct(mermaPctBache(b))}
-                        {mermaProceso && (
-                          <MermaBadge
-                            mermaPct={calcularMerma(b.pesoEntradaKg, b.pesoSalidaKg)?.mermaPct ?? Number.NaN}
-                            referenciaPct={datos.mermaReferenciaPct}
-                            toleranciaPts={datos.toleranciaPts}
-                            tipo={datos.tipo}
-                            conAyuda={false}
-                          />
-                        )}
-                      </span>
-                    </td>
                     <td className="px-2 py-1 text-right">{b.temperaturaC ?? "—"}</td>
+                    <td className="px-2 py-1 text-right">{b.tiempoMin ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -299,7 +296,8 @@ function Remision({ datos }: { datos: RemisionLinea }) {
  * merma, su valor y quién lo registró, los baches de la tostión desplegables, los movimientos de inventario ligados
  * al lote, las reaperturas de producto empacado (con los procesos que cuelgan de ellas), la remisión de entrega (también las anuladas) y, si aplica, su anulación. Los procesos anulados se conservan, tachados y con su motivo.
  */
-export function LoteTimeline({ eventos, zonaHoraria }: { eventos: EventoLinea[]; zonaHoraria: string }) {
+export function LoteTimeline({ eventos, zonaHoraria, perfil = null }: { eventos: EventoLinea[]; zonaHoraria: string; perfil?: PerfilTueste | null }) {
+  const tandas = calcularTandas(eventos.flatMap((e) => (e.clase === "proceso" ? [e.datos] : [])));
   if (eventos.length === 0) {
     return <p className="py-4 text-center text-sm text-gray-400">Este lote aún no tiene historia registrada.</p>;
   }
@@ -310,7 +308,7 @@ export function LoteTimeline({ eventos, zonaHoraria }: { eventos: EventoLinea[];
           case "recepcion":
             return <Recepcion key={e.clave} datos={e.datos} />;
           case "proceso":
-            return <Proceso key={e.clave} datos={e.datos} numBultosLote={e.numBultosLote} reapertura={e.reapertura} />;
+            return <Proceso key={e.clave} datos={e.datos} reapertura={e.reapertura} tanda={tandas.get(e.datos.id) ?? null} perfil={perfil} />;
           case "reapertura":
             return <Reapertura key={e.clave} datos={e.datos} />;
           case "movimiento":

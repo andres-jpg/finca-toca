@@ -10,13 +10,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { formatKgNum } from "@/modules/core/formato/numeros";
 import { cn } from "@/lib/utils";
 import { TerceroCombobox } from "@/modules/core/terceros/components/tercero-combobox";
 import type { RolTercero } from "@/modules/core/terceros/lib/roles";
 import type { TerceroOpcion } from "@/modules/core/terceros/types";
-import { repartirPeso } from "../../lotes/lib/repartir-peso";
-import { etiquetaServicio, etiquetaTueste } from "../../lotes/lib/servicios";
+import { etiquetaServicio } from "../../lotes/lib/servicios";
+import {
+  ETIQUETA_MODO_MOLIENDA,
+  estimarMolienda,
+  mensajeMoliendaExcede,
+  textoEstimadoRecepcion,
+  type ModoMolienda,
+} from "../../procesos/lib/molienda";
+import { parsearDecimal } from "../../procesos/lib/numero";
 import { agregarRolClienteServicio, registrarRecepcion } from "../actions/recepciones.actions";
 import {
   ETIQUETA_ALERTA_CALIDAD,
@@ -27,16 +33,17 @@ import {
   type MagnitudCalidad,
   type RangoCalidad,
 } from "../lib/calidad";
-import { estimarServicios } from "../lib/estimar-servicios";
+import { estimarServicios, mermaTostionPonderada } from "../lib/estimar-servicios";
+import { kgATostar } from "../lib/perfiles";
 import type { ConfigRecepcion } from "../queries/recepcion.queries";
 import {
-  NIVELES_TUESTE,
   SERVICIOS_RECEPCION,
   recepcionSchema,
   type RecepcionFormInput,
   type RecepcionValues,
 } from "../schemas/recepcion.schema";
 import { EstimacionPanel } from "./estimacion-panel";
+import { PerfilTuestePanel } from "./perfil-tueste-panel";
 
 // Formulario pensado para la tablet de recepción: campos y botones de 44 px como mínimo y teclado decimal
 // (`inputMode="decimal"`) en peso, humedad y densidad.
@@ -49,7 +56,6 @@ const AYUDA_SERVICIO: Record<(typeof SERVICIOS_RECEPCION)[number], string> = {
   molienda: "Tostado → molido",
 };
 
-const redondear3 = (n: number) => Math.round(n * 1000) / 1000;
 const numeroOpcional = (v: unknown) => (v === "" || v === null || v === undefined ? null : Number(v));
 
 interface RecepcionFormProps {
@@ -112,74 +118,89 @@ export function RecepcionForm({ config, fechaHoy, puedeAdministrar }: RecepcionF
       terceroId: "",
       fecha: fechaHoy,
       servicios: [],
-      nivelTueste: null,
-      perfilTempC: null,
-      perfilTiempoMin: null,
+      // Terceros abre con el perfil de maquila vigente (B-18): nadie digita nada para el caso común.
+      modoPerfil: "uno",
+      nivelTueste: config.perfilMaquila?.nivel ?? null,
+      perfilTempC: config.perfilMaquila?.tempC ?? null,
+      perfilTiempoMin: config.perfilMaquila?.tiempoMin ?? null,
+      perfiles: [],
+      moliendaModo: null,
+      moliendaKg: null,
       humedadPct: null,
       densidad: null,
-      pesosBultos: null,
       observaciones: "",
     },
   });
 
   const [tercero, setTercero] = useState<TerceroOpcion | null>(null);
   const [agregandoRol, setAgregandoRol] = useState(false);
-  // Pesos por bulto escritos a mano (texto, para no pelear con el cursor); `null` = partes iguales.
-  const [textosBultos, setTextosBultos] = useState<string[] | null>(null);
-  // Mientras el peso total no se escriba a mano, se sugiere `bultos × peso de un bulto` (62,5 kg por defecto).
-  const [pesoManual, setPesoManual] = useState(false);
-
   const pesoKg = useWatch({ control, name: "pesoKg" });
-  const numBultos = useWatch({ control, name: "numBultos" });
   const servicios = useWatch({ control, name: "servicios" });
   const humedadPct = useWatch({ control, name: "humedadPct" });
   const densidad = useWatch({ control, name: "densidad" });
   const nivelTueste = useWatch({ control, name: "nivelTueste" });
+  const kgTostar = kgATostar(Number(pesoKg), servicios, config.mermasRef.trilla ?? 19);
   const hayTostion = servicios.includes("tostion");
+  const hayMolienda = servicios.includes("molienda");
+  const moliendaModoElegido = useWatch({ control, name: "moliendaModo" });
+  const moliendaKgTxt = useWatch({ control, name: "moliendaKg" });
+  const moliendaModo: ModoMolienda = moliendaModoElegido ?? "todo";
+  const moliendaKg = typeof moliendaKgTxt === "number" ? moliendaKgTxt : parsearDecimal(moliendaKgTxt as unknown as string);
 
-  const estimacion = useMemo(
-    () => estimarServicios({ pesoKg, servicios, tarifas: config.tarifas, mermasRef: config.mermasRef, nivelTueste }),
-    [pesoKg, servicios, config.tarifas, config.mermasRef, nivelTueste],
+  const modoPerfil = useWatch({ control, name: "modoPerfil" });
+  const perfilesForm = useWatch({ control, name: "perfiles" });
+  const perfilesEstimacion = useMemo(
+    () =>
+      modoPerfil === "varios"
+        ? (perfilesForm ?? []).map((p) => ({ nivel: p.nivel, kg: typeof p.kg === "number" ? p.kg : null }))
+        : undefined,
+    [modoPerfil, perfilesForm],
   );
 
-  const repartido = useMemo(() => {
-    try {
-      return repartirPeso(pesoKg, numBultos).map(String);
-    } catch {
-      return [];
-    }
-  }, [pesoKg, numBultos]);
-  const filasBultos = textosBultos ?? repartido;
-  const sumaBultos = redondear3(filasBultos.reduce((a, t) => a + (Number(t) || 0), 0));
+  // Estimado de la molienda (B-03): con la merma de referencia de trilla y de tostión del nivel elegido.
+  const moliendaEst = useMemo(() => {
+    if (!hayMolienda || !Number.isFinite(pesoKg) || !(pesoKg > 0)) return null;
+    return estimarMolienda({
+      kgEntrada: pesoKg,
+      trilla: servicios.includes("trilla"),
+      mermaTrillaPct: config.mermasRef.trilla ?? 0,
+      // Con varios perfiles (B-02) la merma de la tostión es la ponderada por kg.
+      mermaTostionPct: mermaTostionPonderada(config.mermasRef, perfilesEstimacion) ?? config.mermasRef.tostion?.[nivelTueste ?? "medio"] ?? 0,
+      modo: moliendaModo,
+      kg: moliendaKg,
+    });
+  }, [hayMolienda, pesoKg, servicios, config.mermasRef, nivelTueste, perfilesEstimacion, moliendaModo, moliendaKg]);
+
+  const estimacion = useMemo(
+    () =>
+      estimarServicios({
+        pesoKg,
+        servicios,
+        tarifas: config.tarifas,
+        mermasRef: config.mermasRef,
+        nivelTueste,
+        perfiles: perfilesEstimacion,
+        molienda: hayMolienda ? { modo: moliendaModo, kg: moliendaKg } : null,
+      }),
+    [pesoKg, servicios, config.tarifas, config.mermasRef, nivelTueste, perfilesEstimacion, hayMolienda, moliendaModo, moliendaKg],
+  );
 
   const sinRolServicio = tercero !== null && !tercero.roles.includes("cliente_servicio");
-
-  function restablecerBultos() {
-    setTextosBultos(null);
-    setValue("pesosBultos", null);
-  }
-
-  function editarBulto(i: number, texto: string) {
-    const siguiente = [...filasBultos];
-    siguiente[i] = texto;
-    setTextosBultos(siguiente);
-    const numeros = siguiente.map((t) => (t.trim() === "" ? Number.NaN : Number(t)));
-    setValue("pesosBultos", numeros);
-    // Con pesos individuales el total es su suma.
-    if (numeros.every(Number.isFinite)) {
-      setPesoManual(true);
-      setValue("pesoKg", redondear3(numeros.reduce((a, b) => a + b, 0)), { shouldValidate: true });
-    }
-  }
 
   function alternarServicio(actuales: RecepcionFormInput["servicios"], servicio: (typeof SERVICIOS_RECEPCION)[number]) {
     let siguiente = actuales.includes(servicio) ? actuales.filter((s) => s !== servicio) : [...actuales, servicio];
     // La molienda y el empaque cuelgan de la tostión: sin ella no hay nivel de tueste ni molienda.
     if (!siguiente.includes("tostion")) {
       siguiente = siguiente.filter((s) => s !== "molienda");
-      setValue("nivelTueste", null);
-      setValue("perfilTempC", null);
-      setValue("perfilTiempoMin", null);
+    } else if (!actuales.includes("tostion") && config.perfilMaquila) {
+      // Recién elegida la tostión: vuelve a precargar el perfil de maquila si se había vaciado.
+      setValue("nivelTueste", config.perfilMaquila.nivel);
+      setValue("perfilTempC", config.perfilMaquila.tempC);
+      setValue("perfilTiempoMin", config.perfilMaquila.tiempoMin);
+    }
+    if (!siguiente.includes("molienda")) {
+      setValue("moliendaModo", null);
+      setValue("moliendaKg", null);
     }
     return SERVICIOS_RECEPCION.filter((s) => siguiente.includes(s));
   }
@@ -198,6 +219,10 @@ export function RecepcionForm({ config, fechaHoy, puedeAdministrar }: RecepcionF
   }
 
   const onSubmit = async (values: RecepcionValues) => {
+    if (moliendaEst?.excede) {
+      toast.error(mensajeMoliendaExcede(moliendaEst));
+      return;
+    }
     const r = await registrarRecepcion(values);
     if (!r.ok) {
       toast.error(r.message);
@@ -214,8 +239,6 @@ export function RecepcionForm({ config, fechaHoy, puedeAdministrar }: RecepcionF
     router.push("/dashboard/cafe/lotes");
     router.refresh();
   };
-
-  const errorPesos = errors.pesosBultos as { message?: string } | undefined;
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
@@ -324,173 +347,98 @@ export function RecepcionForm({ config, fechaHoy, puedeAdministrar }: RecepcionF
           {errors.servicios && <p className="text-xs text-red-500">{errors.servicios.message}</p>}
 
           {hayTostion && (
-            <div className="space-y-4 rounded-md border border-gray-200 p-3">
-              <div className="space-y-1.5">
-                <Label id="rec-tueste-label">Nivel de tueste</Label>
-                <Controller
-                  control={control}
-                  name="nivelTueste"
-                  render={({ field }) => (
-                    <div role="radiogroup" aria-labelledby="rec-tueste-label" className="grid grid-cols-3 gap-2">
-                      {NIVELES_TUESTE.map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          role="radio"
-                          aria-checked={field.value === n}
-                          onClick={() => field.onChange(n)}
-                          className={cn(
-                            "min-h-12 rounded-md border px-3 text-base font-medium transition-colors",
-                            field.value === n
-                              ? "border-gray-900 bg-gray-900 text-white"
-                              : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50",
-                          )}
-                        >
-                          {etiquetaTueste(n)}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                />
-                {errors.nivelTueste && <p className="text-xs text-red-500">{errors.nivelTueste.message}</p>}
-                {!nivelTueste && !errors.nivelTueste && (
-                  <p className="text-xs text-gray-500">Obligatorio con tostión: define la merma de referencia y la planta lo ve al tostar.</p>
-                )}
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="rec-temp">Temperatura pedida (°C) · opcional</Label>
-                  <Input
-                    id="rec-temp"
-                    type="number"
-                    inputMode="decimal"
-                    min={1}
-                    max={400}
-                    step="any"
-                    placeholder="Ej: 205"
-                    className={CAMPO}
-                    {...register("perfilTempC", { setValueAs: numeroOpcional })}
-                  />
-                  {errors.perfilTempC && <p className="text-xs text-red-500">{errors.perfilTempC.message}</p>}
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="rec-tiempo">Tiempo pedido (min) · opcional</Label>
-                  <Input
-                    id="rec-tiempo"
-                    type="number"
-                    inputMode="decimal"
-                    min={1}
-                    max={120}
-                    step="any"
-                    placeholder="Ej: 12"
-                    className={CAMPO}
-                    {...register("perfilTiempoMin", { setValueAs: numeroOpcional })}
-                  />
-                  {errors.perfilTiempoMin && <p className="text-xs text-red-500">{errors.perfilTiempoMin.message}</p>}
-                </div>
-              </div>
-              <p className="text-xs text-gray-500">Si el cliente indicó un perfil, la planta lo ve como objetivo de la tostión.</p>
-            </div>
+            <PerfilTuestePanel
+              control={control}
+              register={register}
+              setValue={setValue}
+              errors={errors}
+              kgTostar={kgTostar}
+              predeterminado={{ nivel: config.perfilMaquila?.nivel ?? null, tempC: config.perfilMaquila?.tempC ?? null, tiempoMin: config.perfilMaquila?.tiempoMin ?? null }}
+            />
           )}
         </section>
 
-        {/* Bultos y peso */}
-        <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="rec-bultos">Número de bultos</Label>
-              <Input
-                id="rec-bultos"
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={200}
-                step={1}
-                placeholder="Ej: 8"
-                className={CAMPO}
-                {...register("numBultos", {
-                  valueAsNumber: true,
-                  onChange: (e) => {
-                    restablecerBultos();
-                    const n = Number(e.target.value);
-                    if (!pesoManual && Number.isInteger(n) && n > 0) {
-                      setValue("pesoKg", redondear3(n * config.pesoBultoKg), { shouldValidate: true });
-                    }
-                  },
-                })}
-              />
-              {errors.numBultos && <p className="text-xs text-red-500">{errors.numBultos.message}</p>}
+        {/* Cantidad a moler (B-03): solo si se contrata molienda */}
+        {hayMolienda && (
+          <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm" aria-labelledby="rec-moler-titulo">
+            <div>
+              <h2 id="rec-moler-titulo" className="text-base font-semibold text-gray-800">
+                Cantidad a moler
+              </h2>
+              <p className="text-xs text-gray-500">Se puede modificar al cerrar la tostión.</p>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="rec-peso">Peso total (kg)</Label>
-              <Input
-                id="rec-peso"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step="any"
-                placeholder="Ej: 500"
-                className={CAMPO}
-                {...register("pesoKg", {
-                  valueAsNumber: true,
-                  onChange: (e) => {
-                    setPesoManual(e.target.value !== "");
-                    restablecerBultos();
-                  },
-                })}
-              />
-              {errors.pesoKg && <p className="text-xs text-red-500">{errors.pesoKg.message}</p>}
-              <p className="text-xs text-gray-500">
-                Se sugiere {formatKgNum(config.pesoBultoKg)} kg por bulto; puedes cambiarlo.
-              </p>
-            </div>
-          </div>
-
-          <details className="group rounded-md border border-gray-200">
-            <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 px-3 text-sm font-medium text-gray-700">
-              <span>Pesos por bulto{textosBultos ? " (editados)" : " (partes iguales)"}</span>
-              <span className="text-xs font-normal text-gray-500 group-open:hidden">Mostrar</span>
-            </summary>
-            <div className="space-y-3 border-t border-gray-200 p-3">
-              {filasBultos.length === 0 ? (
-                <p className="text-sm text-gray-500">Indica el número de bultos y el peso total.</p>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                    {filasBultos.map((texto, i) => (
-                      <div key={i} className="space-y-1">
-                        <Label htmlFor={`rec-bulto-${i}`} className="text-xs text-gray-500">
-                          Bulto {i + 1}
-                        </Label>
-                        <Input
-                          id={`rec-bulto-${i}`}
-                          type="number"
-                          inputMode="decimal"
-                          min={0}
-                          step="any"
-                          value={texto}
-                          onChange={(e) => editarBulto(i, e.target.value)}
-                          className={CAMPO}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                    <p className="text-gray-600">
-                      Suma: <span className="font-semibold tabular-nums">{formatKgNum(sumaBultos)} kg</span>
-                    </p>
-                    {textosBultos && (
-                      <Button type="button" variant="outline" className="h-11" onClick={restablecerBultos}>
-                        Repartir en partes iguales
-                      </Button>
-                    )}
-                  </div>
-                  {errorPesos?.message && <p className="text-xs text-red-500">{errorPesos.message}</p>}
-                </>
+            <Controller
+              control={control}
+              name="moliendaModo"
+              render={({ field }) => (
+                <div role="radiogroup" aria-label="Cantidad a moler" className="grid grid-cols-3 gap-2">
+                  {(["todo", "mitad", "kg"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      role="radio"
+                      aria-checked={moliendaModo === m}
+                      onClick={() => field.onChange(m)}
+                      className={cn(
+                        "min-h-12 rounded-md border px-3 text-base font-medium transition-colors",
+                        moliendaModo === m ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50",
+                      )}
+                    >
+                      {ETIQUETA_MODO_MOLIENDA[m]}
+                    </button>
+                  ))}
+                </div>
               )}
-            </div>
-          </details>
+            />
+            {moliendaModo === "kg" && (
+              <div className="space-y-1.5 sm:max-w-xs">
+                <Label htmlFor="rec-moler-kg">Kilos a moler (kg)</Label>
+                <Input
+                  id="rec-moler-kg"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="any"
+                  placeholder="Ej: 10,0"
+                  className={CAMPO}
+                  {...register("moliendaKg", { setValueAs: numeroOpcional })}
+                />
+                {errors.moliendaKg && <p className="text-xs text-red-500">{errors.moliendaKg.message}</p>}
+              </div>
+            )}
+            {moliendaEst ? (
+              <>
+                <p className="text-sm text-gray-700" aria-live="polite">
+                  {textoEstimadoRecepcion(moliendaEst)}
+                </p>
+                {moliendaEst.excede && (
+                  <p role="alert" className="text-xs font-medium text-red-600">
+                    {mensajeMoliendaExcede(moliendaEst)}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-gray-500">Indicar el peso recibido para ver el estimado.</p>
+            )}
+          </section>
+        )}
+
+        {/* Peso */}
+        <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="space-y-1.5 sm:max-w-xs">
+            <Label htmlFor="rec-peso">Peso recibido (kg)</Label>
+            <Input
+              id="rec-peso"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="any"
+              placeholder="Ej: 500,0"
+              className={CAMPO}
+              {...register("pesoKg", { valueAsNumber: true })}
+            />
+            {errors.pesoKg && <p className="text-xs text-red-500">{errors.pesoKg.message}</p>}
+          </div>
         </section>
 
         {/* Calidad */}

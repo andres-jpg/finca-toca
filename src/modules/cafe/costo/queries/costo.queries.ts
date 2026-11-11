@@ -1,6 +1,6 @@
 import { cache } from "react";
 import { callRpc } from "@/modules/core/rpc/call-rpc";
-import { GRAMOS_LIBRA, leerCostoLibra, leerCostoLibraPanel, type CostoLibra, type CostoLibraLotePanel } from "../lib/costo-libra";
+import { GRAMOS_LIBRA, PRESENTACIONES_COSTO, leerCostoLibra, leerCostoLibraPanel, type CostoLibra, type CostoLibraLotePanel } from "../lib/costo-libra";
 
 // Lectura del costo por libra (A-05 · HU-F1-17). Módulo plano (no "use server"). La frontera es la base: las funciones son
 // `SECURITY INVOKER`, exigen miembro (y `cafe.dashboard` en la del panel) y leen tablas con RLS por cliente. Si la base
@@ -18,4 +18,12 @@ export const getCostoLibraPanel = cache(async (desde: string, hasta: string, gra
   const r = await callRpc("cafe", "costo_libra_panel", { p_desde: desde, p_hasta: hasta, p_gramos: gramos });
   if (!r.ok) throw new Error(`No se pudo cargar el costo por libra del panel (${r.code})`);
   return leerCostoLibraPanel(r.data);
+});
+
+/**
+ * El costo por libra del lote en cada presentación pedida (B-13): una llamada por presentación. Si una falla se lanza: un costo
+ * a medias o en cero engaña más que el error.
+ */
+export const getCostosLibraLote = cache(async (loteId: string, presentaciones: readonly number[] = PRESENTACIONES_COSTO): Promise<CostoLibra[]> => {
+  return Promise.all(presentaciones.map((g) => getCostoLibraLote(loteId, g)));
 });

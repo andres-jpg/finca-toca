@@ -85,10 +85,8 @@ export function ReaperturaPlanta({ reapertura: r, config, fechaHoy, fechaMoliend
         <EmpaqueForm
           key={`emp-${r.id}-${molida ? "m" : "d"}`}
           lote={{ id: r.loteId, linea: "marca_propia", servicios: [], tipoCafe: r.tipoCafe }}
-          bultos={[]}
           config={config}
           fechaHoy={fechaHoy}
-          bultoIdsIniciales={[]}
           pesoDisponibleInicial={r.pesoDisponibleKg}
           reapertura={{ id: r.id, origen: origenEmpaque }}
         />
