@@ -8,7 +8,6 @@ import { LoteTimeline } from "./lote-timeline";
 
 const proceso = (extra: Partial<ProcesoLinea> & Pick<ProcesoLinea, "id" | "tipo" | "fecha" | "creadoEn">): ProcesoLinea => ({
   creadoPor: "operativo@cofradia.test",
-  bultos: [1, 2, 3, 4, 5, 6, 7, 8],
   pesoEntradaKg: 0,
   pesoSalidaKg: 0,
   mermaKg: 0,
@@ -54,8 +53,7 @@ const tostion = proceso({
   baches: Array.from({ length: 30 }, (_, i) => ({
     numero: i + 1,
     pesoEntradaKg: 13.5,
-    pesoSalidaKg: 11.07,
-    mermaKg: 2.43,
+    tiempoMin: 17,
     temperaturaC: i === 0 ? 205 : null,
     observaciones: null,
   })),
@@ -71,9 +69,7 @@ function html(procesos: ProcesoLinea[], extra: Partial<Parameters<typeof constru
       tercero: "Juan Pérez",
       tipoCafe: null,
       pesoRecibidoKg: 500,
-      numBultos: 8,
     },
-    numBultosLote: 8,
     procesos,
     movimientos: [],
     anulacionLote: null,
@@ -86,19 +82,18 @@ describe("LoteTimeline", () => {
   it("muestra la recepción, los procesos en orden y sus kilos, mermas y valor", () => {
     const salida = html([tostion, trilla]);
     expect(salida).toContain("Recepción");
-    expect(salida).toContain("500,0 kg</span> en 8 bultos");
+    expect(salida).toContain("500,0 kg recibidos");
     expect(salida).toContain("cliente: Juan Pérez");
     // en orden cronológico: recepción, trilla, tostión
     expect(salida.indexOf("Recepción")).toBeLessThan(salida.indexOf("Trilla"));
     expect(salida.indexOf("Trilla")).toBeLessThan(salida.indexOf("Tostión"));
-    // 500 → 405 kg con 19 % y 405 → 332 kg con 18,02 %
-    expect(salida).toContain("500,0 → 405,0 kg");
+    // trilla: 500 → 405 kg con 19 %; la tostión (B-12) muestra kilos, baches y perfil, y su merma sale en el empaque de la tanda
+    expect(salida).toContain("500,0 kg → 405,0 kg");
     expect(salida).toContain("merma 95,0 kg (19,0 %)");
-    expect(salida).toContain("405,0 → 332,0 kg");
-    expect(salida).toContain("merma 73,0 kg (18,0 %)");
+    expect(salida).toContain("Tostión · tanda 1");
+    expect(salida).toContain("405,0 kg · 30 baches · Medio");
     expect(salida).toContain("$891.000");
     expect(salida).toContain("Tueste medio");
-    expect(salida).toContain("todos (8)");
     expect(salida).toContain("operativo@cofradia.test");
   });
 
@@ -145,8 +140,7 @@ describe("LoteTimeline", () => {
     const salida = renderToStaticMarkup(
       createElement(LoteTimeline, {
         eventos: construirLineaDeTiempo({
-          recepcion: { fecha: "2026-11-05", creadoEn: "2026-11-05T15:00:00Z", creadoPor: null, linea: "marca_propia", tercero: "Finca La Esperanza", tipoCafe: "Excelso", pesoRecibidoKg: 375, numBultos: 6 },
-          numBultosLote: 6,
+          recepcion: { fecha: "2026-11-05", creadoEn: "2026-11-05T15:00:00Z", creadoPor: null, linea: "marca_propia", tercero: "Finca La Esperanza", tipoCafe: "Excelso", pesoRecibidoKg: 375 },
           procesos: [],
           movimientos: [],
           anulacionLote: null,
@@ -157,5 +151,22 @@ describe("LoteTimeline", () => {
     expect(salida).toContain("Compra");
     expect(salida).toContain("proveedor: Finca La Esperanza");
     expect(salida).toContain("Excelso");
+  });
+
+  it("B-12: empaque con báscula, merma de la tanda y sobrante; molienda solo confirmada; sin merma propia", () => {
+    const t1 = { ...tostion, id: "t1", pesoEntradaKg: 64, pesoSalidaKg: 52.4, mermaKg: 11.6, baches: [] };
+    const e1 = proceso({
+      id: "e1", tipo: "empaque", fecha: "2026-11-07", creadoEn: "2026-11-07T16:00:00Z", pesoEntradaKg: 52.4, pesoSalidaKg: 52,
+      mermaKg: 0.4, origenProcesoId: "t1", diferenciaKg: 0.4, diferenciaDestino: "granel",
+      lineasEmpaque: [{ presentacionG: 500, unidades: 104, producto: "Excelso 500 g", forma: "grano" }],
+    });
+    const m1 = proceso({ id: "m1", tipo: "molienda", fecha: "2026-11-08", creadoEn: "2026-11-08T10:00:00Z", pesoEntradaKg: 10, pesoSalidaKg: null, mermaKg: null });
+    const salida = html([t1, e1, m1]);
+    expect(salida).toContain("Empaque · tanda 1");
+    expect(salida).toContain("52,4 kg en báscula · merma de tostión 18,1 %");
+    expect(salida).toContain("104 u de 500 g en grano (52,0 kg)");
+    expect(salida).toContain("sobrante 0,4 kg");
+    expect(salida).toContain("10,0 kg estimados · confirmada");
+    expect(salida).not.toMatch(/Molienda[\s\S]*merma/);
   });
 });

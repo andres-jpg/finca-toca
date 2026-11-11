@@ -7,14 +7,14 @@ export type Database = {
           Tables: {
             "baches": {
                   Row: {
-                    "created_at": string,"created_by": string | null,"grupo_pesaje": number | null,"id": string,"merma_pct": number | null,"numero": number,"observaciones": string | null,"peso_entrada_kg": number,"peso_salida_kg": number,"proceso_id": string,"temperatura_c": number | null,"tenant_id": string,"tiempo_min": number | null
+                    "created_at": string,"created_by": string | null,"grupo_pesaje": number | null,"id": string,"merma_pct": number | null,"nivel_tueste": Database["cafe"]['Enums']["nivel_tueste"] | null,"numero": number,"observaciones": string | null,"peso_entrada_kg": number,"peso_salida_kg": number | null,"proceso_id": string,"temperatura_c": number | null,"tenant_id": string,"tiempo_min": number | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"created_by"?: string | null,"grupo_pesaje"?: number | null,"id"?: string,"merma_pct"?: never,"numero": number,"observaciones"?: string | null,"peso_entrada_kg": number,"peso_salida_kg": number,"proceso_id": string,"temperatura_c"?: number | null,"tenant_id"?: string,"tiempo_min"?: number | null
+                    "created_at"?: string,"created_by"?: string | null,"grupo_pesaje"?: number | null,"id"?: string,"merma_pct"?: never,"nivel_tueste"?: Database["cafe"]['Enums']["nivel_tueste"] | null,"numero": number,"observaciones"?: string | null,"peso_entrada_kg": number,"peso_salida_kg"?: number | null,"proceso_id": string,"temperatura_c"?: number | null,"tenant_id"?: string,"tiempo_min"?: number | null
                   }
                   Update: {
-                    "created_at"?: string,"created_by"?: string | null,"grupo_pesaje"?: number | null,"id"?: string,"merma_pct"?: never,"numero"?: number,"observaciones"?: string | null,"peso_entrada_kg"?: number,"peso_salida_kg"?: number,"proceso_id"?: string,"temperatura_c"?: number | null,"tenant_id"?: string,"tiempo_min"?: number | null
+                    "created_at"?: string,"created_by"?: string | null,"grupo_pesaje"?: number | null,"id"?: string,"merma_pct"?: never,"nivel_tueste"?: Database["cafe"]['Enums']["nivel_tueste"] | null,"numero"?: number,"observaciones"?: string | null,"peso_entrada_kg"?: number,"peso_salida_kg"?: number | null,"proceso_id"?: string,"temperatura_c"?: number | null,"tenant_id"?: string,"tiempo_min"?: number | null
                   }
                   Relationships: [
                     {
@@ -23,6 +23,18 @@ export type Database = {
 isOneToOne: false
       referencedRelation: "procesos"
       referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "baches_proceso_fk"
+      columns: ["tenant_id","proceso_id"]
+isOneToOne: false
+      referencedRelation: "v_tostion_tandas"
+      referencedColumns: ["tenant_id","empaque_id"]
+    },{
+      foreignKeyName: "baches_proceso_fk"
+      columns: ["tenant_id","proceso_id"]
+isOneToOne: false
+      referencedRelation: "v_tostion_tandas"
+      referencedColumns: ["tenant_id","proceso_id"]
     }
                   ]
                 },"conversiones_presentacion": {
@@ -47,20 +59,26 @@ isOneToOne: false
       foreignKeyName: "conversiones_lote_fk"
       columns: ["tenant_id","lote_id"]
 isOneToOne: false
+      referencedRelation: "v_lote_pesos"
+      referencedColumns: ["tenant_id","lote_id"]
+    },{
+      foreignKeyName: "conversiones_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
       referencedRelation: "v_lotes"
       referencedColumns: ["tenant_id","id"]
     }
                   ]
                 },"empaque_lineas": {
                   Row: {
-                    "articulo_pt_id": string | null,"bolsa_cliente": boolean,"created_at": string,"created_by": string | null,"forma": string,"id": string,"presentacion_g": number,"proceso_id": string,"tenant_id": string,"unidades": number
+                    "articulo_pt_id": string | null,"bolsa_cliente": boolean,"costo_bolsa": number | null,"costo_etiqueta": number | null,"created_at": string,"created_by": string | null,"forma": string,"id": string,"presentacion_g": number,"proceso_id": string,"tenant_id": string,"unidades": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "articulo_pt_id"?: string | null,"bolsa_cliente"?: boolean,"created_at"?: string,"created_by"?: string | null,"forma"?: string,"id"?: string,"presentacion_g": number,"proceso_id": string,"tenant_id"?: string,"unidades": number
+                    "articulo_pt_id"?: string | null,"bolsa_cliente"?: boolean,"costo_bolsa"?: number | null,"costo_etiqueta"?: number | null,"created_at"?: string,"created_by"?: string | null,"forma"?: string,"id"?: string,"presentacion_g": number,"proceso_id": string,"tenant_id"?: string,"unidades": number
                   }
                   Update: {
-                    "articulo_pt_id"?: string | null,"bolsa_cliente"?: boolean,"created_at"?: string,"created_by"?: string | null,"forma"?: string,"id"?: string,"presentacion_g"?: number,"proceso_id"?: string,"tenant_id"?: string,"unidades"?: number
+                    "articulo_pt_id"?: string | null,"bolsa_cliente"?: boolean,"costo_bolsa"?: number | null,"costo_etiqueta"?: number | null,"created_at"?: string,"created_by"?: string | null,"forma"?: string,"id"?: string,"presentacion_g"?: number,"proceso_id"?: string,"tenant_id"?: string,"unidades"?: number
                   }
                   Relationships: [
                     {
@@ -69,6 +87,52 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "procesos"
       referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "empaque_lineas_proceso_fk"
+      columns: ["tenant_id","proceso_id"]
+isOneToOne: false
+      referencedRelation: "v_tostion_tandas"
+      referencedColumns: ["tenant_id","empaque_id"]
+    },{
+      foreignKeyName: "empaque_lineas_proceso_fk"
+      columns: ["tenant_id","proceso_id"]
+isOneToOne: false
+      referencedRelation: "v_tostion_tandas"
+      referencedColumns: ["tenant_id","proceso_id"]
+    }
+                  ]
+                },"insumo_precios": {
+                  Row: {
+                    "articulo_id": string,"created_at": string,"created_by": string | null,"id": string,"precio": number,"tenant_id": string,"updated_at": string | null,"updated_by": string | null,"vigente_desde": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "articulo_id": string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"precio": number,"tenant_id"?: string,"updated_at"?: string | null,"updated_by"?: string | null,"vigente_desde"?: string
+                  }
+                  Update: {
+                    "articulo_id"?: string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"precio"?: number,"tenant_id"?: string,"updated_at"?: string | null,"updated_by"?: string | null,"vigente_desde"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"inventario_ajustes": {
+                  Row: {
+                    "articulo_id": string | null,"cantidad_antes": number,"cantidad_despues": number,"clase": string,"costo_unitario": number | null,"created_at": string,"created_by": string | null,"delta": number | null,"id": string,"motivo": string,"observacion": string | null,"tenant_id": string,"tipo": string,"tipo_cafe_id": string | null,"updated_at": string | null,"updated_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "articulo_id"?: string | null,"cantidad_antes": number,"cantidad_despues": number,"clase": string,"costo_unitario"?: number | null,"created_at"?: string,"created_by"?: string | null,"delta"?: never,"id"?: string,"motivo": string,"observacion"?: string | null,"tenant_id"?: string,"tipo": string,"tipo_cafe_id"?: string | null,"updated_at"?: string | null,"updated_by"?: string | null
+                  }
+                  Update: {
+                    "articulo_id"?: string | null,"cantidad_antes"?: number,"cantidad_despues"?: number,"clase"?: string,"costo_unitario"?: number | null,"created_at"?: string,"created_by"?: string | null,"delta"?: never,"id"?: string,"motivo"?: string,"observacion"?: string | null,"tenant_id"?: string,"tipo"?: string,"tipo_cafe_id"?: string | null,"updated_at"?: string | null,"updated_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "inventario_ajustes_tipo_cafe_id_fkey"
+      columns: ["tipo_cafe_id"]
+isOneToOne: false
+      referencedRelation: "tipos_cafe"
+      referencedColumns: ["id"]
     }
                   ]
                 },"lote_bultos": {
@@ -89,6 +153,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "lotes"
       referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "lote_bultos_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
+      referencedRelation: "v_lote_pesos"
+      referencedColumns: ["tenant_id","lote_id"]
     },{
       foreignKeyName: "lote_bultos_lote_fk"
       columns: ["tenant_id","lote_id"]
@@ -119,20 +189,58 @@ isOneToOne: false
       foreignKeyName: "lote_ediciones_lote_fk"
       columns: ["tenant_id","lote_id"]
 isOneToOne: false
+      referencedRelation: "v_lote_pesos"
+      referencedColumns: ["tenant_id","lote_id"]
+    },{
+      foreignKeyName: "lote_ediciones_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
+      referencedRelation: "v_lotes"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
+                },"lote_perfil_tostion": {
+                  Row: {
+                    "created_at": string,"created_by": string | null,"id": string,"kg": number,"lote_id": string,"nivel": Database["cafe"]['Enums']["nivel_tueste"],"orden": number,"temp_c": number | null,"tenant_id": string,"tiempo_min": number | null,"updated_at": string | null,"updated_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by"?: string | null,"id"?: string,"kg": number,"lote_id": string,"nivel": Database["cafe"]['Enums']["nivel_tueste"],"orden": number,"temp_c"?: number | null,"tenant_id"?: string,"tiempo_min"?: number | null,"updated_at"?: string | null,"updated_by"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string | null,"id"?: string,"kg"?: number,"lote_id"?: string,"nivel"?: Database["cafe"]['Enums']["nivel_tueste"],"orden"?: number,"temp_c"?: number | null,"tenant_id"?: string,"tiempo_min"?: number | null,"updated_at"?: string | null,"updated_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "lote_perfil_tostion_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
+      referencedRelation: "lotes"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "lote_perfil_tostion_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
+      referencedRelation: "v_lote_pesos"
+      referencedColumns: ["tenant_id","lote_id"]
+    },{
+      foreignKeyName: "lote_perfil_tostion_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
       referencedRelation: "v_lotes"
       referencedColumns: ["tenant_id","id"]
     }
                   ]
                 },"lotes": {
                   Row: {
-                    "alertas_calidad": (string)[],"anulado_at": string | null,"anulado_por": string | null,"codigo": string,"created_at": string,"created_by": string | null,"densidad": number | null,"factura_proveedor": string | null,"fecha_recepcion": string,"humedad_pct": number | null,"id": string,"linea": Database["cafe"]['Enums']["linea_lote"],"motivo_anulacion": string | null,"nivel_tueste": Database["cafe"]['Enums']["nivel_tueste"] | null,"num_bultos": number,"observaciones": string | null,"perfil_temp_c": number | null,"perfil_tiempo_min": number | null,"peso_recibido_kg": number,"precio_compra_kg": number | null,"rangos_calidad": Json | null,"servicios": (Database["cafe"]['Enums']["tipo_proceso"])[],"tenant_id": string,"tercero_id": string,"tipo_cafe_id": string | null,"updated_at": string | null,"updated_by": string | null,"valor_compra": number | null,"servicios_requeridos": (Database["cafe"]['Enums']["tipo_proceso"])[] | null
+                    "alertas_calidad": (string)[],"anulado_at": string | null,"anulado_por": string | null,"codigo": string,"created_at": string,"created_by": string | null,"densidad": number | null,"factura_proveedor": string | null,"fecha_recepcion": string,"humedad_pct": number | null,"id": string,"linea": Database["cafe"]['Enums']["linea_lote"],"molienda_solicitada_kg": number | null,"molienda_solicitada_modo": string | null,"motivo_anulacion": string | null,"nivel_tueste": Database["cafe"]['Enums']["nivel_tueste"] | null,"num_bultos": number | null,"observaciones": string | null,"perfil_temp_c": number | null,"perfil_tiempo_min": number | null,"peso_recibido_kg": number,"precio_compra_kg": number | null,"rangos_calidad": Json | null,"servicios": (Database["cafe"]['Enums']["tipo_proceso"])[],"tenant_id": string,"tercero_id": string,"tipo_cafe_id": string | null,"updated_at": string | null,"updated_by": string | null,"valor_compra": number | null,"servicios_requeridos": (Database["cafe"]['Enums']["tipo_proceso"])[] | null
                   }
                   ComputedFields: "servicios_requeridos"
                   Insert: {
-                    "alertas_calidad"?: (string)[],"anulado_at"?: string | null,"anulado_por"?: string | null,"codigo": string,"created_at"?: string,"created_by"?: string | null,"densidad"?: number | null,"factura_proveedor"?: string | null,"fecha_recepcion": string,"humedad_pct"?: number | null,"id"?: string,"linea": Database["cafe"]['Enums']["linea_lote"],"motivo_anulacion"?: string | null,"nivel_tueste"?: Database["cafe"]['Enums']["nivel_tueste"] | null,"num_bultos": number,"observaciones"?: string | null,"perfil_temp_c"?: number | null,"perfil_tiempo_min"?: number | null,"peso_recibido_kg": number,"precio_compra_kg"?: number | null,"rangos_calidad"?: Json | null,"servicios"?: (Database["cafe"]['Enums']["tipo_proceso"])[],"tenant_id"?: string,"tercero_id": string,"tipo_cafe_id"?: string | null,"updated_at"?: string | null,"updated_by"?: string | null,"valor_compra"?: never
+                    "alertas_calidad"?: (string)[],"anulado_at"?: string | null,"anulado_por"?: string | null,"codigo": string,"created_at"?: string,"created_by"?: string | null,"densidad"?: number | null,"factura_proveedor"?: string | null,"fecha_recepcion": string,"humedad_pct"?: number | null,"id"?: string,"linea": Database["cafe"]['Enums']["linea_lote"],"molienda_solicitada_kg"?: number | null,"molienda_solicitada_modo"?: string | null,"motivo_anulacion"?: string | null,"nivel_tueste"?: Database["cafe"]['Enums']["nivel_tueste"] | null,"num_bultos"?: number | null,"observaciones"?: string | null,"perfil_temp_c"?: number | null,"perfil_tiempo_min"?: number | null,"peso_recibido_kg": number,"precio_compra_kg"?: number | null,"rangos_calidad"?: Json | null,"servicios"?: (Database["cafe"]['Enums']["tipo_proceso"])[],"tenant_id"?: string,"tercero_id": string,"tipo_cafe_id"?: string | null,"updated_at"?: string | null,"updated_by"?: string | null,"valor_compra"?: never
                   }
                   Update: {
-                    "alertas_calidad"?: (string)[],"anulado_at"?: string | null,"anulado_por"?: string | null,"codigo"?: string,"created_at"?: string,"created_by"?: string | null,"densidad"?: number | null,"factura_proveedor"?: string | null,"fecha_recepcion"?: string,"humedad_pct"?: number | null,"id"?: string,"linea"?: Database["cafe"]['Enums']["linea_lote"],"motivo_anulacion"?: string | null,"nivel_tueste"?: Database["cafe"]['Enums']["nivel_tueste"] | null,"num_bultos"?: number,"observaciones"?: string | null,"perfil_temp_c"?: number | null,"perfil_tiempo_min"?: number | null,"peso_recibido_kg"?: number,"precio_compra_kg"?: number | null,"rangos_calidad"?: Json | null,"servicios"?: (Database["cafe"]['Enums']["tipo_proceso"])[],"tenant_id"?: string,"tercero_id"?: string,"tipo_cafe_id"?: string | null,"updated_at"?: string | null,"updated_by"?: string | null,"valor_compra"?: never
+                    "alertas_calidad"?: (string)[],"anulado_at"?: string | null,"anulado_por"?: string | null,"codigo"?: string,"created_at"?: string,"created_by"?: string | null,"densidad"?: number | null,"factura_proveedor"?: string | null,"fecha_recepcion"?: string,"humedad_pct"?: number | null,"id"?: string,"linea"?: Database["cafe"]['Enums']["linea_lote"],"molienda_solicitada_kg"?: number | null,"molienda_solicitada_modo"?: string | null,"motivo_anulacion"?: string | null,"nivel_tueste"?: Database["cafe"]['Enums']["nivel_tueste"] | null,"num_bultos"?: number | null,"observaciones"?: string | null,"perfil_temp_c"?: number | null,"perfil_tiempo_min"?: number | null,"peso_recibido_kg"?: number,"precio_compra_kg"?: number | null,"rangos_calidad"?: Json | null,"servicios"?: (Database["cafe"]['Enums']["tipo_proceso"])[],"tenant_id"?: string,"tercero_id"?: string,"tipo_cafe_id"?: string | null,"updated_at"?: string | null,"updated_by"?: string | null,"valor_compra"?: never
                   }
                   Relationships: [
                     {
@@ -141,6 +249,26 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "tipos_cafe"
       referencedColumns: ["tenant_id","id"]
+    }
+                  ]
+                },"perfil_tueste_tipo": {
+                  Row: {
+                    "created_at": string,"created_by": string | null,"id": string,"nivel": Database["cafe"]['Enums']["nivel_tueste"],"temp_c": number,"tenant_id": string,"tiempo_min": number,"tipo_cafe_id": string | null,"updated_at": string | null,"updated_by": string | null,"vigente_desde": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by"?: string | null,"id"?: string,"nivel": Database["cafe"]['Enums']["nivel_tueste"],"temp_c": number,"tenant_id"?: string,"tiempo_min": number,"tipo_cafe_id"?: string | null,"updated_at"?: string | null,"updated_by"?: string | null,"vigente_desde": string
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string | null,"id"?: string,"nivel"?: Database["cafe"]['Enums']["nivel_tueste"],"temp_c"?: number,"tenant_id"?: string,"tiempo_min"?: number,"tipo_cafe_id"?: string | null,"updated_at"?: string | null,"updated_by"?: string | null,"vigente_desde"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "perfil_tueste_tipo_tipo_cafe_id_fkey"
+      columns: ["tipo_cafe_id"]
+isOneToOne: false
+      referencedRelation: "tipos_cafe"
+      referencedColumns: ["id"]
     }
                   ]
                 },"proceso_bultos": {
@@ -177,14 +305,14 @@ isOneToOne: false
                   ]
                 },"procesos": {
                   Row: {
-                    "anulado_at": string | null,"anulado_por": string | null,"created_at": string,"created_by": string | null,"desvio": boolean | null,"desvio_sentido": string | null,"diferencia_destino": string | null,"diferencia_kg": number | null,"fecha": string,"id": string,"lote_id": string,"merma_kg": number | null,"merma_pct": number | null,"merma_referencia_pct": number | null,"motivo_anulacion": string | null,"nivel_tueste": Database["cafe"]['Enums']["nivel_tueste"] | null,"observaciones": string | null,"peso_entrada_kg": number,"peso_salida_kg": number,"reapertura_id": string | null,"tarifa_kg": number,"tenant_id": string,"tipo": Database["cafe"]['Enums']["tipo_proceso"],"tolerancia_pts": number | null,"updated_at": string | null,"updated_by": string | null,"valor": number | null
+                    "anulado_at": string | null,"anulado_por": string | null,"created_at": string,"created_by": string | null,"densidad_gl": number | null,"desvio": boolean | null,"desvio_sentido": string | null,"diferencia_destino": string | null,"diferencia_kg": number | null,"fecha": string,"humedad_pct": number | null,"id": string,"lote_id": string,"merma_kg": number | null,"merma_pct": number | null,"merma_referencia_pct": number | null,"molienda_kg": number | null,"molienda_modo": string | null,"motivo_anulacion": string | null,"nivel_tueste": Database["cafe"]['Enums']["nivel_tueste"] | null,"observaciones": string | null,"origen_proceso_id": string | null,"origen_tipo": Database["cafe"]['Enums']["tipo_proceso"] | null,"peso_entrada_kg": number,"peso_salida_kg": number | null,"reapertura_id": string | null,"tarifa_kg": number,"tenant_id": string,"tipo": Database["cafe"]['Enums']["tipo_proceso"],"tolerancia_pts": number | null,"tostado_incluido_kg": number | null,"updated_at": string | null,"updated_by": string | null,"valor": number | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "anulado_at"?: string | null,"anulado_por"?: string | null,"created_at"?: string,"created_by"?: string | null,"desvio"?: never,"desvio_sentido"?: never,"diferencia_destino"?: string | null,"diferencia_kg"?: never,"fecha": string,"id"?: string,"lote_id": string,"merma_kg"?: never,"merma_pct"?: never,"merma_referencia_pct"?: number | null,"motivo_anulacion"?: string | null,"nivel_tueste"?: Database["cafe"]['Enums']["nivel_tueste"] | null,"observaciones"?: string | null,"peso_entrada_kg": number,"peso_salida_kg": number,"reapertura_id"?: string | null,"tarifa_kg"?: number,"tenant_id"?: string,"tipo": Database["cafe"]['Enums']["tipo_proceso"],"tolerancia_pts"?: number | null,"updated_at"?: string | null,"updated_by"?: string | null,"valor"?: never
+                    "anulado_at"?: string | null,"anulado_por"?: string | null,"created_at"?: string,"created_by"?: string | null,"densidad_gl"?: number | null,"desvio"?: never,"desvio_sentido"?: never,"diferencia_destino"?: string | null,"diferencia_kg"?: never,"fecha": string,"humedad_pct"?: number | null,"id"?: string,"lote_id": string,"merma_kg"?: never,"merma_pct"?: never,"merma_referencia_pct"?: number | null,"molienda_kg"?: number | null,"molienda_modo"?: string | null,"motivo_anulacion"?: string | null,"nivel_tueste"?: Database["cafe"]['Enums']["nivel_tueste"] | null,"observaciones"?: string | null,"origen_proceso_id"?: string | null,"origen_tipo"?: Database["cafe"]['Enums']["tipo_proceso"] | null,"peso_entrada_kg": number,"peso_salida_kg"?: number | null,"reapertura_id"?: string | null,"tarifa_kg"?: number,"tenant_id"?: string,"tipo": Database["cafe"]['Enums']["tipo_proceso"],"tolerancia_pts"?: number | null,"tostado_incluido_kg"?: number | null,"updated_at"?: string | null,"updated_by"?: string | null,"valor"?: never
                   }
                   Update: {
-                    "anulado_at"?: string | null,"anulado_por"?: string | null,"created_at"?: string,"created_by"?: string | null,"desvio"?: never,"desvio_sentido"?: never,"diferencia_destino"?: string | null,"diferencia_kg"?: never,"fecha"?: string,"id"?: string,"lote_id"?: string,"merma_kg"?: never,"merma_pct"?: never,"merma_referencia_pct"?: number | null,"motivo_anulacion"?: string | null,"nivel_tueste"?: Database["cafe"]['Enums']["nivel_tueste"] | null,"observaciones"?: string | null,"peso_entrada_kg"?: number,"peso_salida_kg"?: number,"reapertura_id"?: string | null,"tarifa_kg"?: number,"tenant_id"?: string,"tipo"?: Database["cafe"]['Enums']["tipo_proceso"],"tolerancia_pts"?: number | null,"updated_at"?: string | null,"updated_by"?: string | null,"valor"?: never
+                    "anulado_at"?: string | null,"anulado_por"?: string | null,"created_at"?: string,"created_by"?: string | null,"densidad_gl"?: number | null,"desvio"?: never,"desvio_sentido"?: never,"diferencia_destino"?: string | null,"diferencia_kg"?: never,"fecha"?: string,"humedad_pct"?: number | null,"id"?: string,"lote_id"?: string,"merma_kg"?: never,"merma_pct"?: never,"merma_referencia_pct"?: number | null,"molienda_kg"?: number | null,"molienda_modo"?: string | null,"motivo_anulacion"?: string | null,"nivel_tueste"?: Database["cafe"]['Enums']["nivel_tueste"] | null,"observaciones"?: string | null,"origen_proceso_id"?: string | null,"origen_tipo"?: Database["cafe"]['Enums']["tipo_proceso"] | null,"peso_entrada_kg"?: number,"peso_salida_kg"?: number | null,"reapertura_id"?: string | null,"tarifa_kg"?: number,"tenant_id"?: string,"tipo"?: Database["cafe"]['Enums']["tipo_proceso"],"tolerancia_pts"?: number | null,"tostado_incluido_kg"?: number | null,"updated_at"?: string | null,"updated_by"?: string | null,"valor"?: never
                   }
                   Relationships: [
                     {
@@ -197,8 +325,20 @@ isOneToOne: false
       foreignKeyName: "procesos_lote_fk"
       columns: ["tenant_id","lote_id"]
 isOneToOne: false
+      referencedRelation: "v_lote_pesos"
+      referencedColumns: ["tenant_id","lote_id"]
+    },{
+      foreignKeyName: "procesos_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
       referencedRelation: "v_lotes"
       referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "procesos_origen_fk"
+      columns: ["tenant_id","origen_proceso_id","origen_tipo","lote_id"]
+isOneToOne: false
+      referencedRelation: "procesos"
+      referencedColumns: ["tenant_id","id","tipo","lote_id"]
     },{
       foreignKeyName: "procesos_reapertura_fk"
       columns: ["tenant_id","reapertura_id","lote_id"]
@@ -235,6 +375,12 @@ isOneToOne: false
       foreignKeyName: "reaperturas_lote_fk"
       columns: ["tenant_id","lote_id"]
 isOneToOne: false
+      referencedRelation: "v_lote_pesos"
+      referencedColumns: ["tenant_id","lote_id"]
+    },{
+      foreignKeyName: "reaperturas_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
       referencedRelation: "v_lotes"
       referencedColumns: ["tenant_id","id"]
     }
@@ -257,6 +403,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "lotes"
       referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "remisiones_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
+      referencedRelation: "v_lote_pesos"
+      referencedColumns: ["tenant_id","lote_id"]
     },{
       foreignKeyName: "remisiones_lote_fk"
       columns: ["tenant_id","lote_id"]
@@ -287,6 +439,12 @@ isOneToOne: false
       foreignKeyName: "remisiones_lotes_lote_fk"
       columns: ["tenant_id","lote_id"]
 isOneToOne: false
+      referencedRelation: "v_lote_pesos"
+      referencedColumns: ["tenant_id","lote_id"]
+    },{
+      foreignKeyName: "remisiones_lotes_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
       referencedRelation: "v_lotes"
       referencedColumns: ["tenant_id","id"]
     },{
@@ -310,6 +468,62 @@ isOneToOne: false
                   }
                   Relationships: [
                     
+                  ]
+                },"tostado_movimientos": {
+                  Row: {
+                    "created_at": string,"created_by": string | null,"delta_kg": number,"forma": string,"id": string,"lote_id": string,"origen": string,"proceso_id": string | null,"tenant_id": string,"tipo_cafe_id": string,"updated_at": string | null,"updated_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by"?: string | null,"delta_kg": number,"forma": string,"id"?: string,"lote_id": string,"origen": string,"proceso_id"?: string | null,"tenant_id"?: string,"tipo_cafe_id": string,"updated_at"?: string | null,"updated_by"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string | null,"delta_kg"?: number,"forma"?: string,"id"?: string,"lote_id"?: string,"origen"?: string,"proceso_id"?: string | null,"tenant_id"?: string,"tipo_cafe_id"?: string,"updated_at"?: string | null,"updated_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "tostado_mov_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
+      referencedRelation: "lotes"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "tostado_mov_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
+      referencedRelation: "v_lote_pesos"
+      referencedColumns: ["tenant_id","lote_id"]
+    },{
+      foreignKeyName: "tostado_mov_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
+      referencedRelation: "v_lotes"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "tostado_mov_proceso_fk"
+      columns: ["tenant_id","proceso_id"]
+isOneToOne: false
+      referencedRelation: "procesos"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "tostado_mov_proceso_fk"
+      columns: ["tenant_id","proceso_id"]
+isOneToOne: false
+      referencedRelation: "v_tostion_tandas"
+      referencedColumns: ["tenant_id","empaque_id"]
+    },{
+      foreignKeyName: "tostado_mov_proceso_fk"
+      columns: ["tenant_id","proceso_id"]
+isOneToOne: false
+      referencedRelation: "v_tostion_tandas"
+      referencedColumns: ["tenant_id","proceso_id"]
+    },{
+      foreignKeyName: "tostado_mov_tipo_fk"
+      columns: ["tenant_id","tipo_cafe_id"]
+isOneToOne: false
+      referencedRelation: "tipos_cafe"
+      referencedColumns: ["tenant_id","id"]
+    }
                   ]
                 },"venta_lineas": {
                   Row: {
@@ -376,33 +590,59 @@ isOneToOne: false
       foreignKeyName: "lote_bultos_lote_fk"
       columns: ["tenant_id","lote_id"]
 isOneToOne: false
+      referencedRelation: "v_lote_pesos"
+      referencedColumns: ["tenant_id","lote_id"]
+    },{
+      foreignKeyName: "lote_bultos_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
       referencedRelation: "v_lotes"
       referencedColumns: ["tenant_id","id"]
     }
                   ]
-                },"v_granel_lote": {
+                },"v_insumo_precio_vigente": {
                   Row: {
-                    "kg_granel": number | null,"lote_id": string,"tenant_id": string,"ultima_fecha": string | null
+                    "articulo_id": string,"precio": number,"tenant_id": string,"vigente_desde": string
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    
+                  ]
+                },"v_inventario_tostado": {
+                  Row: {
+                    "forma": string,"kg": number | null,"lote_codigo": string,"lote_id": string,"tenant_id": string,"tipo_cafe_id": string,"tipo_cafe_nombre": string,"ultimo_movimiento": string | null
                   }
                   ComputedFields: never
                   Relationships: [
                     {
-      foreignKeyName: "procesos_lote_fk"
+      foreignKeyName: "tostado_mov_lote_fk"
       columns: ["tenant_id","lote_id"]
 isOneToOne: false
       referencedRelation: "lotes"
       referencedColumns: ["tenant_id","id"]
     },{
-      foreignKeyName: "procesos_lote_fk"
+      foreignKeyName: "tostado_mov_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
+      referencedRelation: "v_lote_pesos"
+      referencedColumns: ["tenant_id","lote_id"]
+    },{
+      foreignKeyName: "tostado_mov_lote_fk"
       columns: ["tenant_id","lote_id"]
 isOneToOne: false
       referencedRelation: "v_lotes"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "tostado_mov_tipo_fk"
+      columns: ["tenant_id","tipo_cafe_id"]
+isOneToOne: false
+      referencedRelation: "tipos_cafe"
       referencedColumns: ["tenant_id","id"]
     }
                   ]
                 },"v_lote_etapas": {
                   Row: {
-                    "bultos_procesados": number | null,"bultos_total": number | null,"completo": boolean | null,"desvios": number | null,"lote_id": string,"merma_kg": number | null,"merma_pct": number | null,"num_procesos": number | null,"parcial": boolean | null,"peso_entrada": number | null,"peso_salida": number | null,"tenant_id": string,"tipo": Database["cafe"]['Enums']["tipo_proceso"],"ultima_fecha": string | null,"valor": number | null
+                    "bultos_procesados": number | null,"bultos_total": number | null,"completo": boolean | null,"desvios": number | null,"kg_base": number | null,"kg_pendientes": number | null,"kg_procesados": number | null,"lote_id": string,"merma_kg": number | null,"merma_pct": number | null,"num_procesos": number | null,"parcial": boolean | null,"peso_entrada": number | null,"peso_salida": number | null,"tenant_id": string,"tipo": Database["cafe"]['Enums']["tipo_proceso"],"ultima_fecha": string | null,"valor": number | null
                   }
                   ComputedFields: never
                   Relationships: [
@@ -416,13 +656,27 @@ isOneToOne: false
       foreignKeyName: "procesos_lote_fk"
       columns: ["tenant_id","lote_id"]
 isOneToOne: false
+      referencedRelation: "v_lote_pesos"
+      referencedColumns: ["tenant_id","lote_id"]
+    },{
+      foreignKeyName: "procesos_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
       referencedRelation: "v_lotes"
       referencedColumns: ["tenant_id","id"]
     }
                   ]
+                },"v_lote_pesos": {
+                  Row: {
+                    "estimado": boolean | null,"kg_empacado": number | null,"kg_en_planta": number | null,"lote_id": string,"peso_actual_kg": number | null,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    
+                  ]
                 },"v_lotes": {
                   Row: {
-                    "alertas_calidad": (string)[],"anulado_at": string | null,"anulado_por": string | null,"avance_texto": string | null,"codigo": string,"created_at": string,"created_by": string | null,"densidad": number | null,"estado": string | null,"factura_proveedor": string | null,"fecha_recepcion": string,"humedad_pct": number | null,"id": string,"linea": Database["cafe"]['Enums']["linea_lote"],"merma_total_kg": number | null,"merma_total_pct": number | null,"motivo_anulacion": string | null,"nivel_tueste": Database["cafe"]['Enums']["nivel_tueste"] | null,"num_bultos": number,"observaciones": string | null,"perfil_temp_c": number | null,"perfil_tiempo_min": number | null,"peso_actual_kg": number | null,"peso_recibido_kg": number,"precio_compra_kg": number | null,"rangos_calidad": Json | null,"servicios": (Database["cafe"]['Enums']["tipo_proceso"])[],"servicios_completados": number | null,"servicios_requeridos": (Database["cafe"]['Enums']["tipo_proceso"])[] | null,"tenant_id": string,"tercero_id": string,"tercero_identificacion": string | null,"tercero_nombre": string | null,"tiene_desvio": boolean | null,"tipo_cafe_id": string | null,"tipo_cafe_nombre": string | null,"valor_compra": number | null,"valor_servicios": number | null
+                    "alertas_calidad": (string)[],"anulado_at": string | null,"anulado_por": string | null,"avance_texto": string | null,"codigo": string,"created_at": string,"created_by": string | null,"densidad": number | null,"estado": string | null,"factura_proveedor": string | null,"fecha_recepcion": string,"humedad_pct": number | null,"id": string,"linea": Database["cafe"]['Enums']["linea_lote"],"merma_total_kg": number | null,"merma_total_pct": number | null,"motivo_anulacion": string | null,"nivel_tueste": Database["cafe"]['Enums']["nivel_tueste"] | null,"num_bultos": number | null,"observaciones": string | null,"perfil_temp_c": number | null,"perfil_tiempo_min": number | null,"peso_actual_estimado": boolean | null,"peso_actual_kg": number | null,"peso_recibido_kg": number,"precio_compra_kg": number | null,"rangos_calidad": Json | null,"servicios": (Database["cafe"]['Enums']["tipo_proceso"])[],"servicios_completados": number | null,"servicios_requeridos": (Database["cafe"]['Enums']["tipo_proceso"])[] | null,"tenant_id": string,"tercero_id": string,"tercero_identificacion": string | null,"tercero_nombre": string | null,"tiene_desvio": boolean | null,"tipo_cafe_id": string | null,"tipo_cafe_nombre": string | null,"valor_compra": number | null,"valor_servicios": number | null
                   }
                   ComputedFields: never
                   Relationships: [
@@ -433,6 +687,14 @@ isOneToOne: false
       referencedRelation: "tipos_cafe"
       referencedColumns: ["tenant_id","id"]
     }
+                  ]
+                },"v_origenes_disponibles": {
+                  Row: {
+                    "base_kg": number | null,"consumido_kg": number | null,"estimado": boolean | null,"lote_id": string | null,"proceso_id": string | null,"saldo_kg": number | null,"tenant_id": string | null,"tipo": Database["cafe"]['Enums']["tipo_proceso"] | null
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    
                   ]
                 },"v_proceso_bultos_peso": {
                   Row: {
@@ -476,6 +738,12 @@ isOneToOne: false
       foreignKeyName: "reaperturas_lote_fk"
       columns: ["tenant_id","lote_id"]
 isOneToOne: false
+      referencedRelation: "v_lote_pesos"
+      referencedColumns: ["tenant_id","lote_id"]
+    },{
+      foreignKeyName: "reaperturas_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
       referencedRelation: "v_lotes"
       referencedColumns: ["tenant_id","id"]
     }
@@ -492,6 +760,38 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "lotes"
       referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "procesos_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
+      referencedRelation: "v_lote_pesos"
+      referencedColumns: ["tenant_id","lote_id"]
+    },{
+      foreignKeyName: "procesos_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
+      referencedRelation: "v_lotes"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
+                },"v_tostion_tandas": {
+                  Row: {
+                    "bascula_kg": number | null,"cerrada": boolean | null,"desvio": boolean | null,"desvio_sentido": string | null,"empaque_id": string | null,"entrada_kg": number,"fecha": string,"lote_id": string,"merma_kg": number | null,"merma_pct": number | null,"merma_referencia_pct": number | null,"proceso_id": string,"tenant_id": string,"tolerancia_pts": number | null
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "procesos_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
+      referencedRelation: "lotes"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "procesos_lote_fk"
+      columns: ["tenant_id","lote_id"]
+isOneToOne: false
+      referencedRelation: "v_lote_pesos"
+      referencedColumns: ["tenant_id","lote_id"]
     },{
       foreignKeyName: "procesos_lote_fk"
       columns: ["tenant_id","lote_id"]
@@ -522,6 +822,9 @@ isOneToOne: false
             "_asegurar_producto_molido":
 { Args: { "p_presentacion_g": number,"p_tipo_cafe": string }; Returns: string
                            },
+"_asignar_salida_tostion":
+{ Args: { "p_empaque": string }; Returns: undefined
+                           },
 "_edicion_activa":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
@@ -534,17 +837,29 @@ isOneToOne: false
 "_exigir_edicion":
 { Args: Record<PropertyKey, never>; Returns: undefined
                            },
+"_fijar_molienda":
+{ Args: { "p_kg": number,"p_lote": string,"p_modo": string,"p_tostion": string }; Returns: undefined
+                           },
 "_insertar_proceso":
-{ Args: { "p_baches": Json,"p_bultos": (string)[],"p_diferencia_destino"?: string,"p_entrada": number,"p_fecha": string,"p_lote": string,"p_nivel": Database["cafe"]['Enums']["nivel_tueste"],"p_observaciones": string,"p_salida": number,"p_tipo": Database["cafe"]['Enums']["tipo_proceso"] }; Returns: Json
+{ Args: { "p_baches": Json,"p_densidad"?: number,"p_diferencia_destino"?: string,"p_entrada": number,"p_fecha": string,"p_humedad"?: number,"p_incluido"?: number,"p_lote": string,"p_molienda_kg"?: number,"p_molienda_modo"?: string,"p_nivel": Database["cafe"]['Enums']["nivel_tueste"],"p_observaciones": string,"p_origen": string,"p_salida": number,"p_tipo": Database["cafe"]['Enums']["tipo_proceso"] }; Returns: Json
                            },
 "_insertar_proceso_reapertura":
 { Args: { "p_diferencia_destino"?: string,"p_entrada": number,"p_fecha": string,"p_observaciones": string,"p_reapertura": string,"p_salida": number,"p_tipo": Database["cafe"]['Enums']["tipo_proceso"] }; Returns: Json
+                           },
+"_liberar_salida_tostion":
+{ Args: { "p_empaque": string }; Returns: undefined
                            },
 "_metricas_edicion":
 { Args: { "p_lote": string }; Returns: Json
                            },
 "_registrar_cambio_edicion":
 { Args: { "p_antes": unknown,"p_campo": string,"p_despues": unknown,"p_edicion": string,"p_entidad": string,"p_entidad_id": string,"p_lote": string,"p_motivo": string,"p_ref": string }; Returns: number
+                           },
+"_resolver_origen":
+{ Args: { "p_lote": string,"p_origen": string,"p_tipo": Database["cafe"]['Enums']["tipo_proceso"] }; Returns: string
+                           },
+"ajustar_inventario":
+{ Args: { "p": Json }; Returns: Json
                            },
 "anular_proceso":
 { Args: { "p_motivo": string,"p_proceso": string }; Returns: Json
@@ -558,14 +873,23 @@ isOneToOne: false
 "asegurar_productos_terminados":
 { Args: { "p_tenant"?: string }; Returns: number
                            },
+"carga_inicial":
+{ Args: { "p": Json }; Returns: Json
+                           },
 "concepto_precio":
 { Args: { "p_articulo": string }; Returns: string
+                           },
+"confirmar_molienda":
+{ Args: { "p": Json }; Returns: Json
                            },
 "convertir_presentacion":
 { Args: { "p": Json }; Returns: Json
                            },
 "costo_insumo":
 { Args: { "p_clase": string,"p_gramos": number }; Returns: number
+                           },
+"costo_insumos_empaque":
+{ Args: { "p_proceso": string }; Returns: Json
                            },
 "costo_libra_lote":
 { Args: { "p_gramos"?: number,"p_lote": string }; Returns: Json
@@ -599,6 +923,9 @@ isOneToOne: false
 "kpis_periodo":
 { Args: { "p_desde"?: string,"p_hasta"?: string,"p_linea"?: string }; Returns: Json
                            },
+"libras_vendidas":
+{ Args: { "p_desde": string,"p_hasta": string }; Returns: Json
+                           },
 "linea_panel":
 { Args: { "p_linea": Database["cafe"]['Enums']["linea_lote"],"p_servicios": (Database["cafe"]['Enums']["tipo_proceso"])[] }; Returns: string
                            },
@@ -614,21 +941,52 @@ isOneToOne: false
 "parametro_numero":
 { Args: { "p_clave": string,"p_default": number }; Returns: number
                            },
+"paso_origen":
+{ Args: { "p_lote": string,"p_tipo": Database["cafe"]['Enums']["tipo_proceso"] }; Returns: Database["cafe"]['Enums']["tipo_proceso"]
+                           },
 "paso_previo":
-{ Args: { "p_bulto"?: string,"p_lote": string,"p_tipo": Database["cafe"]['Enums']["tipo_proceso"] }; Returns: Database["cafe"]['Enums']["tipo_proceso"]
+{ Args: { "p_lote": string,"p_tipo": Database["cafe"]['Enums']["tipo_proceso"] }; Returns: Database["cafe"]['Enums']["tipo_proceso"]
                            },
 "pasos_del_lote":
 { Args: { "p_lote": string }; Returns: (Database["cafe"]['Enums']["tipo_proceso"])[]
                            },
+"perfil_tueste_vigente":
+{ Args: { "p_fecha": string,"p_tipo": string }; Returns: {
+              "created_at": string,
+"created_by": string | null,
+"id": string,
+"nivel": Database["cafe"]['Enums']["nivel_tueste"],
+"temp_c": number,
+"tenant_id": string,
+"tiempo_min": number,
+"tipo_cafe_id": string | null,
+"updated_at": string | null,
+"updated_by": string | null,
+"vigente_desde": string
+            }[]
+                          SetofOptions: {
+        from: "*"
+        to: "perfil_tueste_tipo"
+        isOneToOne: false
+        isSetofReturn: true
+      } },
 "peso_disponible":
-{ Args: { "p_bultos": (string)[],"p_lote": string,"p_tipo": Database["cafe"]['Enums']["tipo_proceso"] }; Returns: number
+{ Args: { "p_lote": string,"p_tipo": Database["cafe"]['Enums']["tipo_proceso"] }; Returns: number
                            },
 "peso_disponible_reapertura":
 { Args: { "p_reapertura": string,"p_tipo": Database["cafe"]['Enums']["tipo_proceso"] }; Returns: number
                            },
+"precio_insumo":
+{ Args: { "p_articulo": string,"p_at"?: string }; Returns: number
+                           },
 "produccion_diaria":
 { Args: { "p_desde"?: string,"p_hasta"?: string,"p_linea"?: string }; Returns: {
               "fecha": string,"kg_entrada": number,"kg_salida": number,"linea": string,"merma_pct": number,"tipo": Database["cafe"]['Enums']["tipo_proceso"],"valor": number
+            }[]
+                           },
+"produccion_panel":
+{ Args: { "p_desde"?: string,"p_hasta"?: string }; Returns: {
+              "kg_entrada": number,"kg_entrada_medida": number,"kg_salida": number,"linea": string,"procesos": number,"tipo": Database["cafe"]['Enums']["tipo_proceso"]
             }[]
                            },
 "proveedores_marca_propia":
@@ -672,8 +1030,17 @@ isOneToOne: false
 "resumen_ventas":
 { Args: { "p_desde"?: string,"p_estado"?: string,"p_factura_pendiente"?: boolean,"p_hasta"?: string,"p_q"?: string,"p_tercero"?: string,"p_tipo"?: string }; Returns: Json
                            },
+"saldo_proceso":
+{ Args: { "p_proceso": string }; Returns: number
+                           },
 "saldo_reabrible":
 { Args: { "p_lote": string,"p_presentacion": number }; Returns: number
+                           },
+"saldo_tolerancia_kg":
+{ Args: { "p_base": number }; Returns: number
+                           },
+"sembrar_perfiles_tueste":
+{ Args: { "p_tenant": string }; Returns: undefined
                            },
 "servicios_requeridos":
 { Args: { "l": Omit<Database["cafe"]['Tables']["lotes"]['Row'], Database["cafe"]['Tables']["lotes"]['ComputedFields']> }; Returns: (Database["cafe"]['Enums']["tipo_proceso"])[]
@@ -681,12 +1048,20 @@ isOneToOne: false
 "sugerir_baches":
 { Args: { "p_peso": number }; Returns: Json
                            },
+"tanda_requiere_molienda":
+{ Args: { "p_tostion": string }; Returns: boolean
+                           },
 "ultimo_precio_compra":
 { Args: { "p_tercero": string,"p_tipo": string }; Returns: number
                            },
 "ventas_diarias":
 { Args: { "p_desde"?: string,"p_hasta"?: string,"p_linea"?: string }; Returns: {
               "fecha": string,"n_ventas": number,"total": number,"unidades_cortesia": number
+            }[]
+                           },
+"ventas_por_presentacion":
+{ Args: { "p_desde"?: string,"p_hasta"?: string }; Returns: {
+              "articulo_pt_id": string,"ingreso": number,"libras": number,"nombre": string,"presentacion_g": number,"tipo_cafe_id": string,"unidades": number
             }[]
                            },
 "verificar_baches_proceso":

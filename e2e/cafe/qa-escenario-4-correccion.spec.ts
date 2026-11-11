@@ -8,7 +8,7 @@ import { abrirFichaDeLote, aviso } from "../helpers/ui";
 // Se usa «Consumo»: un lote cuyos productos ya se vendieron NO es editable (`lote_con_ventas`) y los demás escenarios venden
 // «Excelso 500 g», así que con Excelso este escenario dependería del orden de ejecución.
 const LOTE_DE_PARTIDA = async () => {
-  const lote = await crearCompra({ tipo: "Consumo", bultos: 2, pesoKg: 125 });
+  const lote = await crearCompra({ tipo: "Consumo", pesoKg: 125 });
   await tostarYEmpacar(lote, 125, [{ presentacion_g: 500, unidades: 60 }]);
   return lote;
 };
@@ -21,8 +21,8 @@ test.describe("admin", () => {
     const lote = await LOTE_DE_PARTIDA();
     await abrirFichaDeLote(page, lote.codigo);
 
-    const costo = page.getByRole("region", { name: "Cuánto nos cuesta producir una libra (500 g)" });
-    const costoAntes = await costo.getByText("Costo", { exact: true }).locator("xpath=following-sibling::dd").innerText();
+    const costo = page.getByRole("region", { name: "Costo de producir una libra" });
+    const costoAntes = await costo.getByRole("row", { name: /^Costo por libra/ }).innerText();
 
     await page.getByRole("button", { name: "Editar" }).click();
     const dialogo = page.getByRole("dialog");
@@ -38,7 +38,7 @@ test.describe("admin", () => {
 
     // Recalculado: el costo por libra cambia (la merma de la tostión ya no es la misma).
     await expect(async () => {
-      const despues = await costo.getByText("Costo", { exact: true }).locator("xpath=following-sibling::dd").innerText();
+      const despues = await costo.getByRole("row", { name: /^Costo por libra/ }).innerText();
       expect(despues).not.toBe(costoAntes);
     }).toPass();
 

@@ -1,6 +1,7 @@
 import { calcularValor } from "@/modules/core/tarifas/lib/calcular-valor";
 import { ordenarServicios } from "../../lotes/lib/servicios";
 import type { NivelTueste, TipoProceso } from "../../lotes/types";
+import { estimarMolienda, type ModoMolienda } from "../../procesos/lib/molienda";
 import { referenciaDelPaso } from "../../procesos/lib/resumen";
 import type { ServicioTarifado } from "../types";
 
@@ -31,6 +32,13 @@ export interface EntradaEstimacion {
   mermasRef: MermasReferencia;
   /** Nivel de tueste elegido; sin él la merma de la tostión se toma del nivel medio. */
   nivelTueste?: NivelTueste | null;
+  /**
+   * Varios perfiles por kilos (B-02): la merma de la tostión es la ponderada por kg de la de cada nivel
+   * (Σ kg × merma(nivel) / Σ kg). Con uno solo, o sin kilos, vale `nivelTueste`.
+   */
+  perfiles?: readonly { nivel: NivelTueste; kg: number | null }[];
+  /** Cantidad a moler (B-03): la línea de molienda estima esos kilos, no todo el tostado. Sin ella, todo el tostado. */
+  molienda?: { modo: ModoMolienda; kg?: number | null } | null;
 }
 
 export interface LineaEstimacion {
@@ -76,7 +84,16 @@ function mermaDelPaso(servicio: TipoProceso, mermasRef: MermasReferencia, nivel?
   return referenciaDelPaso(servicio, cfg, servicio === "tostion" ? (nivel ?? "medio") : null);
 }
 
-export function estimarServicios({ pesoKg, servicios, tarifas, mermasRef, nivelTueste }: EntradaEstimacion): Estimacion {
+/** Merma de la tostión ponderada por los kilos de cada perfil; `null` si no hay varios perfiles con kilos. */
+export function mermaTostionPonderada(mermasRef: MermasReferencia, perfiles: EntradaEstimacion["perfiles"]): number | null {
+  const conKg = (perfiles ?? []).filter((p) => typeof p.kg === "number" && Number.isFinite(p.kg) && p.kg > 0);
+  if (conKg.length < 2 || !mermasRef.tostion) return null;
+  const total = conKg.reduce((s, p) => s + (p.kg as number), 0);
+  const suma = conKg.reduce((s, p) => s + (p.kg as number) * mermaValida(mermasRef.tostion?.[p.nivel]), 0);
+  return suma / total;
+}
+
+export function estimarServicios({ pesoKg, servicios, tarifas, mermasRef, nivelTueste, perfiles, molienda }: EntradaEstimacion): Estimacion {
   const ordenados = ordenarServicios(servicios);
   const conEmpaque = ordenados.includes("tostion");
 
@@ -91,15 +108,27 @@ export function estimarServicios({ pesoKg, servicios, tarifas, mermasRef, nivelT
     if (servicio === "empaque") continue;
 
     const tarifaKg = tarifas[servicio] ?? null;
+    // La molienda se cobra sobre los kilos que se piden moler (B-03), no sobre todo el tostado.
+    const pesoLinea =
+      servicio === "molienda" && molienda
+        ? estimarMolienda({
+            kgEntrada: pesoKg,
+            trilla: ordenados.includes("trilla"),
+            mermaTrillaPct: mermaValida(mermasRef.trilla),
+            mermaTostionPct: mermaValida(mermaTostionPonderada(mermasRef, perfiles) ?? mermaDelPaso("tostion", mermasRef, nivelTueste)),
+            modo: molienda.modo,
+            kg: molienda.kg,
+          }).molidoKg
+        : pesoPaso;
     lineas.push({
       servicio,
-      pesoKg: pesoPaso,
+      pesoKg: pesoLinea,
       tarifaKg,
-      valor: tarifaKg === null ? null : calcularValor(pesoPaso, tarifaKg),
+      valor: tarifaKg === null ? null : calcularValor(pesoLinea, tarifaKg),
       estimado: lineas.length > 0,
     });
 
-    const merma = mermaDelPaso(servicio, mermasRef, nivelTueste);
+    const merma = (servicio === "tostion" ? mermaTostionPonderada(mermasRef, perfiles) : null) ?? mermaDelPaso(servicio, mermasRef, nivelTueste);
     pesoPaso = redondear3(pesoPaso * (1 - mermaValida(merma) / 100));
   }
 

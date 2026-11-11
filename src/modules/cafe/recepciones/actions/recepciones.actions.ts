@@ -9,7 +9,9 @@ import { callRpc, traducirErrorRpc, type Result } from "@/modules/core/rpc/call-
 import { mensajeRpc } from "@/modules/core/rpc/mensajes";
 import { requireModulo } from "@/modules/core/tenants/tenant.guards";
 import { fechaHoyEnZona } from "../../insumos/lib/insumos";
-import { payloadRecepcion, recepcionSchema, type RecepcionFormInput } from "../schemas/recepcion.schema";
+import { getParametro } from "@/modules/core/parametros/queries/parametros.queries";
+import { PARAMETROS_CAFE } from "../../parametros";
+import { crearRecepcionSchema, payloadRecepcion, type RecepcionFormInput } from "../schemas/recepcion.schema";
 import type { RespuestaRecepcion } from "../types";
 
 // Server Actions de la recepción de café de clientes (FIN-107). Cada una: módulo activo → rol de la membresía →
@@ -35,7 +37,8 @@ export async function registrarRecepcion(input: RecepcionFormInput): Promise<Res
   await requireModulo("cafe.recepcion");
   const sesion: Sesion = await requireRolTenant(ROLES_RECEPCION);
 
-  const parsed = recepcionSchema.safeParse(input);
+  // La suma de kilos de «Varios perfiles» se compara con lo que entra a la tostión: depende de la merma de trilla del cliente.
+  const parsed = crearRecepcionSchema(await getParametro(PARAMETROS_CAFE.mermaReferenciaTrillaPct)).safeParse(input);
   if (!parsed.success) return datosInvalidos(parsed.error.issues[0]?.message);
 
   // La fecha es un día del calendario del cliente: no se recibe café del futuro. (La base solo la valida como

@@ -28,7 +28,7 @@ interface Props {
 }
 
 /**
- * Molienda del café reabierto (HU-F1-16): sin repetir trilla ni tostión y sin bultos. Entra todo lo reabierto; el
+ * Molienda del café reabierto (HU-F1-16): sin repetir trilla ni tostión. Entra todo lo reabierto; el
  * operario pesa lo que salió molido y la diferencia es la merma. Es el único paso de molienda de esta reapertura.
  * Pensado para tablet: campos de 44 px, teclado decimal con coma.
  */
@@ -67,9 +67,7 @@ export function MoliendaReaperturaForm({ loteId, reaperturaId, pesoEntradaKg, fe
       toast.error(r.message);
       return;
     }
-    toast.success("Molienda registrada", {
-      description: `Merma ${formatearPeso(r.data.merma_kg)} kg (${formatearMermaPct(r.data.merma_kg, r.data.peso_entrada_kg)}). Ahora puedes empacarla.`,
-    });
+    toast.success("Molienda registrada", { description: "Ahora puede empacarse." });
     router.refresh();
   }
 

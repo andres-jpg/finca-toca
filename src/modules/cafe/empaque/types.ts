@@ -6,6 +6,8 @@ export interface InsumoPresentacion {
   nombre: string;
   stock: number;
   stockMinimo: number | null;
+  /** Precio unitario vigente (COP) o `null` si aún no se fijó en Insumos. */
+  precio: number | null;
 }
 
 /** Una fila de la tabla de presentaciones del formulario de empaque. */
@@ -40,12 +42,32 @@ export interface LineaEmpaqueVista {
   forma: "grano" | "molido";
 }
 
+/** Una tanda (tostión) pendiente de empacar, con lo que el formulario muestra en la cabecera. */
+export interface TandaEmpaque {
+  procesoId: string;
+  fecha: string;
+  /** Lo que entró a tostión en esta tanda (kg). */
+  entradaKg: number;
+  nivelTueste: "bajo" | "medio" | "alto" | null;
+  /** Molienda solicitada para la tanda (kg): Σ entrada de sus moliendas vigentes; `null` si no hay. */
+  moliendaKg: number | null;
+}
+
 /** Lo que devuelve `cafe.registrar_empaque`. */
 export interface ResultadoEmpaque {
   proceso_id: string;
-  merma_kg: number;
-  merma_pct: number;
-  /** Lo que llegó a empaque y no entró en bolsas (0 si cuadra). NO es merma: va a `diferencia_destino`. */
+  /** Merma de TOSTIÓN de la tanda (el empaque no tiene merma propia). `null` si el empaque no cierra una tostión. */
+  merma_kg: number | null;
+  merma_pct: number | null;
+  merma_tostion: { proceso_id: string; entrada_kg: number; bascula_kg: number; merma_kg: number; merma_pct: number; desvio: boolean | null; desvio_sentido: "alta" | "baja" | null } | null;
+  /** Acumulado del lote: Σ entró a tostión → Σ báscula. */
+  acumulado: { entrada_kg: number; bascula_kg: number; merma_pct: number } | null;
+  peso_bascula_kg: number;
+  tostado_incluido_kg?: number;
+  en_bolsas_kg: number;
+  /** Báscula + incluido − bolsas: va a «Tostado sin empacar» (marca propia) o se entrega a granel (terceros). */
+  sobrante_kg: number;
+  sobrante_forma: "grano" | "molido" | null;
   diferencia_kg: number;
   diferencia_destino: "suelto" | "granel" | "muestra" | "perdida" | null;
   peso_entrada_kg: number;
@@ -54,9 +76,9 @@ export interface ResultadoEmpaque {
   avance_texto: string;
   /** En servicios a terceros `producto_id` y `producto` son null (no mueven inventario propio). */
   lineas: { presentacion_g: number; unidades: number; kg: number; forma?: "grano" | "molido"; producto_id: string | null; producto: string | null }[];
-  /** La molienda registrada en el mismo paso (A-02); `null` si no hubo. */
-  molienda?: { proceso_id: string; merma_kg: number; merma_pct: number; peso_entrada_kg: number; peso_salida_kg: number } | null;
   stocks: { articulo_id: string; stock: number; bajo_minimo: boolean }[];
+  /** Costo de los insumos del empaque con los precios que regían al registrarlo (B-13). `null` si no se pudo leer. */
+  costo_insumos?: { total: number; completo: boolean; aplica: boolean } | null;
   /** Insumos que quedaron en negativo: se avisa, no se bloquea (decisión 14 de CO-20). */
   advertencias: { articulo_id: string; articulo: string | null; stock_resultante: number }[];
 }

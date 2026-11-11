@@ -90,6 +90,14 @@ grant execute on function pg_temp.comprar(text, numeric, integer) to authenticat
 create or replace function pg_temp.lid(p_k text) returns uuid language sql as $$ select (r ->> 'id')::uuid from res where k = p_k $$;
 grant execute on function pg_temp.lid(text) to authenticated;
 
+-- Peso en báscula de la tanda: lo que dejó la tostión abierta del lote (su salida, o su entrada si aún no la tiene).
+create or replace function pg_temp.tostado(p_k text) returns numeric language sql as $$
+  select sum(coalesce(t.peso_salida_kg, t.peso_entrada_kg)) from cafe.procesos t
+   where t.lote_id = pg_temp.lid(p_k) and t.tipo = 'tostion' and t.anulado_at is null
+     and not exists (select 1 from cafe.procesos e where e.origen_proceso_id = t.id and e.tipo = 'empaque' and e.anulado_at is null)
+$$;
+grant execute on function pg_temp.tostado(text) to authenticated;
+
 create or replace function pg_temp.barr(p_k text, p_nums integer[]) returns uuid[] language sql as $$
   select array_agg(b.id order by b.numero) from cafe.lote_bultos b where b.lote_id = pg_temp.lid(p_k) and b.numero = any(p_nums)
 $$;
@@ -103,10 +111,33 @@ returns jsonb language sql as $$
 $$;
 grant execute on function pg_temp.p(text, text, jsonb) to authenticated;
 
+-- Los baches ya no llevan salida (B-05): estas pruebas parten de tostiones CON salida (la que antes pesaba cada bache), así que
+-- se fija aquí como lo haría el empaque de la tanda (SECURITY DEFINER de prueba, con la bandera de edición de `editar_lote`).
+create or replace function pg_temp.fijar_salida(p_proceso uuid, p_extra jsonb) returns void language plpgsql security definer set search_path = '' as $$
+declare v numeric;
+begin
+  select sum((b ->> 'peso_salida_kg')::numeric) into v from jsonb_array_elements(p_extra -> 'baches') b where b ? 'peso_salida_kg';
+  if v is null then return; end if;
+  perform set_config('cafe.edicion_lote', 'on', true);
+  update cafe.procesos set peso_salida_kg = v where id = p_proceso;
+  perform set_config('cafe.edicion_lote', 'off', true);
+end $$;
+grant execute on function pg_temp.fijar_salida(uuid, jsonb) to authenticated;
+
 create or replace function pg_temp.reg(p_k text, p_tipo text, p_extra jsonb default '{}')
 returns void language plpgsql as $$
+declare v jsonb;
 begin
-  perform cafe.registrar_proceso(pg_temp.p(p_k, p_tipo, p_extra));
+  if p_tipo = 'empaque' then
+    -- El empaque de una tanda va por registrar_empaque (báscula + bolsas del cliente de peso libre).
+    v := cafe.registrar_empaque(jsonb_build_object('lote_id', pg_temp.lid(p_k), 'fecha', coalesce(p_extra ->> 'fecha', pg_temp.hoy()),
+           'peso_bascula_kg', pg_temp.tostado(p_k),
+           'lineas', jsonb_build_array(jsonb_build_object('presentacion_g', 1000, 'unidades', round((p_extra ->> 'peso_salida_kg')::numeric), 'bolsa_cliente', true))));
+
+    return;
+  end if;
+  v := cafe.registrar_proceso(pg_temp.p(p_k, p_tipo, p_extra));
+  if p_tipo = 'tostion' then perform pg_temp.fijar_salida((v ->> 'id')::uuid, p_extra); end if;
 end $$;
 grant execute on function pg_temp.reg(text, text, jsonb) to authenticated;
 
@@ -289,8 +320,8 @@ select is(
                                       (d ->> 'tarifa_kg')::numeric, (d ->> 'valor')::numeric) order by o)
      from cafe.remisiones x, jsonb_array_elements(x.detalle) with ordinality as e(d, o) where x.id = pg_temp.lid('R1')),
   '[["trilla", 500, 405, 1400, 700000], ["tostion", 405, 332, 2200, 891000],
-    ["molienda", 332, 330, 1000, 332000], ["empaque", 330, 330, 0, 0]]'::jsonb,
-  'el detalle trae los cuatro pasos en orden, con kilos, tarifa efectiva y valor de cada uno'
+    ["molienda", 332, null, 1000, 332000], ["empaque", 332, 330, 0, 0]]'::jsonb,
+  'el detalle trae los cuatro pasos en orden, con kilos, tarifa efectiva y valor de cada uno (molienda sin salida)'
 );
 select is(
   (select array_agg(d ->> 'nivel_tueste' order by o) from cafe.remisiones x, jsonb_array_elements(x.detalle) with ordinality as e(d, o)

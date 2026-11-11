@@ -119,3 +119,19 @@ export type AjusteFormValues = z.output<typeof ajusteFormSchema>;
 export function cantidadAjuste(values: Pick<AjusteFormValues, "direccion" | "cantidad">): number {
   return values.direccion === "disminuye" ? -values.cantidad : values.cantidad;
 }
+
+// --- Precio vigente (B-13) -----------------------------------------------------------------------------
+
+/** Precio unitario vigente de una bolsa o etiqueta (COP, mayor que cero). Cada cambio es una fila nueva del historial. */
+export const precioInsumoSchema = z.object({
+  articuloId,
+  precio: z
+    .number({ message: "Indica el precio unitario" })
+    .refine(Number.isFinite, { message: "Indica el precio unitario" })
+    .gt(0, "El precio debe ser mayor a 0")
+    .max(10_000_000, "El precio es demasiado grande")
+    .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6, { message: "Máximo 2 decimales" }),
+});
+
+export type PrecioInsumoFormInput = z.input<typeof precioInsumoSchema>;
+export type PrecioInsumoValues = z.output<typeof precioInsumoSchema>;

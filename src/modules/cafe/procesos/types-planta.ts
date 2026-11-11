@@ -2,11 +2,12 @@ import type { AlertaCalidad } from "../recepciones/lib/calidad";
 import type { DestinoDiferencia } from "../empaque/lib/empaque";
 import type { LineaEmpaqueVista } from "../empaque/types";
 import type { LineaLote, NivelTueste, TipoProceso } from "../lotes/types";
+import type { ModoMolienda } from "./lib/molienda";
 import type { ConfigMerma } from "./lib/resumen";
-import type { SiguientePaso } from "./lib/pasos";
+import type { EtapaKg, OrigenPlanta, SiguientePaso } from "./lib/pasos";
 import type { EstadoLote } from "./types";
 
-// Formas que la pantalla de planta (CO-28) lee de `cafe.v_lotes`, `cafe.v_bultos_estado` y `cafe.procesos`.
+// Formas que la pantalla de planta (CO-28) lee de `cafe.v_lotes`, `cafe.v_origenes_disponibles` y `cafe.procesos`.
 // Los números llegan ya como `number` (PostgREST devuelve los `numeric` como JSON number).
 
 /** Una tarjeta de la cola de trabajo: un lote con pasos pendientes. */
@@ -23,9 +24,8 @@ export interface TarjetaLotePlanta {
   /** Instante en que se registró el lote (`created_at`): la hora de llegada, que se muestra en la zona del cliente. */
   llegadaEn: string;
   pesoRecibidoKg: number;
-  /** Lo que queda en planta ahora (salida atribuida del último paso de cada bulto). */
+  /** Lo que queda en planta ahora (suma de los saldos; con tostiones sin empaque, estimado). */
   pesoActualKg: number;
-  numBultos: number;
   nivelTueste: NivelTueste | null;
   /** Perfil pedido por el cliente (opcional, solo con tostión). */
   perfilTempC?: number | null;
@@ -35,27 +35,25 @@ export interface TarjetaLotePlanta {
   estado: EstadoLote;
   /** «2 de 3», DERIVADO por la base. */
   avanceTexto: string;
-  /** Primer paso requerido con bultos pendientes; `null` si no queda ninguno. */
+  /** Primer paso requerido con kilos pendientes; `null` si no queda ninguno. */
   siguiente: SiguientePaso | null;
   /** Pasos que exige el lote (los contratados, o tostión + empaque en marca propia). */
   serviciosRequeridos: TipoProceso[];
-  /** Bultos que ya pasaron por cada paso. */
-  procesados: Partial<Record<TipoProceso, number>>;
-  /** Cuántos bultos esperan cada etapa (un lote parcial aparece en varias columnas del tablero). */
-  bultosPorEtapa: Partial<Record<TipoProceso, number>>;
+  /** Pasos completos (sus kilos ya se procesaron). */
+  completos: Partial<Record<TipoProceso, boolean>>;
+  /** Kilos que esperan cada etapa (un lote parcial aparece en varias columnas del tablero). */
+  kgPorEtapa: Partial<Record<TipoProceso, number>>;
   /** `YYYY-MM-DD` del último proceso vigente: desde cuándo está listo. Solo en lotes `listo`. */
   listoDesde: string | null;
 }
 
-/** Un bulto con lo que se necesita para decidir si puede pasar por un paso, y de cuándo es cada uno ya hecho. */
-export interface BultoPlanta {
-  id: string;
-  numero: number;
-  pesoKg: number;
-  pesoActualKg: number;
-  pasos: TipoProceso[];
-  /** Fecha y proceso con que el bulto pasó por cada paso (solo procesos vigentes). */
-  hechos: Partial<Record<TipoProceso, { fecha: string; procesoId: string }>>;
+/** Perfil de tueste del lote (B-02): uno, o varios repartidos por kilos en maquila; en marca propia, el snapshot del tipo. */
+export interface PerfilLote {
+  orden: number;
+  nivel: NivelTueste;
+  tempC: number | null;
+  tiempoMin: number | null;
+  kg: number;
 }
 
 /** Un proceso ya registrado, para el historial del lote. */
@@ -64,9 +62,11 @@ export interface ProcesoHistorial {
   tipo: TipoProceso;
   fecha: string;
   pesoEntradaKg: number;
-  pesoSalidaKg: number;
-  mermaKg: number;
-  mermaPct: number;
+  /** `null` en una tostión sin empaque (su salida es la báscula del empaque) y en la molienda. */
+  pesoSalidaKg: number | null;
+  /** Solo trilla y tostión con salida; molienda y empaque no tienen merma. */
+  mermaKg: number | null;
+  mermaPct: number | null;
   desvio: boolean;
   /** Referencia y tolerancia congeladas al registrar el proceso; `null` = sin referencia (molienda, empaque). */
   mermaReferenciaPct: number | null;
@@ -78,13 +78,16 @@ export interface ProcesoHistorial {
   numBaches: number;
   /** Líneas de bolsas del empaque (tamaño × unidades); vacío en los demás procesos. */
   lineasEmpaque: LineaEmpaqueVista[];
-  /** Solo empaque (A-01): lo que llegó y no entró en bolsas. NO es merma. `null` en los demás procesos. */
+  /** Solo empaque: sobrante (báscula − bolsas). NO es merma. `null` en los demás procesos. */
   diferenciaKg: number | null;
   /** A dónde fue esa diferencia; `null` si no hubo (o en los empaques anteriores a A-01). */
   diferenciaDestino: DestinoDiferencia | null;
-  /** Números de los bultos que pasaron (vacío en un proceso anulado: sus bultos se liberan). */
-  bultos: number[];
-  bultoIds: string[];
+  /** Tanda de la que consume (el proceso previo); `null` = el café recibido. */
+  origenProcesoId: string | null;
+  /** Solo tostión: lo decidido para la molienda de la tanda (B-06); `null` = tanda anterior a esa decisión. */
+  moliendaModo?: ModoMolienda | null;
+  /** Kilos estimados a moler de la tanda; `null` si no se muele o no hay decisión. */
+  moliendaKg?: number | null;
   anulado: boolean;
   motivoAnulacion: string | null;
   createdAt: string;
@@ -107,21 +110,28 @@ export interface LoteParaProceso {
     linea: LineaLote;
     tercero: string;
     tipoCafe: string | null;
+    tipoCafeId: string | null;
     fechaRecepcion: string;
     pesoRecibidoKg: number;
     pesoActualKg: number;
-    numBultos: number;
     servicios: TipoProceso[];
     serviciosRequeridos: TipoProceso[];
     nivelTueste: NivelTueste | null;
     perfilTempC?: number | null;
     perfilTiempoMin?: number | null;
+    /** Perfiles del lote (`lote_perfil_tostion`), por orden; `[]` en lotes sin perfil. */
+    perfiles: PerfilLote[];
     alertasCalidad: AlertaCalidad[];
     estado: EstadoLote;
     avanceTexto: string;
     anulado: boolean;
+    /** Lo pedido en la recepción (terceros) y actualizado al cambiarlo en la tostión (B-03/B-06); `modo` null = sin dato. */
+    moliendaSolicitada?: { modo: ModoMolienda | null; kg: number | null };
   };
-  bultos: BultoPlanta[];
+  /** Saldo por origen (`v_origenes_disponibles`) con su fecha. */
+  origenes: OrigenPlanta[];
+  /** Resumen por etapa (`v_lote_etapas`), en kilos. */
+  etapas: EtapaKg[];
   procesos: ProcesoHistorial[];
   config: ConfigPlanta;
 }

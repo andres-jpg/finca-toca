@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TarjetaLotePlanta } from "../types-planta";
-import { bultosPorEtapa, calcularAvisos, chipsServicios, construirTablero, diasEntre, filtrarCola, textoListoHace } from "./cola";
+import { chipsServicios, construirTablero, diasEntre, filtrarCola, kgPorEtapa, textoListoHace } from "./cola";
 
 function tarjeta(p: Partial<TarjetaLotePlanta> & Pick<TarjetaLotePlanta, "codigo">): TarjetaLotePlanta {
   return {
@@ -12,16 +12,15 @@ function tarjeta(p: Partial<TarjetaLotePlanta> & Pick<TarjetaLotePlanta, "codigo
     llegadaEn: "2026-11-05T12:15:00.000Z",
     pesoRecibidoKg: 500,
     pesoActualKg: 500,
-    numBultos: 8,
     nivelTueste: null,
     alertasCalidad: [],
     tieneDesvio: false,
     estado: "recibido",
     avanceTexto: "0 de 3",
-    siguiente: { tipo: "trilla", pendientes: 8, total: 8 },
+    siguiente: { tipo: "trilla", pendienteKg: 500, baseKg: 500 },
     serviciosRequeridos: ["trilla", "tostion", "empaque"],
-    procesados: {},
-    bultosPorEtapa: { trilla: 8 },
+    completos: {},
+    kgPorEtapa: { trilla: 500 },
     listoDesde: null,
     ...p,
   };
@@ -31,23 +30,29 @@ const PARCIAL = tarjeta({
   codigo: "MP-2026-0003",
   linea: "marca_propia",
   tercero: "Proveedor Uno",
-  numBultos: 6,
+  pesoRecibidoKg: 320,
   estado: "parcial",
   serviciosRequeridos: ["tostion", "empaque"],
-  procesados: { tostion: 2 },
-  bultosPorEtapa: { tostion: 4, empaque: 2 },
+  completos: {},
+  kgPorEtapa: { tostion: 202, empaque: 54 },
 });
-const LISTO = tarjeta({ codigo: "MQ-2026-0009", estado: "listo", procesados: { trilla: 8, tostion: 8, empaque: 8 }, bultosPorEtapa: {}, listoDesde: "2026-10-20" });
-const LISTO_MP = tarjeta({ codigo: "MP-2026-0010", linea: "marca_propia", estado: "listo", serviciosRequeridos: ["tostion", "empaque"], bultosPorEtapa: {} });
+const LISTO = tarjeta({ codigo: "MQ-2026-0009", estado: "listo", completos: { trilla: true, tostion: true, empaque: true }, kgPorEtapa: {}, listoDesde: "2026-10-20" });
+const LISTO_MP = tarjeta({ codigo: "MP-2026-0010", linea: "marca_propia", estado: "listo", serviciosRequeridos: ["tostion", "empaque"], kgPorEtapa: {} });
 const NUEVO = tarjeta({ codigo: "MQ-2026-0007" });
 const COLA = [NUEVO, PARCIAL, LISTO, LISTO_MP];
 
-describe("bultosPorEtapa", () => {
-  it("reparte los bultos según el primer paso requerido que les falta", () => {
-    expect(bultosPorEtapa(["tostion", "empaque"], [{ pasos: ["tostion"] }, { pasos: ["tostion"] }, { pasos: [] }, { pasos: [] }])).toEqual({ tostion: 2, empaque: 2 });
+describe("kgPorEtapa", () => {
+  it("cuenta los kilos de los pasos que se pueden registrar ahora", () => {
+    expect(
+      kgPorEtapa([
+        { tipo: "tostion", disponible: true, kgDisponible: 202 },
+        { tipo: "empaque", disponible: true, kgDisponible: 54 },
+        { tipo: "molienda", disponible: false, kgDisponible: 0 },
+      ]),
+    ).toEqual({ tostion: 202, empaque: 54 });
   });
-  it("un bulto con todo hecho no cuenta", () => {
-    expect(bultosPorEtapa(["trilla"], [{ pasos: ["trilla"] }])).toEqual({});
+  it("sin pasos disponibles no cuenta nada", () => {
+    expect(kgPorEtapa([{ tipo: "trilla", disponible: false, kgDisponible: 0 }])).toEqual({});
   });
 });
 
@@ -56,9 +61,9 @@ describe("construirTablero", () => {
   it("un lote nuevo va a su primera etapa", () => {
     expect(t.trilla.map((e) => e.tarjeta.codigo)).toEqual(["MQ-2026-0007"]);
   });
-  it("un lote parcial aparece en dos columnas con sus bultos", () => {
-    expect(t.tostion.map((e) => [e.tarjeta.codigo, e.pendientes, e.total])).toEqual([["MP-2026-0003", 4, 6]]);
-    expect(t.empaque.map((e) => [e.tarjeta.codigo, e.pendientes])).toEqual([["MP-2026-0003", 2]]);
+  it("un lote parcial aparece en dos columnas con sus kilos", () => {
+    expect(t.tostion.map((e) => [e.tarjeta.codigo, e.pendientes, e.total])).toEqual([["MP-2026-0003", 202, 320]]);
+    expect(t.empaque.map((e) => [e.tarjeta.codigo, e.pendientes])).toEqual([["MP-2026-0003", 54]]);
   });
   it("un lote de servicio listo va a «Por entregar» y no desaparece", () => {
     expect(t.entrega.map((e) => e.tarjeta.codigo)).toEqual(["MQ-2026-0009"]);
@@ -80,7 +85,7 @@ describe("filtrarCola", () => {
 
 describe("chipsServicios", () => {
   it("hecho, actual y futuro", () => {
-    const t = tarjeta({ codigo: "X", procesados: { trilla: 8 }, bultosPorEtapa: { tostion: 8 } });
+    const t = tarjeta({ codigo: "X", completos: { trilla: true }, kgPorEtapa: { tostion: 405 } });
     expect(chipsServicios(t, "tostion")).toEqual([
       { tipo: "trilla", estado: "hecho" },
       { tipo: "tostion", estado: "actual" },
@@ -98,21 +103,5 @@ describe("diasEntre y textoListoHace", () => {
     expect(textoListoHace(0)).toBe("listo hoy");
     expect(textoListoHace(1)).toBe("listo desde ayer");
     expect(textoListoHace(5)).toBe("listo hace 5 días");
-  });
-});
-
-describe("calcularAvisos", () => {
-  it("rojo por desvío, ámbar por insumos y gris por lotes sin recoger más de N días", () => {
-    const avisos = calcularAvisos({
-      tarjetas: [...COLA, tarjeta({ codigo: "MQ-2026-0011", tieneDesvio: true })],
-      insumosBajoMinimo: ["Bolsa 500 g"],
-      diasSinRecoger: 7,
-      hoy: "2026-11-02",
-    });
-    expect(avisos.map((a) => [a.id, a.tono, a.cantidad])).toEqual([["desvio", "rojo", 1], ["insumo", "ambar", 1], ["sin_recoger", "gris", 1]]);
-  });
-  it("en orden: cantidades en cero", () => {
-    const avisos = calcularAvisos({ tarjetas: [NUEVO, { ...LISTO, listoDesde: "2026-11-01" }], insumosBajoMinimo: [], diasSinRecoger: 7, hoy: "2026-11-02" });
-    expect(avisos.every((a) => a.cantidad === 0)).toBe(true);
   });
 });

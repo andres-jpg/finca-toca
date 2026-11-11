@@ -124,3 +124,45 @@ describe("estimarServicios", () => {
     expect(molienda("alto")).toMatchObject({ pesoKg: 79, estimado: true });
   });
 });
+
+describe("estimarServicios con varios perfiles (B-02)", () => {
+  const mermasRef = { trilla: 19, tostion: { bajo: 15, medio: 18, alto: 21 } } as const;
+  it("pondera por kilos la merma de la tostión para estimar la molienda", () => {
+    // 27 kg medio (18 %) + 13,5 kg alto (21 %) → (27·18 + 13,5·21) / 40,5 = 19 % → 40,5 × 0,81 = 32,805 kg a moler.
+    const e = estimarServicios({
+      pesoKg: 40.5,
+      servicios: ["tostion", "molienda"],
+      tarifas: { tostion: 2200, molienda: 1000 },
+      mermasRef,
+      nivelTueste: "medio",
+      perfiles: [
+        { nivel: "medio", kg: 27 },
+        { nivel: "alto", kg: 13.5 },
+      ],
+    });
+    expect(e.lineas.find((l) => l.servicio === "molienda")?.pesoKg).toBe(32.805);
+  });
+  it("con un solo perfil vale el nivel elegido", () => {
+    const e = estimarServicios({ pesoKg: 100, servicios: ["tostion", "molienda"], tarifas: {}, mermasRef, nivelTueste: "medio", perfiles: [{ nivel: "alto", kg: null }] });
+    expect(e.lineas.find((l) => l.servicio === "molienda")?.pesoKg).toBe(82);
+  });
+});
+
+describe("molienda con cantidad a moler (B-03)", () => {
+  const entrada = {
+    pesoKg: 50,
+    servicios: ["trilla", "tostion", "molienda"] as const,
+    tarifas: { trilla: 500, tostion: 1500, molienda: 1000 },
+    mermasRef: { trilla: 19, tostion: { bajo: 18, medio: 18, alto: 18 } },
+    nivelTueste: "medio" as const,
+  };
+  it("«Mitad» estima 16,6 kg × $1.000 como Estimado", () => {
+    const e = estimarServicios({ ...entrada, servicios: [...entrada.servicios], molienda: { modo: "mitad" } });
+    const l = e.lineas.find((x) => x.servicio === "molienda");
+    expect(l).toMatchObject({ pesoKg: 16.6, tarifaKg: 1000, valor: 16600, estimado: true });
+  });
+  it("sin cantidad elegida, todo el tostado", () => {
+    const e = estimarServicios({ ...entrada, servicios: [...entrada.servicios] });
+    expect(e.lineas.find((x) => x.servicio === "molienda")?.pesoKg).toBeCloseTo(33.21, 2);
+  });
+});

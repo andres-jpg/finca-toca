@@ -15,7 +15,7 @@ const num = (n: number | null | undefined): number => (n === null || n === undef
 const LOTES_POR_LOTE_DE_PROCESOS = 100;
 
 const COLUMNAS_LOTES =
-  "id, codigo, linea, servicios, tercero_nombre, tercero_identificacion, tipo_cafe_nombre, fecha_recepcion, num_bultos, peso_recibido_kg, humedad_pct, densidad, alertas_calidad, nivel_tueste, precio_compra_kg, valor_compra, peso_actual_kg, merma_total_kg, valor_servicios, estado, avance_texto";
+  "id, codigo, linea, servicios, tercero_nombre, tercero_identificacion, tipo_cafe_nombre, fecha_recepcion, peso_recibido_kg, humedad_pct, densidad, alertas_calidad, nivel_tueste, precio_compra_kg, valor_compra, peso_actual_kg, merma_total_kg, valor_servicios, estado, avance_texto";
 
 /**
  * Los lotes del listado con los MISMOS filtros (`aplicarFiltrosLotes`, la única traducción de `tipo`, `estado`,
@@ -33,6 +33,22 @@ export async function leerLotesExport(filtros: FiltrosLotes): Promise<LoteExport
       .range(desde, hasta),
   );
 
+  // Merma de tostión acumulada (B-12): fila de tostión de `v_lote_etapas` (solo cuenta las tandas con salida).
+  const tostion = new Map<string, { mermaKg: number; entradaKg: number }>();
+  const ids = filas.map((l) => l.id);
+  for (let i = 0; i < ids.length; i += LOTES_POR_LOTE_DE_PROCESOS) {
+    const { data, error } = await supabase
+      .schema("cafe")
+      .from("v_lote_etapas")
+      .select("lote_id, peso_entrada, merma_kg")
+      .eq("tipo", "tostion")
+      .in("lote_id", ids.slice(i, i + LOTES_POR_LOTE_DE_PROCESOS));
+    if (error) throw new Error("No se pudo leer la merma de tostión de los lotes");
+    for (const e of data ?? []) {
+      if (e.merma_kg !== null) tostion.set(e.lote_id, { mermaKg: num(e.merma_kg), entradaKg: num(e.peso_entrada) });
+    }
+  }
+
   return filas.map(
     (l): LoteExport => ({
       id: l.id,
@@ -43,7 +59,6 @@ export async function leerLotesExport(filtros: FiltrosLotes): Promise<LoteExport
       identificacion: l.tercero_identificacion,
       tipoCafe: l.tipo_cafe_nombre,
       fechaRecepcion: l.fecha_recepcion,
-      numBultos: l.num_bultos,
       pesoRecibidoKg: num(l.peso_recibido_kg),
       humedadPct: l.humedad_pct === null ? null : Number(l.humedad_pct),
       densidad: l.densidad === null ? null : Number(l.densidad),
@@ -53,6 +68,8 @@ export async function leerLotesExport(filtros: FiltrosLotes): Promise<LoteExport
       valorCompra: l.valor_compra === null ? null : Number(l.valor_compra),
       pesoActualKg: num(l.peso_actual_kg),
       mermaTotalKg: num(l.merma_total_kg),
+      mermaTostionKg: tostion.get(l.id)?.mermaKg ?? null,
+      entradaTostionKg: tostion.get(l.id)?.entradaKg ?? null,
       valorServicios: num(l.valor_servicios),
       estado: l.estado ?? "recibido",
       avanceTexto: l.avance_texto,
@@ -76,12 +93,10 @@ export async function leerProcesosExport(
   const ids = lotes.map((l) => l.id);
 
   const procesos = [];
-  const bultosPorProceso = new Map<string, number>();
   for (let i = 0; i < ids.length; i += LOTES_POR_LOTE_DE_PROCESOS) {
     const trozo = ids.slice(i, i + LOTES_POR_LOTE_DE_PROCESOS);
 
-    const [filas, bultos] = await Promise.all([
-      fetchAllPaginado((desde, hasta) => {
+    const filas = await fetchAllPaginado((desde, hasta) => {
         let consulta = cafe
           .from("procesos")
           .select(
@@ -91,14 +106,8 @@ export async function leerProcesosExport(
         if (filtros.desde) consulta = consulta.gte("fecha", filtros.desde);
         if (filtros.hasta) consulta = consulta.lte("fecha", filtros.hasta);
         return consulta.order("fecha", { ascending: true }).order("created_at", { ascending: true }).order("id", { ascending: true }).range(desde, hasta);
-      }),
-      // Un proceso anulado libera sus bultos (se borran sus filas): para esos el conteo queda sin dato.
-      fetchAllPaginado((desde, hasta) =>
-        cafe.from("proceso_bultos").select("proceso_id, bulto_id").in("lote_id", trozo).order("proceso_id").order("bulto_id").range(desde, hasta),
-      ),
-    ]);
+    });
     procesos.push(...filas);
-    for (const b of bultos) bultosPorProceso.set(b.proceso_id, (bultosPorProceso.get(b.proceso_id) ?? 0) + 1);
   }
 
   const usuarios = await nombresUsuarios([...new Set(procesos.flatMap((p) => (p.created_by ? [p.created_by] : [])))]);
@@ -111,10 +120,10 @@ export async function leerProcesosExport(
       linea: lote?.linea ?? "servicio",
       fecha: p.fecha,
       tipo: p.tipo,
-      numBultos: anulado ? null : (bultosPorProceso.get(p.id) ?? null),
       pesoEntradaKg: num(p.peso_entrada_kg),
-      pesoSalidaKg: num(p.peso_salida_kg),
-      mermaKg: num(p.merma_kg),
+      pesoSalidaKg: p.peso_salida_kg === null ? null : num(p.peso_salida_kg),
+      // Solo trilla y tostión (con su salida) tienen merma: molienda y empaque no.
+      mermaKg: p.merma_kg === null || (p.tipo !== "trilla" && p.tipo !== "tostion") ? null : num(p.merma_kg),
       mermaReferenciaPct: p.merma_referencia_pct === null ? null : Number(p.merma_referencia_pct),
       desvio: p.desvio === true,
       nivelTueste: p.nivel_tueste,

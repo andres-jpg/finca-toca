@@ -52,35 +52,28 @@ describe("sugerirBaches", () => {
   });
 });
 
-describe("totalesBaches y bachesCuadran", () => {
-  const baches = [
-    { peso_entrada_kg: 13.5, peso_salida_kg: 11.1 },
-    { peso_entrada_kg: 13.5, peso_salida_kg: 11.2 },
-  ];
+describe("totalesBaches y bachesCuadran (solo entradas)", () => {
+  const baches = [{ peso_entrada_kg: 13.5 }, { peso_entrada_kg: 13.5 }];
 
-  it("suma entradas y salidas sin ruido de coma flotante", () => {
-    expect(totalesBaches(baches)).toEqual({ entradaKg: 27, salidaKg: 22.3 });
-    expect(totalesBaches([{ peso_entrada_kg: 0.1, peso_salida_kg: 0.2 }, { peso_entrada_kg: 0.2, peso_salida_kg: 0.1 }])).toEqual({
-      entradaKg: 0.3,
-      salidaKg: 0.3,
-    });
-    expect(totalesBaches([])).toEqual({ entradaKg: 0, salidaKg: 0 });
+  it("suma entradas sin ruido de coma flotante", () => {
+    expect(totalesBaches(baches)).toEqual({ entradaKg: 27 });
+    expect(totalesBaches([{ peso_entrada_kg: 0.1 }, { peso_entrada_kg: 0.2 }])).toEqual({ entradaKg: 0.3 });
+    expect(totalesBaches([])).toEqual({ entradaKg: 0 });
   });
 
-  it("cuadran si suman la entrada y la salida del proceso (tolerancia de 1 g)", () => {
-    expect(bachesCuadran(baches, 27, 22.3)).toBe(true);
-    expect(bachesCuadran(baches, 27.001, 22.299)).toBe(true);
+  it("cuadran si suman los kilos a tostar (tolerancia de 1 g)", () => {
+    expect(bachesCuadran(baches, 27)).toBe(true);
+    expect(bachesCuadran(baches, 27.001)).toBe(true);
   });
 
   it("no cuadran si difieren más de 1 g o si no hay baches", () => {
-    expect(bachesCuadran(baches, 27.002, 22.3)).toBe(false);
-    expect(bachesCuadran(baches, 27, 22.5)).toBe(false);
-    expect(bachesCuadran([], 0, 0)).toBe(false);
+    expect(bachesCuadran(baches, 27.002)).toBe(false);
+    expect(bachesCuadran([], 0)).toBe(false);
   });
 
-  it("los 30 baches del ejemplo suman 405 → 332", () => {
-    const treinta = Array.from({ length: 30 }, (_, i) => ({ peso_entrada_kg: 13.5, peso_salida_kg: i < 26 ? 11 : 11.5 }));
-    expect(totalesBaches(treinta)).toEqual({ entradaKg: 405, salidaKg: 332 });
-    expect(bachesCuadran(treinta, 405, 332)).toBe(true);
+  it("54,0 kg → 4 baches de 13,5 kg cuadran", () => {
+    const cuatro = sugerirBaches(54, 13.5).map((k) => ({ peso_entrada_kg: k }));
+    expect(cuatro).toHaveLength(4);
+    expect(bachesCuadran(cuatro, 54)).toBe(true);
   });
 });

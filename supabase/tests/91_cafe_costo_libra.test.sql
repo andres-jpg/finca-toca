@@ -1,10 +1,11 @@
--- A-05 (FIN-124 · HU-F1-17) · Costo de producir una libra: `cafe.costo_insumo` (promedio ponderado de compras),
--- `cafe.costo_libra_lote` (merma de tostión/molienda acumulada, bolsa y etiqueta, precio de venta) y `cafe.costo_libra_panel`.
+-- A-05 + B-13 (FIN-124, FIN-160) · Costo de producir una libra: `cafe.costo_insumo` (precio vigente de `cafe.insumo_precios`),
+-- `cafe.costo_libra_lote` (merma de tostión acumulada, bolsa y etiqueta, precio de venta), el snapshot de insumos en el
+-- empaque (`empaque_lineas.costo_*`, `cafe.costo_insumos_empaque`) y `cafe.costo_libra_panel`.
 -- Ejemplo del informe: café a $30.000/kg, merma de tostión 18,3 %, bolsa + etiqueta $900 → $19.260 la libra.
 -- Todo se crea AQUÍ dentro de la transacción (rollback al final).   p3 operativo A   p5 owner B (sin cafe.dashboard)
 begin;
 
-select plan(12);
+select plan(19);
 
 insert into auth.users (id, aud, role, email) values
   ('00000000-0000-0000-0000-0000000091a3', 'authenticated', 'authenticated', 'operativo-a@costo.test'),
@@ -62,6 +63,14 @@ grant execute on function pg_temp.comprar(text, numeric, integer, text) to authe
 create or replace function pg_temp.lid(p_k text) returns uuid language sql as $$ select (r ->> 'id')::uuid from res where k = p_k $$;
 grant execute on function pg_temp.lid(text) to authenticated;
 
+-- Peso en báscula de la tanda: lo que dejó la tostión abierta del lote (su salida, o su entrada si aún no la tiene).
+create or replace function pg_temp.tostado(p_k text) returns numeric language sql as $$
+  select sum(coalesce(t.peso_salida_kg, t.peso_entrada_kg)) from cafe.procesos t
+   where t.lote_id = pg_temp.lid(p_k) and t.tipo = 'tostion' and t.anulado_at is null
+     and not exists (select 1 from cafe.procesos e where e.origen_proceso_id = t.id and e.tipo = 'empaque' and e.anulado_at is null)
+$$;
+grant execute on function pg_temp.tostado(text) to authenticated;
+
 create or replace function pg_temp.barr(p_k text, p_nums integer[]) returns uuid[] language sql as $$
   select array_agg(b.id order by b.numero) from cafe.lote_bultos b where b.lote_id = pg_temp.lid(p_k) and b.numero = any(p_nums)
 $$;
@@ -75,10 +84,26 @@ returns jsonb language sql as $$
 $$;
 grant execute on function pg_temp.p(text, text, integer[], jsonb) to authenticated;
 
+-- Los baches ya no llevan salida (B-05): estas pruebas parten de tostiones CON salida (la que antes pesaba cada bache), así que
+-- se fija aquí como lo haría el empaque de la tanda (SECURITY DEFINER de prueba, con la bandera de edición de `editar_lote`).
+create or replace function pg_temp.fijar_salida(p_proceso uuid, p_extra jsonb) returns void language plpgsql security definer set search_path = '' as $$
+declare v numeric;
+begin
+  select sum((b ->> 'peso_salida_kg')::numeric) into v from jsonb_array_elements(p_extra -> 'baches') b where b ? 'peso_salida_kg';
+  if v is null then return; end if;
+  perform set_config('cafe.edicion_lote', 'on', true);
+  update cafe.procesos set peso_salida_kg = v where id = p_proceso;
+  perform set_config('cafe.edicion_lote', 'off', true);
+end $$;
+grant execute on function pg_temp.fijar_salida(uuid, jsonb) to authenticated;
+
 create or replace function pg_temp.reg(p_res text, p_k text, p_tipo text, p_nums integer[] default null, p_extra jsonb default '{}')
 returns void language plpgsql as $$
+declare v jsonb;
 begin
-  insert into res select p_res, cafe.registrar_proceso(pg_temp.p(p_k, p_tipo, p_nums, p_extra));
+  v := cafe.registrar_proceso(pg_temp.p(p_k, p_tipo, p_nums, p_extra));
+  insert into res values (p_res, v);
+  if p_tipo = 'tostion' then perform pg_temp.fijar_salida((v ->> 'id')::uuid, p_extra); end if;
 end $$;
 grant execute on function pg_temp.reg(text, text, text, integer[], jsonb) to authenticated;
 
@@ -102,8 +127,7 @@ grant execute on function pg_temp.tostar(text, text) to authenticated;
 create or replace function pg_temp.pe(p_k text, p_lineas integer[][], p_nums integer[] default null, p_extra jsonb default '{}')
 returns jsonb language sql as $$
   select jsonb_build_object('lote_id', pg_temp.lid(p_k), 'fecha', pg_temp.hoy(),
-         'bultos', to_jsonb(pg_temp.barr(p_k, coalesce(p_nums, array(select generate_series(1, 200))))),
-         'diferencia_destino', 'perdida',   -- A-01: lo que sobra siempre dice adónde fue (si no sobra, se ignora)
+         'peso_bascula_kg', pg_temp.tostado(p_k),
          'lineas', (select jsonb_agg(jsonb_build_object('presentacion_g', p_lineas[i][1], 'unidades', p_lineas[i][2]) order by i)
                       from generate_subscripts(p_lineas, 1) i)) || p_extra
 $$;
@@ -154,18 +178,21 @@ create or replace function pg_temp.n_empaques(p_k text) returns bigint language 
 grant execute on function pg_temp.n_empaques(text) to authenticated;
 
 
--- Insumos: bolsa 500 g = (100 a $600 + 100 a $800) / 200 = $700; etiqueta 500 g = $200 ------------------------------
+-- Insumos: precio vigente de la bolsa 500 g = $700 y de la etiqueta 500 g = $200 (los fija un administrador; aquí, el rol de BD).
+insert into cafe.insumo_precios (tenant_id, articulo_id, precio)
+select a.tenant_id, a.id, case a.atributos ->> 'clase' when 'bolsa' then 700 else 200 end
+  from public.articulos a
+ where a.tipo = 'insumo' and a.tenant_id = (select id from ids where clave = 'a') and (a.atributos ->> 'presentacion_g') = '500';
+
 select tests.autenticar_como('operativo-a@costo.test');
 select lives_ok(
   $$ select public.registrar_movimientos(jsonb_build_array(
-       jsonb_build_object('articulo_id', pg_temp.aid('Bolsa 500 g'), 'cantidad', 100, 'motivo', 'compra', 'costo_unitario', 600),
-       jsonb_build_object('articulo_id', pg_temp.aid('Bolsa 500 g'), 'cantidad', 100, 'motivo', 'compra', 'costo_unitario', 800),
-       jsonb_build_object('articulo_id', pg_temp.aid('Bolsa 500 g'), 'cantidad', 300, 'motivo', 'compra'),
+       jsonb_build_object('articulo_id', pg_temp.aid('Bolsa 500 g'), 'cantidad', 300, 'motivo', 'compra', 'costo_unitario', 600),
        jsonb_build_object('articulo_id', pg_temp.aid('Etiqueta 500 g'), 'cantidad', 500, 'motivo', 'compra', 'costo_unitario', 200))) $$,
-  'el operativo compra bolsas y etiquetas (una compra de bolsas sin costo no cuenta en el promedio)'
+  'el operativo compra bolsas y etiquetas (el costo de la compra no cambia el precio vigente)'
 );
-select is(cafe.costo_insumo('bolsa', 500), 700.00, 'costo de la bolsa 500 g: promedio ponderado de las compras con costo');
-select is(cafe.costo_insumo('etiqueta', 2500), null, 'sin compras con costo: NULL, no cero');
+select is(cafe.costo_insumo('bolsa', 500), 700.00, 'costo de la bolsa 500 g: su precio vigente (no el de la compra)');
+select is(cafe.costo_insumo('etiqueta', 2500), null, 'sin precio fijado: NULL, no cero');
 
 -- L1: 10 kg de Excelso a $30.000/kg, sin tostión todavía --------------------------------------------------------------
 select pg_temp.comprar('L1', 10, 1);
@@ -183,8 +210,9 @@ select is(
   '30.000 / (1 - 0,183) × 0,5 + 700 + 200 = $19.260 por libra'
 );
 select is(
-  (select row(r ->> 'precio_venta', r ->> 'margen', r ->> 'completo')::text from (select cafe.costo_libra_lote(pg_temp.lid('L1')) r) x),
-  row(null, null, 'false')::text, 'sin ventas del producto no hay precio ni margen: no se inventan'
+  (select row((r ->> 'precio_libra')::numeric, r ->> 'margen', r ->> 'margen_pct', r ->> 'completo')::text from (select cafe.costo_libra_lote(pg_temp.lid('L1')) r) x),
+  row(29000.00::numeric, '9740', '33.6', 'true')::text,
+  'el precio por libra sale de la tarifa vigente del producto ($29.000 de la lista del alta): margen 9.740 (33,6 %)'
 );
 
 -- Merma acumulada: un lote de 20 kg en dos bultos; la segunda tostión recalcula ---------------------------------------------
@@ -205,6 +233,39 @@ select is(
   row(1, '8.000', 'Excelso', '19260')::text, 'el panel trae el lote empacado con sus kg y su costo por libra'
 );
 select is(cafe.costo_libra_panel(current_date + 1, current_date + 1), '[]'::jsonb, 'un día sin empaques: lista vacía');
+
+-- B-13: el empaque estampa el precio de ese momento; cambiar el precio no toca lo ya registrado --------------------------------------
+select is(
+  (select row(el.costo_bolsa, el.costo_etiqueta)::text from cafe.empaque_lineas el where el.proceso_id = (select (r ->> 'proceso_id')::uuid from res where k = 'L1_e')),
+  row(700.00, 200.00)::text, 'la línea del empaque guarda el costo de bolsa y etiqueta vigentes al registrarla'
+);
+select is(
+  (select (cafe.costo_insumos_empaque((select (r ->> 'proceso_id')::uuid from res where k = 'L1_e')) ->> 'total')::numeric),
+  14400::numeric, 'costo de insumos del empaque: 16 bolsas × (700 + 200) = $14.400'
+);
+select throws_ok(
+  $$ insert into cafe.insumo_precios (articulo_id, precio) values (pg_temp.aid('Bolsa 500 g'), 900) $$,
+  '42501', null, 'un operativo no fija precios de insumos'
+);
+reset role;
+insert into cafe.insumo_precios (tenant_id, articulo_id, precio)
+select a.tenant_id, a.id, 900 from public.articulos a
+ where a.tipo = 'insumo' and a.tenant_id = (select id from ids where clave = 'a') and a.atributos ->> 'clase' = 'bolsa' and a.atributos ->> 'presentacion_g' = '500';
+select tests.autenticar_como('operativo-a@costo.test');
+select is(cafe.costo_insumo('bolsa', 500), 900.00, 'el precio nuevo rige para los empaques que vengan');
+select is(
+  (select (cafe.costo_libra_lote(pg_temp.lid('L1')) ->> 'costo_libra')), '19260',
+  'el costo del lote empacado conserva el precio registrado en su empaque (no cambia con el precio nuevo)'
+);
+select is(
+  (select (cafe.costo_libra_lote(pg_temp.lid('L2'), 2500) ->> 'costo_empaque')), null,
+  '2.500 g sin precios de bolsa y etiqueta: el costo de empaque no se inventa'
+);
+reset role;
+select tests.autenticar_como('owner-b@costo.test');
+select is((select count(*) from cafe.insumo_precios), 0::bigint, 'otro cliente no ve los precios de insumos');
+reset role;
+select tests.autenticar_como('operativo-a@costo.test');
 
 -- Aislamiento y módulo -------------------------------------------------------------------------------------------------------
 reset role;

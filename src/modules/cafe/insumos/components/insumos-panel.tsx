@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Pencil, PackagePlus, Plus, Power, PowerOff, ScrollText, SlidersHorizontal } from "lucide-react";
+import { CircleDollarSign, Pencil, PackagePlus, Plus, Power, PowerOff, ScrollText, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { DeleteConfirmationDialog } from "@/components/shared/delete-confirmation-dialog";
 import { EntityModal } from "@/components/shared/entity-modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatCOP } from "@/modules/core/formato/numeros";
 import { StockBadge } from "@/modules/core/inventario/components/stock-badge";
 import { cn } from "@/lib/utils";
 import { desactivarInsumo, reactivarInsumo } from "../actions/insumos.actions";
@@ -18,6 +19,7 @@ import { AjusteInsumoForm } from "./ajuste-insumo-form";
 import { CompraInsumoForm } from "./compra-insumo-form";
 import { InsumoForm } from "./insumo-form";
 import { KardexInsumoDialog } from "./kardex-insumo-dialog";
+import { PrecioInsumoForm } from "./precio-insumo-form";
 
 interface InsumosPanelProps {
   insumos: InsumoEmpaque[];
@@ -32,7 +34,7 @@ interface InsumosPanelProps {
 
 type Dialogo =
   | { tipo: "nuevo" }
-  | { tipo: "compra" | "editar" | "ajuste" | "desactivar"; insumo: InsumoEmpaque }
+  | { tipo: "compra" | "editar" | "ajuste" | "desactivar" | "precio"; insumo: InsumoEmpaque }
   | null;
 
 const BOTON = "inline-flex h-11 w-11 items-center justify-center rounded-md text-gray-400 transition-colors sm:h-9 sm:w-9";
@@ -93,6 +95,7 @@ export function InsumosPanel({ insumos, puedeComprar, puedeAdministrar, fechaHoy
                   <TableHead>Nombre</TableHead>
                   <TableHead>Presentación</TableHead>
                   <TableHead>Stock</TableHead>
+                  <TableHead className="text-right">Precio</TableHead>
                   <TableHead className="text-right">Mínimo</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
@@ -105,6 +108,9 @@ export function InsumosPanel({ insumos, puedeComprar, puedeAdministrar, fechaHoy
                     <TableCell>{etiquetaPresentacion(insumo.presentacionG)}</TableCell>
                     <TableCell>
                       <StockBadge stock={insumo.stock} stockMinimo={insumo.stock_minimo} unidad={insumo.unidad} />
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {insumo.precio === null ? <span className="text-amber-700">Sin precio</span> : formatCOP(insumo.precio)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {insumo.stock_minimo === null ? "—" : insumo.stock_minimo.toLocaleString("es-CO")}
@@ -145,6 +151,14 @@ export function InsumosPanel({ insumos, puedeComprar, puedeAdministrar, fechaHoy
                               aria-label={`Editar ${insumo.nombre}`}
                             >
                               <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => setDialogo({ tipo: "precio", insumo })}
+                              className={cn(BOTON, "hover:bg-green-50 hover:text-green-700")}
+                              title="Fijar precio"
+                              aria-label={`Fijar el precio de ${insumo.nombre}`}
+                            >
+                              <CircleDollarSign className="h-4 w-4" />
                             </button>
                             {insumo.activo && (
                               <button
@@ -195,6 +209,9 @@ export function InsumosPanel({ insumos, puedeComprar, puedeAdministrar, fechaHoy
       </EntityModal>
       <EntityModal open={dialogo?.tipo === "compra"} onClose={cerrar} title="Registrar compra">
         {dialogo?.tipo === "compra" && <CompraInsumoForm insumo={dialogo.insumo} fechaHoy={fechaHoy} onSuccess={cerrar} />}
+      </EntityModal>
+      <EntityModal open={dialogo?.tipo === "precio"} onClose={cerrar} title="Fijar precio">
+        {dialogo?.tipo === "precio" && <PrecioInsumoForm insumo={dialogo.insumo} onSuccess={cerrar} />}
       </EntityModal>
       <EntityModal open={dialogo?.tipo === "ajuste"} onClose={cerrar} title="Ajustar stock">
         {dialogo?.tipo === "ajuste" && <AjusteInsumoForm insumo={dialogo.insumo} onSuccess={cerrar} />}

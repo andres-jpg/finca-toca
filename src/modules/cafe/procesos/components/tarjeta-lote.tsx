@@ -28,7 +28,7 @@ const ETIQUETA_CHIP = { hecho: "hecho", actual: "pendiente", futuro: "después" 
 export function TarjetaLote({ entrada, zonaHoraria, hoy }: { entrada: EntradaTablero; zonaHoraria: string; hoy: string }) {
   const { tarjeta: lote, columna, pendientes, total } = entrada;
   const porEntregar = columna === "entrega";
-  const parcial = !porEntregar && pendientes < total;
+  const parcial = !porEntregar && pendientes < total - 0.05;
   const alertas = [...lote.alertasCalidad.map((a) => ETIQUETA_ALERTA_CALIDAD[a] ?? a), ...(lote.tieneDesvio ? ["Merma desviada"] : [])];
   const href = porEntregar ? rutaEntregar(lote.id) : `/dashboard/cafe/planta/${lote.id}`;
   const dias = porEntregar && lote.listoDesde ? diasEntre(lote.listoDesde, hoy) : null;
@@ -44,7 +44,7 @@ export function TarjetaLote({ entrada, zonaHoraria, hoy }: { entrada: EntradaTab
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <LineaBadge linea={lote.linea} />
-        {parcial && <span className="text-xs font-medium text-gray-600 tabular-nums">{pendientes} de {total} bultos</span>}
+        {parcial && <span className="text-xs font-medium text-gray-600 tabular-nums">{formatearPeso(pendientes)} kg por procesar · de {formatearPeso(total)} kg</span>}
       </div>
 
       <div className="min-w-0">
@@ -70,7 +70,7 @@ export function TarjetaLote({ entrada, zonaHoraria, hoy }: { entrada: EntradaTab
       )}
 
       <p className="text-xs text-gray-500">
-        Recibido {fechaCorta(lote.fechaRecepcion)} · llegó {horaLlegada(lote.llegadaEn, zonaHoraria)} · {lote.numBultos} {lote.numBultos === 1 ? "bulto" : "bultos"}
+        Recibido {fechaCorta(lote.fechaRecepcion)} · llegó {horaLlegada(lote.llegadaEn, zonaHoraria)}
       </p>
 
       {chips.length > 0 && (

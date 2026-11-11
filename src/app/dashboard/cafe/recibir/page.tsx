@@ -1,11 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireSesion } from "@/modules/core/auth/guards";
-import { getParametro } from "@/modules/core/parametros/queries/parametros.queries";
 import { requireModuloPagina } from "@/modules/core/tenants/tenant.guards";
 import { CompraForm } from "@/modules/cafe/compras/components/compra-form";
 import { fechaHoyEnZona } from "@/modules/cafe/insumos/lib/insumos";
-import { PARAMETROS_CAFE } from "@/modules/cafe/parametros";
 import { RecepcionForm } from "@/modules/cafe/recepciones/components/recepcion-form";
 import { getConfigRecepcion } from "@/modules/cafe/recepciones/queries/recepcion.queries";
 import { TipoIngresoSelector, tipoIngresoDesdeQuery } from "@/modules/cafe/recepciones/components/tipo-ingreso-selector";
@@ -29,7 +27,7 @@ export default async function RecibirCafePage({ searchParams }: { searchParams: 
 
   let formulario: React.ReactNode = null;
   if (tipo === "marca_propia") {
-    const [tipos, pesoBultoKg] = await Promise.all([listarTiposCafe(), getParametro(PARAMETROS_CAFE.pesoBultoKg)]);
+    const tipos = await listarTiposCafe();
     const activos = tipos.filter((t) => t.activo).map((t) => ({ id: t.id, nombre: t.nombre }));
     formulario =
       activos.length === 0 ? (
@@ -48,10 +46,10 @@ export default async function RecibirCafePage({ searchParams }: { searchParams: 
           )}
         </p>
       ) : (
-        <CompraForm tipos={activos} pesoBultoKg={pesoBultoKg} fechaHoy={fechaHoy} />
+        <CompraForm tipos={activos} fechaHoy={fechaHoy} />
       );
   } else if (tipo === "servicio") {
-    const config = await getConfigRecepcion();
+    const config = await getConfigRecepcion(fechaHoy);
     formulario = <RecepcionForm config={config} fechaHoy={fechaHoy} puedeAdministrar={puedeAdministrar} />;
   }
 

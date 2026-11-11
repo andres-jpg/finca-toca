@@ -13,7 +13,7 @@ test.describe("operativo", () => {
 
   test("no puede tostar antes de trillar: la opción sale deshabilitada y dice por qué @tablet", async ({ page }) => {
     // Lote de servicio con trilla + tostión recién recibido (sin ningún proceso).
-    const lote = await crearRecepcion({ servicios: ["trilla", "tostion"], bultos: 2, pesoKg: 125 });
+    const lote = await crearRecepcion({ servicios: ["trilla", "tostion"], pesoKg: 125 });
     await abrirPlanta(page, lote.codigo);
 
     const pasos = page.getByRole("radiogroup", { name: "Paso a registrar" });
@@ -47,7 +47,7 @@ test.describe("operativo", () => {
   });
 
   test("entrega pero no anula la remisión", async ({ page }) => {
-    const lote = await crearRecepcion({ servicios: ["trilla"], bultos: 1, pesoKg: 62.5 });
+    const lote = await crearRecepcion({ servicios: ["trilla"], pesoKg: 62.5 });
     await registrarTrilla(lote, 62.5, 50.625);
     await irA(page, `/dashboard/cafe/planta/entregar?lote=${lote.id}`);
     await page.getByLabel("Nombre de quien recibe").fill("Luis Mora");
@@ -66,7 +66,7 @@ test.describe("gerencia", () => {
   test.use(usarRol("cafeGerencia"));
 
   test("consulta sin ver Planta ni botones de acción, y exporta los lotes a Excel", async ({ page }) => {
-    const lote = await crearCompra({ bultos: 2 });
+    const lote = await crearCompra();
 
     // Menú: ve lo que consulta, no la Planta ni los maestros.
     await irA(page, "/dashboard/cafe/lotes");

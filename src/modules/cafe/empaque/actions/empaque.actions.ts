@@ -72,8 +72,11 @@ export async function registrarEmpaque(input: EmpaqueFormInput): Promise<Result<
   const r = await callRpc<"cafe", "registrar_empaque", ResultadoEmpaque>("cafe", "registrar_empaque", {
     p: payloadEmpaque(parsed.data),
   });
-  if (r.ok) revalidarEmpaque(parsed.data.loteId);
-  return r;
+  if (!r.ok) return r;
+  revalidarEmpaque(parsed.data.loteId);
+  // El costo de insumos queda estampado en las líneas al registrarlas (precio vigente de ese momento): se lee para el cierre.
+  const costo = await callRpc<"cafe", "costo_insumos_empaque", { total: number; completo: boolean; aplica: boolean }>("cafe", "costo_insumos_empaque", { p_proceso: r.data.proceso_id });
+  return { ok: true, data: { ...r.data, costo_insumos: costo.ok ? costo.data : null } };
 }
 
 /**

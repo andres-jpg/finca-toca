@@ -1,18 +1,18 @@
 import { cn } from "@/lib/utils";
-import { formatCOP, formatKg, formatPct } from "@/modules/core/formato/numeros";
-import { getProveedoresMarcaPropia, getReferenciasPanel } from "../queries/panel.queries";
+import { formatCOP, formatPct } from "@/modules/core/formato/numeros";
+import { DEFINICIONES } from "../lib/kpis";
+import { kgTexto } from "../lib/formato";
 import { describirPeriodo } from "../lib/periodo";
-import { esDesvio } from "../../procesos/lib/merma";
+import { estadoProveedor } from "../lib/proveedores";
+import { getProveedoresMarcaPropia, getRangoHumedad, getReferenciasPanel } from "../queries/panel.queries";
 import { InfoDefinicion } from "./info-definicion";
 
-const DEFINICION =
-  "Por proveedor, de los lotes de marca propia recibidos en el periodo (sin anulados): precio por kg promedio ponderado por kg, humedad promedio ponderada de los lotes con humedad medida, merma de tostión ponderada (kg de merma ÷ kg de entrada de sus tostiones) y costo por kg tostado = precio por kg ÷ (1 − merma de tostión). Sin tostión no hay merma ni costo por kg tostado: no se inventa. No incluye bolsa, etiqueta, energía ni mano de obra.";
-
 const TH = "px-3 py-2 text-right font-semibold";
+const AMBAR = "font-semibold text-amber-700";
 
-/** Tabla «Proveedores de marca propia» (A-19). Con la línea de servicios no se pinta: el café de terceros no tiene proveedor. */
+/** «Proveedores de marca propia»: comprado (kg y $), precio/kg, humedad y merma de tostión con semáforo (gris en rango, ámbar fuera). */
 export async function SeccionProveedores({ desde, hasta }: { desde: string; hasta: string }) {
-  const [proveedores, refs] = await Promise.all([getProveedoresMarcaPropia(desde, hasta), getReferenciasPanel()]);
+  const [proveedores, refs, humedad] = await Promise.all([getProveedoresMarcaPropia(desde, hasta), getReferenciasPanel(), getRangoHumedad()]);
 
   return (
     <section className="space-y-3" aria-labelledby="proveedores-titulo">
@@ -21,9 +21,12 @@ export async function SeccionProveedores({ desde, hasta }: { desde: string; hast
           <h2 id="proveedores-titulo" className="text-lg font-semibold tracking-tight text-gray-800">
             Proveedores de marca propia
           </h2>
-          <p className="text-sm text-gray-500">Lotes recibidos del {describirPeriodo(desde, hasta)}.</p>
+          <p className="text-sm text-gray-500">
+            Lotes recibidos del {describirPeriodo(desde, hasta)}. Ámbar: humedad fuera de {humedad.min}–{humedad.max} %
+            {refs.tostion !== null ? ` o merma fuera de ${formatPct(refs.tostion)} ± ${refs.toleranciaPts} pts` : ""}.
+          </p>
         </div>
-        <InfoDefinicion titulo="Proveedores de marca propia" texto={DEFINICION} />
+        <InfoDefinicion titulo={DEFINICIONES.proveedores.titulo} texto={DEFINICIONES.proveedores.texto} />
       </div>
       {proveedores.length === 0 ? (
         <p role="status" className="rounded-md border border-stone-200 bg-white px-3 py-3 text-sm text-gray-600">
@@ -38,7 +41,7 @@ export async function SeccionProveedores({ desde, hasta }: { desde: string; hast
                   Proveedor
                 </th>
                 <th scope="col" className={TH}>
-                  Recibido
+                  Comprado
                 </th>
                 <th scope="col" className={TH}>
                   Precio / kg
@@ -49,28 +52,30 @@ export async function SeccionProveedores({ desde, hasta }: { desde: string; hast
                 <th scope="col" className={TH}>
                   Merma tostión
                 </th>
-                <th scope="col" className={TH}>
-                  Costo / kg tostado
-                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
               {proveedores.map((p) => {
-                const fuera = p.mermaTostionPct !== null && esDesvio(p.mermaTostionPct, refs.tostion, refs.toleranciaPts);
+                const e = estadoProveedor(p, humedad, refs.tostion, refs.toleranciaPts);
                 return (
                   <tr key={p.terceroId ?? p.nombre}>
                     <th scope="row" className="px-3 py-2 text-left font-medium text-gray-800">
                       {p.nombre}
                       <span className="block text-xs font-normal text-gray-500">{p.lotes === 1 ? "1 lote" : `${p.lotes} lotes`}</span>
                     </th>
-                    <td className="px-3 py-2 text-right tabular-nums">{formatKg(p.kg)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{p.precioKg === null ? "—" : formatCOP(p.precioKg)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{formatPct(p.humedadPct)}</td>
-                    <td className={cn("px-3 py-2 text-right tabular-nums", fuera && "font-semibold text-amber-700")}>
-                      {formatPct(p.mermaTostionPct)}
-                      {fuera && <span className="block text-xs font-normal">fuera de la referencia</span>}
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {kgTexto(p.kg)}
+                      <span className="block text-xs text-gray-500">{formatCOP(p.valorCompra)}</span>
                     </td>
-                    <td className="px-3 py-2 text-right font-semibold tabular-nums">{p.costoKgTostado === null ? "—" : formatCOP(p.costoKgTostado)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{p.precioKg === null ? "—" : formatCOP(p.precioKg)}</td>
+                    <td className={cn("px-3 py-2 text-right tabular-nums", e.humedad === "fuera" && AMBAR)} data-estado={e.humedad ?? "sin_dato"}>
+                      {formatPct(p.humedadPct)}
+                      {e.humedad === "fuera" && <span className="block text-xs font-normal">fuera de rango</span>}
+                    </td>
+                    <td className={cn("px-3 py-2 text-right tabular-nums", e.merma === "fuera" && AMBAR)} data-estado={e.merma ?? "sin_dato"}>
+                      {formatPct(p.mermaTostionPct)}
+                      {e.merma === "fuera" && <span className="block text-xs font-normal">fuera de rango</span>}
+                    </td>
                   </tr>
                 );
               })}

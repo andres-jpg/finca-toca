@@ -17,9 +17,16 @@ describe("leerDetalle", () => {
       tarifaKg: 2200,
       valor: 891000,
       nivelTueste: "medio",
+      humedadPct: null,
+      densidadGl: null,
       incluido: false,
       pendiente: false,
     });
+  });
+
+  it("lee la humedad y la densidad de la trilla (B-04)", () => {
+    const [d] = leerDetalle([{ servicio: "trilla", kg_entrada: 250, kg_salida: 202.5, humedad_pct: "11.20", densidad_gl: 720, incluido: false, pendiente: false }]);
+    expect(d).toMatchObject({ humedadPct: 11.2, densidadGl: 720 });
   });
 
   it("un servicio pendiente trae sus cifras en null", () => {

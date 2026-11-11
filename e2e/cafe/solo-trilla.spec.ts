@@ -7,11 +7,11 @@ test.use(usarRol("cafeAdmin"));
 // el sistema avisa en pantalla (y marca el proceso para revisión) pero no impide guardar; después se entrega con remisión.
 
 test("solo trilla con desvío de merma y remisión", async ({ page }) => {
-  // --- 1. Recepción de 2 bultos (125 kg) solo para trilla: dentro de rangos, sin alertas de calidad -------------------------
+  // --- 1. Recepción de 125 kg solo para trilla: dentro de rangos, sin alertas de calidad -------------------------
   await irA(page, "/dashboard/cafe/recibir?tipo=servicios");
   await page.getByText("Selecciona o crea el cliente").click();
   await page.getByRole("option", { name: /Cliente E2E/ }).click();
-  await page.getByLabel("Número de bultos").fill("2");
+  await page.getByLabel("Peso recibido (kg)").fill("125");
   await page.getByLabel("Humedad (%)").fill("11");
   await page.getByLabel("Densidad").fill("680");
   await page.getByRole("button", { name: "Trilla", exact: true }).click();
@@ -21,8 +21,10 @@ test("solo trilla con desvío de merma y remisión", async ({ page }) => {
 
   // --- 2. Trilla 125 → 93,75 kg: merma 25 % -------------------------------------------------------------------------------------
   await abrirPlanta(page, codigo!);
-  await expect(page.getByLabel("Peso de entrada (kg)")).toHaveValue("125");
-  await page.getByLabel("Peso de salida (kg)").fill("93,75");
+  await expect(page.getByLabel("Entrada: pergamino del lote (kg)")).toHaveValue("125");
+  await page.getByLabel("Peso final (kg)").fill("93,75");
+  await page.getByLabel("Humedad (%)").fill("11,2");
+  await page.getByLabel("Densidad (g/L)").fill("720");
   const merma = page.getByRole("region", { name: "Merma" });
   await expect(merma).toContainText(/25(,0)? %/);
   // El aviso de desvío cita la referencia y deja claro que se puede guardar igualmente.

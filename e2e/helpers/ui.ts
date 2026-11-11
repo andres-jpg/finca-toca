@@ -49,21 +49,6 @@ export function conComa(n: number, decimales = 3): string {
   return n.toFixed(decimales).replace(/0+$/, "").replace(/[.,]$/, "").replace(".", ",");
 }
 
-/**
- * Rellena la salida de cada bache de la tostión con `entrada × (1 − merma%)`. Los baches deben estar ya sugeridos
- * (botón «Sugerir baches»). Devuelve cuántos había.
- */
-export async function llenarSalidaDeBaches(page: Page, mermaPct = 18): Promise<number> {
-  const entradas = page.getByLabel(/^Bache \d+, kg de entrada$/);
-  const n = await entradas.count();
-  expect(n, "debe haber baches sugeridos").toBeGreaterThan(0);
-  for (let i = 0; i < n; i++) {
-    const entrada = await numeroDelCampo(entradas.nth(i));
-    const salida = Math.round(entrada * (100 - mermaPct) * 10) / 1000; // gramos enteros
-    await page.getByLabel(`Bache ${i + 1}, kg de salida`, { exact: true }).fill(conComa(salida));
-  }
-  return n;
-}
 
 /**
  * Sigue un enlace cargando su destino (carga completa) en vez de pulsarlo. Un clic sobre un `<Link>` de Next justo después de

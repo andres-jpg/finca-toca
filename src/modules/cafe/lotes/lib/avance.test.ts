@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { calcularAvance, textoAvance, textoBultos, type EtapaAvance, type LoteAvance } from "./avance";
+import { calcularAvance, textoAvance, textoKg, type EtapaAvance, type LoteAvance } from "./avance";
 
+// kg procesados / kg base (p. ej. 118 de 320 kg tostados).
 const etapa = (tipo: EtapaAvance["tipo"], procesados: number, total: number): EtapaAvance => ({
   tipo,
-  bultosProcesados: procesados,
-  bultosTotal: total,
+  kgBase: total,
+  kgProcesados: procesados,
+  kgPendientes: total - procesados,
   completo: procesados === total,
   parcial: procesados > 0 && procesados < total,
 });
@@ -25,10 +27,10 @@ const marcaPropia: LoteAvance = {
   serviciosRequeridos: ["tostion", "empaque"],
 };
 
-describe("textoBultos", () => {
-  it("singular y plural", () => {
-    expect(textoBultos(4, 6)).toBe("4/6 bultos");
-    expect(textoBultos(1, 1)).toBe("1/1 bulto");
+describe("textoKg", () => {
+  it("«202,0 kg por tostar · de 320,0 kg»", () => {
+    expect(textoKg("tostion", 202, 320)).toBe("202,0 kg por tostar · de 320,0 kg");
+    expect(textoKg("empaque", 54, 118)).toBe("54,0 kg por empacar · de 118,0 kg");
   });
 });
 
@@ -45,7 +47,7 @@ describe("calcularAvance · servicio", () => {
   it("un paso a medias no sube el «n de m» pero se dice aparte", () => {
     const a = calcularAvance(maquila(1), [etapa("trilla", 8, 8), etapa("tostion", 2, 8)]);
     expect(a.texto).toBe("1 de 4");
-    expect(a.detalle).toBe("Tostión 2/8 bultos");
+    expect(a.detalle).toBe("Tostión · 6,0 kg por tostar · de 8,0 kg");
   });
   it("sin texto de la vista, lo arma", () => {
     expect(textoAvance({ ...maquila(2), avanceTexto: null }, [])).toBe("2 de 4");
@@ -56,14 +58,14 @@ describe("calcularAvance · marca propia", () => {
   it("sin procesos: sin procesar", () => {
     expect(calcularAvance(marcaPropia, [])).toEqual({ texto: "Sin procesar", fraccion: 0, detalle: null });
   });
-  it("«Tostado 4/6 bultos» con la barra al 4/6", () => {
-    const a = calcularAvance(marcaPropia, [etapa("tostion", 4, 6)]);
-    expect(a.texto).toBe("Tostado 4/6 bultos");
-    expect(a.fraccion).toBeCloseTo(4 / 6);
+  it("un lote de 320,0 kg con 118,0 kg tostados muestra «202,0 kg por tostar»", () => {
+    const a = calcularAvance(marcaPropia, [etapa("tostion", 118, 320)]);
+    expect(a.texto).toBe("202,0 kg por tostar · de 320,0 kg");
+    expect(a.fraccion).toBeCloseTo(118 / 320);
   });
   it("cuenta el paso más avanzado", () => {
-    expect(textoAvance(marcaPropia, [etapa("tostion", 6, 6), etapa("molienda", 3, 6)])).toBe("Molido 3/6 bultos");
-    expect(textoAvance(marcaPropia, [etapa("tostion", 6, 6), etapa("empaque", 6, 6)])).toBe("Empacado 6/6 bultos");
+    expect(textoAvance(marcaPropia, [etapa("tostion", 320, 320), etapa("molienda", 100, 320)])).toBe("220,0 kg por moler · de 320,0 kg");
+    expect(textoAvance(marcaPropia, [etapa("tostion", 320, 320), etapa("empaque", 320, 320)])).toBe("Empacado · 320,0 kg");
   });
 });
 

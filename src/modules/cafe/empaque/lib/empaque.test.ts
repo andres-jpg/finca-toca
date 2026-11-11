@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  costoInsumosEmpaque,
   enteroConMiles,
   faltantesDeInsumo,
   kgPorUnidades,
@@ -11,10 +12,9 @@ import {
   destinosDeLinea,
   DESTINOS_DIFERENCIA,
   ETIQUETA_DESTINO,
-  resumenEmpaque,
-  cuadreMolienda,
+  avisoMolido,
+  cierreEmpaque,
   kgDeForma,
-  llegaConMolienda,
 } from "./empaque";
 
 // Los casos numéricos son los de `92_cafe_empaque*.test.sql` (81 kg → 120 × 500 g + 8 × 2.500 g) y los de FIN-119.
@@ -43,46 +43,60 @@ describe("totalKgEmpacados", () => {
   });
 });
 
-describe("resumenEmpaque", () => {
-  const lineas = [{ presentacionG: 500, unidades: 120 }, { presentacionG: 2500, unidades: 8 }];
+describe("cierreEmpaque (B-08)", () => {
+  // MP-2026-0007 tanda 2: entran 54,0 kg; 500 g: 48 grano + 20 molido; 2.500 g: 4 grano + 0 molido = 44,0 kg; báscula 44,3.
+  const tanda2 = [
+    { presentacionG: 500, unidades: 48, forma: "grano" as const },
+    { presentacionG: 500, unidades: 20, forma: "molido" as const },
+    { presentacionG: 2500, unidades: 4, forma: "grano" as const },
+  ];
 
-  it("81 kg llegan y 80 kg van en bolsas: sobra 1 kg y hay que decir adónde fue", () => {
-    expect(resumenEmpaque(81, lineas)).toEqual({ llegaKg: 81, usadoKg: 80, diferenciaKg: 1, haySobrante: true, supera: false, excesoKg: 0 });
+  it("tanda 2: en bolsas 44,0 kg, sobrante 0,3 y merma de tostión 18,0 % (54,0 → 44,3)", () => {
+    const c = cierreEmpaque({ entradaKg: 54, lineas: tanda2, basculaKg: 44.3 });
+    expect(c).toMatchObject({ enBolsasKg: 44, sobranteKg: 0.3, supera: false, mermaKg: 9.7, mermaPct: 17.963 });
+    expect(Math.round((c.mermaPct ?? 0) * 10) / 10).toBe(18);
   });
 
-  it("el caso del ticket: 145,6 kg con 12 × 10 kg + 5 × 5 kg → usado 145,0 y diferencia 0,6", () => {
-    const r = resumenEmpaque(145.6, [{ presentacionG: 10_000, unidades: 12 }, { presentacionG: 5000, unidades: 5 }]);
-    expect(r).toMatchObject({ usadoKg: 145, diferenciaKg: 0.6, haySobrante: true, supera: false });
+  it("acumulado con la tanda 1 (64,0 → 52,4): 118,0 → 96,7 kg · 18,1 %", () => {
+    const c = cierreEmpaque({ entradaKg: 54, lineas: tanda2, basculaKg: 44.3, acumuladoPrevio: { entradaKg: 64, basculaKg: 52.4 } });
+    expect(c.acumulado).toMatchObject({ entradaKg: 118, basculaKg: 96.7 });
+    expect(Math.round((c.acumulado?.mermaPct ?? 0) * 10) / 10).toBe(18.1);
   });
 
-  it("empacar todo lo que llega: diferencia cero y nada que clasificar", () => {
-    expect(resumenEmpaque(80, lineas)).toMatchObject({ diferenciaKg: 0, haySobrante: false, supera: false });
+  it("bolsas > báscula: no se puede guardar", () => {
+    const c = cierreEmpaque({ entradaKg: 54, lineas: tanda2, basculaKg: 43 });
+    expect(c.supera).toBe(true);
+    expect(c.sobranteKg).toBe(-1);
   });
 
-  it("170 × 500 g (85 kg) con 81 kg: las bolsas superan por 4 kg", () => {
-    expect(resumenEmpaque(81, [{ presentacionG: 500, unidades: 170 }])).toEqual({
-      llegaKg: 81,
-      usadoKg: 85,
-      diferenciaKg: -4,
-      haySobrante: false,
-      supera: true,
-      excesoKg: 4,
-    });
+  it("lo incluido de tandas anteriores va a las bolsas pero no altera la merma de la tanda", () => {
+    const c = cierreEmpaque({ entradaKg: 54, lineas: tanda2, basculaKg: 44.3, incluidoKg: 0.4 });
+    expect(c).toMatchObject({ enBolsasKg: 44, sobranteKg: 0.7, supera: false, mermaPct: 17.963 });
+    // incluir lo necesario para empacar de más no es «supera»
+    expect(cierreEmpaque({ entradaKg: 54, lineas: tanda2, basculaKg: 43.6, incluidoKg: 0.4 }).supera).toBe(false);
   });
 
-  it("sin café que llegue o con un peso inválido no hay resumen", () => {
-    expect(resumenEmpaque(null, lineas)).toBeNull();
-    expect(resumenEmpaque(0, lineas)).toBeNull();
-    expect(resumenEmpaque(Number.NaN, lineas)).toBeNull();
+  it("sin báscula válida no hay cierre", () => {
+    expect(cierreEmpaque({ entradaKg: 54, lineas: tanda2, basculaKg: null })).toMatchObject({ mermaPct: null, supera: false, acumulado: null });
+    expect(cierreEmpaque({ entradaKg: 0, lineas: tanda2, basculaKg: 10 }).mermaPct).toBeNull();
   });
 
-  it("sin líneas todo el café es diferencia", () => {
-    expect(resumenEmpaque(81, [])).toMatchObject({ usadoKg: 0, diferenciaKg: 81, haySobrante: true });
+  it("el caso de terceros: 145,6 kg con 12 × 10 kg + 5 × 5 kg → en bolsas 145,0 y sobrante 0,6", () => {
+    const c = cierreEmpaque({ entradaKg: 145.6, lineas: [{ presentacionG: 10_000, unidades: 12 }, { presentacionG: 5000, unidades: 5 }], basculaKg: 145.6 });
+    expect(c).toMatchObject({ enBolsasKg: 145, sobranteKg: 0.6 });
+  });
+});
+
+describe("avisoMolido", () => {
+  it("«Molido empacado: 10,0 kg · solicitado 10,0 kg»; sin molienda no hay aviso", () => {
+    expect(avisoMolido(10, 10)).toBe("Molido empacado: 10,0 kg · solicitado 10,0 kg");
+    expect(avisoMolido(9.5, 10)).toBe("Molido empacado: 9,5 kg · solicitado 10,0 kg");
+    expect(avisoMolido(10, null)).toBeNull();
   });
 });
 
 describe("destinosDeLinea", () => {
-  it("marca propia: granel, muestra y pérdida; terceros: suelto, muestra y pérdida", () => {
+  it("reapertura (marca propia): granel, muestra y pérdida; terceros: suelto, muestra y pérdida", () => {
     expect(destinosDeLinea("marca_propia")).toEqual(["granel", "muestra", "perdida"]);
     expect(destinosDeLinea("servicio")).toEqual(["suelto", "muestra", "perdida"]);
   });
@@ -182,7 +196,7 @@ describe("formato", () => {
   });
 });
 
-describe("molienda junto con el empaque (A-02)", () => {
+describe("kilos por forma", () => {
   const lineas = [
     { presentacionG: 500, unidades: 40, forma: "grano" as const },
     { presentacionG: 2500, unidades: 8, forma: "molido" as const },
@@ -193,22 +207,20 @@ describe("molienda junto con el empaque (A-02)", () => {
     expect(kgDeForma(lineas, "molido")).toBe(20);
     expect(kgDeForma([{ presentacionG: 500, unidades: 2 }], "grano")).toBe(1);
   });
+});
 
-  it("a empaque llega lo que no se molió más lo que salió de la molienda (igual que la base)", () => {
-    expect(llegaConMolienda(81, { entradaKg: 22, salidaKg: 20.4 })).toBe(79.4);
-    const r = resumenEmpaque(llegaConMolienda(81, { entradaKg: 22, salidaKg: 20.4 }), lineas);
-    expect(r).toMatchObject({ llegaKg: 79.4, usadoKg: 40, diferenciaKg: 39.4, haySobrante: true, supera: false });
+describe("costoInsumosEmpaque · B-13", () => {
+  it("tanda 2 de MP-2026-0007: $123.040", () => {
+    const r = costoInsumosEmpaque([
+      { unidades: 68, bolsaPrecio: 1200, etiquetaPrecio: 370 },
+      { unidades: 4, bolsaPrecio: 3700, etiquetaPrecio: 370 },
+    ]);
+    expect(r).toEqual({ total: 123040, completo: true });
   });
-
-  it("lo molido en bolsas no puede pasar de lo que salió de la molienda, ni el grano de lo no molido", () => {
-    expect(cuadreMolienda(81, { entradaKg: 22, salidaKg: 20.4 }, lineas)).toMatchObject({ molidoSupera: false, granoSupera: false, sinMolerKg: 59 });
-    expect(cuadreMolienda(81, { entradaKg: 22, salidaKg: 10 }, lineas)?.molidoSupera).toBe(true);
-    expect(cuadreMolienda(81, { entradaKg: 70, salidaKg: 60 }, lineas)?.granoSupera).toBe(true);
+  it("una presentación sin precio no se inventa: total parcial y completo=false", () => {
+    expect(costoInsumosEmpaque([{ unidades: 10, bolsaPrecio: 1200, etiquetaPrecio: null }, { unidades: 2, bolsaPrecio: 100, etiquetaPrecio: 50 }])).toEqual({ total: 300, completo: false });
   });
-
-  it("sin molienda válida no hay cuadre", () => {
-    expect(cuadreMolienda(81, null, lineas)).toBeNull();
-    expect(cuadreMolienda(81, { entradaKg: 22, salidaKg: 30 }, lineas)).toBeNull();
-    expect(cuadreMolienda(81, { entradaKg: 0, salidaKg: 0 }, lineas)).toBeNull();
+  it("sin unidades no cuenta", () => {
+    expect(costoInsumosEmpaque([{ unidades: 0, bolsaPrecio: null, etiquetaPrecio: null }])).toEqual({ total: 0, completo: true });
   });
 });

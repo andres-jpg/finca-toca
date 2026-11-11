@@ -81,11 +81,11 @@ insert into public.tarifas (tenant_id, concepto, valor, unidad, vigente_desde)
 select (select id from ids where clave = 'a'), x.concepto, x.valor, 'kg', timestamptz '2000-01-01'
   from (values ('cafe.trilla', 1400), ('cafe.tostion', 2200), ('cafe.molienda', 1000)) as x(concepto, valor);
 
--- Saldo inicial de producto terminado (como lo cargará CO-37, ref `cafe.arranque`): Consumo 500 g y Excelso 500 g = 10.
+-- Saldo inicial de producto terminado (como lo cargará CO-37, ref `cafe.arranque`): Consumo 500 g y Excelso 500 g = 10 (en A y en B: desde B-11 no se vende lo que no hay).
 insert into public.movimientos_inventario (tenant_id, articulo_id, cantidad, motivo, ref_tipo)
 select a.tenant_id, a.id, 10, 'saldo_inicial', 'cafe.arranque'
   from public.articulos a
- where a.tenant_id = (select id from ids where clave = 'a') and a.tipo = 'producto_terminado'
+ where a.tenant_id in (select id from ids where clave in ('a', 'b')) and a.tipo = 'producto_terminado'
    and a.nombre in ('Consumo 500 g', 'Excelso 500 g');
 
 create temp table res (k text primary key, r jsonb);
@@ -99,6 +99,14 @@ create or replace function pg_temp.tid(p_clave text) returns uuid language sql a
 grant execute on function pg_temp.tid(text) to authenticated;
 create or replace function pg_temp.lid(p_k text) returns uuid language sql as $$ select (r ->> 'id')::uuid from res where k = p_k $$;
 grant execute on function pg_temp.lid(text) to authenticated;
+
+-- Peso en báscula de la tanda: lo que dejó la tostión abierta del lote (su salida, o su entrada si aún no la tiene).
+create or replace function pg_temp.tostado(p_k text) returns numeric language sql as $$
+  select sum(coalesce(t.peso_salida_kg, t.peso_entrada_kg)) from cafe.procesos t
+   where t.lote_id = pg_temp.lid(p_k) and t.tipo = 'tostion' and t.anulado_at is null
+     and not exists (select 1 from cafe.procesos e where e.origen_proceso_id = t.id and e.tipo = 'empaque' and e.anulado_at is null)
+$$;
+grant execute on function pg_temp.tostado(text) to authenticated;
 
 -- Recibe un café de cliente (servicio) en `p_fecha` y guarda el resultado bajo `p_k`.
 create or replace function pg_temp.recibir(p_k text, p_fecha text, p_peso numeric, p_n integer, p_servicios text[],
@@ -129,11 +137,35 @@ $$;
 grant execute on function pg_temp.barr(text) to authenticated;
 
 -- Proceso de TODOS los bultos del lote `p_k`; la fecha y los pesos van en `p_extra`.
+-- Los baches ya no llevan salida (B-05): estas pruebas parten de tostiones CON salida (la que antes pesaba cada bache), así que
+-- se fija aquí como lo haría el empaque de la tanda (SECURITY DEFINER de prueba, con la bandera de edición de `editar_lote`).
+create or replace function pg_temp.fijar_salida(p_proceso uuid, p_extra jsonb) returns void language plpgsql security definer set search_path = '' as $$
+declare v numeric;
+begin
+  select sum((b ->> 'peso_salida_kg')::numeric) into v from jsonb_array_elements(p_extra -> 'baches') b where b ? 'peso_salida_kg';
+  if v is null then return; end if;
+  perform set_config('cafe.edicion_lote', 'on', true);
+  update cafe.procesos set peso_salida_kg = v where id = p_proceso;
+  perform set_config('cafe.edicion_lote', 'off', true);
+end $$;
+grant execute on function pg_temp.fijar_salida(uuid, jsonb) to authenticated;
+
 create or replace function pg_temp.reg(p_res text, p_k text, p_tipo text, p_extra jsonb default '{}')
 returns void language plpgsql as $$
+declare v jsonb;
 begin
-  insert into res select p_res, cafe.registrar_proceso(
+  if p_tipo = 'empaque' then
+    -- El empaque de una tanda va por registrar_empaque (báscula + bolsas del cliente de peso libre).
+    v := cafe.registrar_empaque(jsonb_build_object('lote_id', pg_temp.lid(p_k), 'fecha', coalesce(p_extra ->> 'fecha', pg_temp.hoy()),
+           'peso_bascula_kg', pg_temp.tostado(p_k),
+           'lineas', jsonb_build_array(jsonb_build_object('presentacion_g', 1000, 'unidades', round((p_extra ->> 'peso_salida_kg')::numeric), 'bolsa_cliente', true))));
+    insert into res values (p_res, v);
+    return;
+  end if;
+  v := cafe.registrar_proceso(
     jsonb_build_object('lote_id', pg_temp.lid(p_k), 'tipo', p_tipo, 'fecha', pg_temp.hoy(), 'bultos', to_jsonb(pg_temp.barr(p_k))) || p_extra);
+  insert into res values (p_res, v);
+  if p_tipo = 'tostion' then perform pg_temp.fijar_salida((v ->> 'id')::uuid, p_extra); end if;
 end $$;
 grant execute on function pg_temp.reg(text, text, text, jsonb) to authenticated;
 
@@ -240,7 +272,7 @@ select pg_temp.reg('M1_tostion', 'M1', 'tostion', pg_temp.baches(100, 0.82) || '
 select pg_temp.reg('M3_tostion', 'M3', 'tostion', pg_temp.baches(20, 0.82) || '{"fecha": "2026-03-10", "nivel_tueste": "medio"}');
 -- Empaque de M3: 32 × 500 g = 16 kg de los 16,4 que salieron de la tostión.
 insert into res select 'M3_empaque', cafe.registrar_empaque(jsonb_build_object(
-  'lote_id', pg_temp.lid('M3'), 'fecha', '2026-03-10', 'bultos', to_jsonb(pg_temp.barr('M3')), 'diferencia_destino', 'granel',
+  'lote_id', pg_temp.lid('M3'), 'fecha', '2026-03-10', 'peso_bascula_kg', pg_temp.tostado('M3'),
   'lineas', jsonb_build_array(jsonb_build_object('presentacion_g', 500, 'unidades', 32))));
 
 -- Ventas: 03-09 una de $23.000; 03-10 el ejemplo de $98.000, una cortesía y una venta de $50.000 que se anula.
@@ -280,10 +312,10 @@ select is(pg_temp.j('kA', '{mermas,1}') - 'tipo',
   '{"procesos": 3, "kg_entrada": 525, "kg_salida": 430.4, "merma_kg": 94.6, "merma_pct": 18.019, "desvios": 0}'::jsonb,
   'tostión: 94,6 de 525 kg = 18,019 % PONDERADO (el promedio simple de los tres porcentajes daría 18,008)');
 select is(pg_temp.j('kA', '{mermas,2}') - 'tipo',
-  '{"procesos": 1, "kg_entrada": 332, "kg_salida": 330, "merma_kg": 2, "merma_pct": 0.602, "desvios": 0}'::jsonb, 'molienda: 2 de 332 kg');
+  '{"procesos": 1, "kg_entrada": 332, "kg_salida": 0, "merma_kg": 0, "merma_pct": null, "desvios": 0}'::jsonb, 'molienda: sin salida ni merma (B-07: no tiene merma)');
 select is(pg_temp.j('kA', '{mermas,3}') - 'tipo',
-  '{"procesos": 2, "kg_entrada": 346.4, "kg_salida": 346, "merma_kg": 0.4, "merma_pct": 0.115, "desvios": 0}'::jsonb,
-  'empaque: el de maquila (330→330) y el de marca propia (16,4→16): 0,4 de 346,4 kg');
+  '{"procesos": 2, "kg_entrada": 348.4, "kg_salida": 346, "merma_kg": 0, "merma_pct": null, "desvios": 0}'::jsonb,
+  'empaque: kilos del de maquila y del de marca propia, SIN merma (B-08: el empaque no tiene merma)');
 select is(pg_temp.j('kA', '{desvios}'), '1'::jsonb, 'procesos con desvío: solo la trilla de L3 (30 % contra 19 ± 3)');
 
 select is(pg_temp.j('kA', '{ingreso_marca_propia}'), '{"total": 121000, "ventas": 2, "cortesias": 1, "unidades_cortesia": 2}'::jsonb,
@@ -328,8 +360,8 @@ select is(pg_temp.j('kP', '{mermas,1}') - 'tipo',
   '{"procesos": 2, "kg_entrada": 120, "kg_salida": 98.4, "merma_kg": 21.6, "merma_pct": 18.000, "desvios": 0}'::jsonb,
   'marca propia: tostión de M1 y M3 (18 %)');
 select is(pg_temp.j('kP', '{mermas,3}') - 'tipo',
-  '{"procesos": 1, "kg_entrada": 16.4, "kg_salida": 16, "merma_kg": 0.4, "merma_pct": 2.439, "desvios": 0}'::jsonb,
-  'marca propia: empaque de M3 sin la maquila');
+  '{"procesos": 1, "kg_entrada": 16.4, "kg_salida": 16, "merma_kg": 0, "merma_pct": null, "desvios": 0}'::jsonb,
+  'marca propia: empaque de M3 sin la maquila, sin merma de empaque');
 
 -- Trilla.
 select is(pg_temp.j('kT', '{recibido}'), '[{"linea": "trilla", "kg": 350, "lotes": 3}]'::jsonb, 'trilla: solo recibe lo suyo');

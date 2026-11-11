@@ -84,20 +84,18 @@ describe("valorDelServicio", () => {
 });
 
 describe("textos del resultado", () => {
-  it("lote parcial: 2 de 6 bultos tostados", () => {
-    expect(textoEstadoLote("parcial", "0 de 2", { tipo: "tostion", procesados: 2, total: 6 })).toBe(
-      "Lote parcial: 2 de 6 bultos tostados",
-    );
+  it("lote parcial: quedan 202,0 kg por tostar", () => {
+    expect(textoEstadoLote("parcial", "0 de 2", { tipo: "tostion", pendienteKg: 202 })).toBe("Lote parcial: quedan 202,0 kg por tostar");
   });
 
   it("listo, en proceso y recibido", () => {
-    expect(textoEstadoLote("listo", "4 de 4", { tipo: "empaque", procesados: 8, total: 8 })).toBe("Lote listo: todos los pasos están completos");
-    expect(textoEstadoLote("en_proceso", "1 de 3", { tipo: "trilla", procesados: 8, total: 8 })).toBe("Lote en proceso: 1 de 3");
+    expect(textoEstadoLote("listo", "4 de 4", { tipo: "empaque", pendienteKg: 0 })).toBe("Lote listo: todos los pasos están completos");
+    expect(textoEstadoLote("en_proceso", "1 de 3", { tipo: "trilla", pendienteKg: 0 })).toBe("Lote en proceso: 1 de 3");
   });
 
-  it("textoProcesoRegistrado", () => {
-    expect(textoProcesoRegistrado("tostion", 18.025, 73)).toBe("Tostión registrada · merma 18,0 % (73,0 kg)");
-    expect(textoProcesoRegistrado("empaque", 0, 0)).toBe("Empaque registrado · merma 0,0 % (0,0 kg)");
+  it("textoProcesoRegistrado: la tostión no tiene merma hasta su empaque", () => {
+    expect(textoProcesoRegistrado("trilla", 19, 95)).toBe("Trilla registrada · merma 19,0 % (95,0 kg)");
+    expect(textoProcesoRegistrado("tostion", null, null, 54)).toBe("Tostión registrada · 54,0 kg");
   });
 });
 

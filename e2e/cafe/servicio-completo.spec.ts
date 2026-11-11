@@ -5,7 +5,6 @@ import {
   aviso,
   elegirTueste,
   irA,
-  llenarSalidaDeBaches,
   registrarPaso,
   textoDelAviso,
   NAVEGACION_LENTA,
@@ -22,12 +21,11 @@ test("servicio trilla + maquila: recepción con aviso de humedad, planta complet
   page,
   context,
 }) => {
-  // --- 1. Recepción: 500 kg, 8 bultos, humedad 13 % (rango 10–12 %) ---------------------------------------------------
+  // --- 1. Recepción: 500 kg, humedad 13 % (rango 10–12 %) ---------------------------------------------------
   await irA(page, "/dashboard/cafe/recibir?tipo=servicios");
   await page.getByText("Selecciona o crea el cliente").click();
   await page.getByRole("option", { name: /Cliente E2E/ }).click();
-  await page.getByLabel("Número de bultos").fill("8"); // 8 × 62,5 kg = 500 kg
-  await expect(page.getByLabel("Peso total (kg)")).toHaveValue("500");
+  await page.getByLabel("Peso recibido (kg)").fill("500");
   await page.getByLabel("Humedad (%)").fill("13");
   await expect(page.getByRole("status").filter({ hasText: "Humedad 13 % fuera del rango 10–12 %" })).toContainText(
     "Puedes guardar igualmente",
@@ -50,8 +48,8 @@ test("servicio trilla + maquila: recepción con aviso de humedad, planta complet
   // --- 2. Trilla: 500 → 405 kg (merma 19 %, la de referencia) -------------------------------------------------------
   await abrirPlanta(page, codigo!);
   await expect(page.getByText("Calidad al recibir: Humedad alta")).toBeVisible();
-  await expect(page.getByLabel("Peso de entrada (kg)")).toHaveValue("500");
-  await page.getByLabel("Peso de salida (kg)").fill("405");
+  await expect(page.getByLabel("Entrada: pergamino del lote (kg)")).toHaveValue("500");
+  await page.getByLabel("Peso final (kg)").fill("405");
   const merma = page.getByRole("region", { name: "Merma" });
   await expect(merma).toContainText(/19(,0)? %/);
   await expect(merma).toContainText("Referencia 19 % ± 2 puntos");
@@ -61,25 +59,30 @@ test("servicio trilla + maquila: recepción con aviso de humedad, planta complet
 
   // --- 3. Tostión: entrada 405 kg → 30 baches sugeridos -----------------------------------------------------------------
   await abrirPlanta(page, codigo!);
-  await expect(page.getByLabel("Peso de entrada (kg)")).toHaveValue("405");
-  await page.getByRole("button", { name: "Sugerir baches" }).click();
+  await expect(page.getByLabel("Kilos a tostar ahora")).toHaveValue("405");
   await expect(page.getByRole("heading", { name: "Baches (30)" })).toBeVisible();
-  await llenarSalidaDeBaches(page, 18);
-  await expect(page.getByRole("status").filter({ hasText: "Cuadra con la entrada" })).toBeVisible();
-  await registrarPaso(page, "Registrar tostión");
+  await expect(page.getByRole("status").filter({ hasText: "Cuadra con los kilos a tostar" })).toBeVisible();
+  // B-06: la molienda llega precargada desde la recepción (Todo) y se puede cambiar al cerrar la tostión.
+  await expect(page.getByRole("radio", { name: "Todo" })).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("radio", { name: "Otra cantidad (kg)" }).click();
+  await page.getByLabel("Kilos a moler (kg)").fill("330");
+  await registrarPaso(page, "Registrar tostión → Por moler");
 
-  // --- 4. Molienda y empaque (incluido, sin coste) ----------------------------------------------------------------------
+  // --- 4. Molienda (confirmación sin pesos) y empaque (incluido, sin coste) ---------------------------------------------
   await abrirPlanta(page, codigo!);
-  await page.getByLabel("Peso de salida (kg)").fill("330");
-  await registrarPaso(page, "Registrar molienda");
+  await page.getByRole("radio", { name: /^Molienda/ }).click();
+  await registrarPaso(page, "Molienda realizada → Por empacar");
 
   await abrirPlanta(page, codigo!);
-  // Bolsas del cliente (peso libre): 132 × 2,5 kg = 330 kg, todo lo que llega, así que no sobra café que explicar.
-  await page.getByLabel("Peso de la bolsa (kg)").fill("2,5");
-  await page.getByLabel("Cantidad", { exact: true }).fill("132");
+  await page.getByRole("radio", { name: /^Empaque/ }).click();
+  // Bolsas del cliente (peso libre): 132 × 2,5 kg = 330 kg; el peso total en báscula (332 kg) incluye el sobrante de 2 kg.
+  await page.getByRole("radio", { name: "Otro (kg)" }).click();
+  await page.getByLabel("Peso por bolsa en kilos").fill("2,5");
+  await page.getByLabel("Número de bolsas").fill("132");
+  await page.getByLabel("Peso total en báscula (kg)").fill("332");
   await page.getByRole("button", { name: "Registrar empaque" }).click();
   // Era el último servicio. (Aparece el diálogo «Lote listo · ¿Entregar ahora?»; se prueba en entrega.spec.ts, aquí se sigue por la ficha.)
-  await expect(aviso(page, /Todo el café quedó en bolsas/)).toBeVisible();
+  await expect(aviso(page, /Empaque registrado\. Lote listo para entrega/)).toBeVisible();
 
   // El lote queda listo para entregar.
   await irA(page, `/dashboard/cafe/lotes?q=${codigo}`);
@@ -113,7 +116,14 @@ test("servicio trilla + maquila: recepción con aviso de humedad, planta complet
     await expect(ticket).toContainText(codigo!);
     await expect(ticket).toContainText("Cliente E2E");
     await expect(ticket).toContainText("Peso entregado");
+    // B-17: sin merma total, sin merma de molienda/empaque, sin bultos ni «Perfil pedido».
+    await expect(ticket).not.toContainText(/merma total|merma de molienda|merma de empaque|bulto|perfil pedido/i);
+    await expect(ticket).toContainText("Merma de tostión");
   }
+  // B-17: «Volver a Planta» se ve sin desplazarse, no sale en el papel y lleva a Planta.
+  const volver = impresion.getByRole("link", { name: "Volver a Planta" });
+  await expect(volver).toBeVisible();
+  await expect(impresion.locator(".no-print").filter({ has: volver })).toHaveCount(1);
   await expect(impresion.getByRole("button", { name: "Imprimir con copia" })).toBeVisible();
   await impresion.close();
 

@@ -7,7 +7,7 @@ import { etiquetaServicio } from "../lib/servicios";
 import type { TipoProceso } from "../types";
 
 /**
- * Resumen por etapa (`v_lote_etapas`): bultos procesados, kilos que entraron y salieron, merma en kilos y %,
+ * Resumen por etapa (`v_lote_etapas`): kilos pendientes, kilos que entraron y salieron, merma en kilos y %,
  * valor y desvío. Los pasos requeridos que aún no tienen ningún proceso salen como «Pendiente». Los kilos son
  * los de ESTE lote: la tabla no suma etapas entre sí (la salida de una es la entrada de la siguiente).
  */
@@ -19,7 +19,7 @@ export function EtapasTabla({ requeridos, etapas, esServicio }: { requeridos: re
         <TableHeader>
           <TableRow>
             <TableHead>Etapa</TableHead>
-            <TableHead className="text-right">Bultos</TableHead>
+            <TableHead className="text-right">Por procesar</TableHead>
             <TableHead className="text-right">Kg entrada</TableHead>
             <TableHead className="text-right">Kg salida</TableHead>
             <TableHead className="text-right">Merma kg</TableHead>
@@ -41,11 +41,11 @@ export function EtapasTabla({ requeridos, etapas, esServicio }: { requeridos: re
               <TableRow key={f.etapa.tipo}>
                 <TableCell className="font-medium">{etiquetaServicio(f.etapa.tipo)}</TableCell>
                 <TableCell className="text-right tabular-nums">
-                  {f.etapa.bultosProcesados}/{f.etapa.bultosTotal}
+                  {formatearKg3(f.etapa.kgPendientes)} kg
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{formatearKg3(f.etapa.pesoEntradaKg)}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatearKg3(f.etapa.pesoSalidaKg)}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatearKg3(f.etapa.mermaKg)}</TableCell>
+                <TableCell className="text-right tabular-nums">{f.etapa.pesoSalidaKg === null ? "—" : formatearKg3(f.etapa.pesoSalidaKg)}</TableCell>
+                <TableCell className="text-right tabular-nums">{f.etapa.mermaKg === null ? "—" : formatearKg3(f.etapa.mermaKg)}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatearPct(f.mermaPct)}</TableCell>
                 {esServicio && <TableCell className="text-right tabular-nums">{formatearCOP(f.etapa.valor)}</TableCell>}
                 <TableCell>

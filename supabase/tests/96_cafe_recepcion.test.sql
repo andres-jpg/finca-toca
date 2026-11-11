@@ -6,7 +6,7 @@
 --   r1 owner A   r2 operativo A   r3 viewer A   r4 owner B
 begin;
 
-select plan(64);
+select plan(56);
 
 -- 0. Preparación --------------------------------------------------------------------------------------------
 insert into auth.users (id, aud, role, email) values
@@ -99,16 +99,10 @@ select ok(
   'sin rangos: rangos_calidad = null, alertas vacías y la humedad y la densidad quedan guardadas'
 );
 select is(
-  (select (l.linea::text, l.fecha_recepcion, l.peso_recibido_kg, l.num_bultos, l.nivel_tueste is null)::text
+  (select (l.linea::text, l.fecha_recepcion, l.peso_recibido_kg, l.nivel_tueste is null)::text
      from cafe.lotes l where l.id = (select (r ->> 'id')::uuid from res where k = 'solo_trilla')),
-  '(servicio,' || to_char(current_date, 'YYYY-MM-DD') || ',500.000,8,t)',
-  'el lote es de línea servicio, con la fecha, el peso y los bultos recibidos'
-);
-select is(
-  (select (count(*), sum(b.peso_kg), min(b.peso_kg), max(b.peso_kg))::text
-     from cafe.lote_bultos b where b.lote_id = (select (r ->> 'id')::uuid from res where k = 'solo_trilla')),
-  '(8,500.000,62.500,62.500)',
-  '8 bultos de 62,5 kg que suman 500 kg'
+  '(servicio,' || to_char(current_date, 'YYYY-MM-DD') || ',500.000,t)',
+  'el lote es de línea servicio, con la fecha y el peso recibido (sin bultos)'
 );
 
 -- 2. Trilla + tostión + molienda: un solo código, empaque incluido, nivel de tueste -----------------------------
@@ -245,14 +239,6 @@ select throws_ok(
   'P0001', 'datos_invalidos', 'el peso debe ser un número, no un texto'
 );
 select throws_ok(
-  $$ select cafe.registrar_recepcion(pg_temp.carga('ca', '{"num_bultos": 0}')) $$,
-  'P0001', 'datos_invalidos', 'al menos un bulto'
-);
-select throws_ok(
-  $$ select cafe.registrar_recepcion(pg_temp.carga('ca', '{"num_bultos": 201}')) $$,
-  'P0001', 'datos_invalidos', 'máximo 200 bultos'
-);
-select throws_ok(
   $$ select cafe.registrar_recepcion(pg_temp.carga('ca', '{"fecha": "2026-13-45"}')) $$,
   'P0001', 'datos_invalidos', 'una fecha imposible'
 );
@@ -268,36 +254,12 @@ select throws_ok(
   $$ select cafe.registrar_recepcion('[]'::jsonb) $$,
   'P0001', 'datos_invalidos', 'la entrada debe ser un objeto'
 );
-select throws_ok(
-  $$ select cafe.registrar_recepcion(pg_temp.carga('ca', jsonb_build_object('pesos_bultos', jsonb_build_array(100, 100, 100)))) $$,
-  'P0001', 'bultos_no_cuadran', 'tres pesos para ocho bultos → bultos_no_cuadran'
-);
-select throws_ok(
-  $$ select cafe.registrar_recepcion(pg_temp.carga('ca', jsonb_build_object('num_bultos', 2, 'pesos_bultos', jsonb_build_array(100, 100)))) $$,
-  'P0001', 'bultos_no_cuadran', 'los pesos por bulto deben sumar el peso total'
-);
-select throws_ok(
-  $$ select cafe.registrar_recepcion(pg_temp.carga('ca', jsonb_build_object('num_bultos', 2, 'pesos_bultos', jsonb_build_array(500, 0)))) $$,
-  'P0001', 'datos_invalidos', 'un bulto de 0 kg no es válido'
-);
 
 insert into res
 select 'pesos', cafe.registrar_recepcion(pg_temp.carga('ca', jsonb_build_object('num_bultos', 3, 'peso_kg', 100)));
-select is(
-  (select array_agg(b.peso_kg order by b.numero)::text
-     from cafe.lote_bultos b where b.lote_id = (select (r ->> 'id')::uuid from res where k = 'pesos')),
-  '{33.333,33.333,33.334}',
-  '100 kg en 3 bultos: partes iguales y el último absorbe el resto'
-);
 insert into res
 select 'pesos_custom', cafe.registrar_recepcion(pg_temp.carga('ca', jsonb_build_object(
   'num_bultos', 3, 'peso_kg', 200, 'pesos_bultos', jsonb_build_array(70.5, 60, 69.5))));
-select is(
-  (select array_agg(b.peso_kg order by b.numero)::text
-     from cafe.lote_bultos b where b.lote_id = (select (r ->> 'id')::uuid from res where k = 'pesos_custom')),
-  '{70.500,60.000,69.500}',
-  'pesos por bulto explícitos: se guardan tal cual'
-);
 
 -- 8. Sin tarifa para la fecha: se guarda y la estimación sale vacía -------------------------------------------------
 insert into res

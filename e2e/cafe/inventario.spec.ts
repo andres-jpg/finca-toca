@@ -10,9 +10,13 @@ test.describe("administrador", () => {
   test("tres pestañas: marca propia, servicios a terceros e insumos", async ({ page }) => {
     await irA(page, "/dashboard/cafe/inventario");
     const pestanas = page.getByRole("navigation", { name: "Inventario" });
-    await expect(pestanas.getByRole("link", { name: "Marca propia · para vender" })).toHaveAttribute("aria-current", "page");
+    await expect(pestanas.getByRole("link", { name: "Marca propia" })).toHaveAttribute("aria-current", "page");
     // Marca propia: la matriz de producto terminado por tipo de café × presentación.
-    await expect(page.getByRole("rowheader", { name: "Excelso" })).toBeVisible();
+    await expect(page.getByRole("rowheader", { name: "Excelso" }).first()).toBeVisible();
+    // Los tres bloques de la marca propia (B-10).
+    await expect(page.getByRole("heading", { name: "1 · Café verde por tostar" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "2 · Tostado sin empacar" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "3 · Producto terminado · listo para vender" })).toBeVisible();
 
     // Servicios a terceros: aclara que ese café no es de Cofradía.
     await pestanas.getByRole("link", { name: "Servicios a terceros" }).click();
@@ -48,6 +52,10 @@ test.describe("gerencia", () => {
     await irA(page, "/dashboard/cafe/inventario?tab=servicios");
     await expect(page.getByText("Café de clientes · no es inventario de Cofradía")).toBeVisible();
     await irA(page, "/dashboard/cafe/inventario");
-    await expect(page.getByRole("rowheader", { name: "Excelso" })).toBeVisible();
+    await expect(page.getByRole("rowheader", { name: "Excelso" }).first()).toBeVisible();
+    // Los tres bloques de la marca propia (B-10).
+    await expect(page.getByRole("heading", { name: "1 · Café verde por tostar" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "2 · Tostado sin empacar" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "3 · Producto terminado · listo para vender" })).toBeVisible();
   });
 });

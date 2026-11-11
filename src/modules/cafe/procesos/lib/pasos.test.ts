@@ -1,179 +1,138 @@
 import { describe, expect, it } from "vitest";
-import type { TipoProceso } from "../../lotes/types";
 import {
-  evaluarBulto,
   evaluarPaso,
   evaluarPasos,
   origenPeso,
   pasoInicial,
+  pasoOrigen,
   pasoPrevio,
   pasosDelLote,
   pasosRequeridos,
-  procesadosPorTipo,
   siguientePaso,
   textoSiguientePaso,
-  type BultoPasos,
   type LotePasos,
+  type OrigenPlanta,
 } from "./pasos";
 
 const COMPLETO: LotePasos = { linea: "servicio", servicios: ["trilla", "tostion", "molienda", "empaque"] };
-const SOLO_TRILLA: LotePasos = { linea: "servicio", servicios: ["trilla"] };
-const TRILLA_Y_TUESTE: LotePasos = { linea: "servicio", servicios: ["trilla", "tostion", "empaque"] };
-const MARCA: LotePasos = { linea: "marca_propia", servicios: [] };
+const SIN_MOLIENDA: LotePasos = { linea: "servicio", servicios: ["trilla", "tostion", "empaque"] };
+const MARCA_PROPIA: LotePasos = { linea: "marca_propia", servicios: [] };
 
-function bultos(n: number, pasos: (i: number) => TipoProceso[] = () => []): BultoPasos[] {
-  return Array.from({ length: n }, (_, i) => ({ id: `b${i + 1}`, numero: i + 1, pasos: pasos(i + 1) }));
-}
+const origen = (o: Partial<OrigenPlanta>): OrigenPlanta => ({
+  procesoId: null,
+  tipo: null,
+  fecha: null,
+  baseKg: 320,
+  consumidoKg: 0,
+  saldoKg: 320,
+  estimado: false,
+  conMolienda: false,
+  ...o,
+});
 
-describe("pasosDelLote / pasoPrevio: las mismas reglas que cafe.pasos_del_lote() y cafe.paso_previo()", () => {
-  it("servicio: los contratados, en orden; marca propia: nunca trilla", () => {
-    expect(pasosDelLote(COMPLETO)).toEqual(["trilla", "tostion", "molienda", "empaque"]);
-    expect(pasosDelLote(SOLO_TRILLA)).toEqual(["trilla"]);
-    expect(pasosDelLote(MARCA)).toEqual(["tostion", "molienda", "empaque"]);
+describe("pasosDelLote / pasosRequeridos", () => {
+  it("servicio: los contratados, en orden", () => {
+    expect(pasosDelLote({ linea: "servicio", servicios: ["empaque", "trilla", "tostion"] })).toEqual(["trilla", "tostion", "empaque"]);
   });
-
-  it("servicio: el previo es el contratado anterior (se salta lo no contratado)", () => {
-    expect(pasoPrevio(COMPLETO, "trilla")).toBeNull();
-    expect(pasoPrevio(COMPLETO, "tostion")).toBe("trilla");
-    expect(pasoPrevio(COMPLETO, "empaque")).toBe("molienda");
-    expect(pasoPrevio(TRILLA_Y_TUESTE, "empaque")).toBe("tostion");
-    expect(pasoPrevio({ linea: "servicio", servicios: ["tostion", "empaque"] }, "tostion")).toBeNull();
+  it("marca propia: nunca trilla", () => {
+    expect(pasosDelLote(MARCA_PROPIA)).toEqual(["tostion", "molienda", "empaque"]);
   });
-
-  it("marca propia: la molienda sigue a la tostión y el empaque a la molienda solo si el bulto la hizo", () => {
-    expect(pasoPrevio(MARCA, "tostion")).toBeNull();
-    expect(pasoPrevio(MARCA, "molienda")).toBe("tostion");
-    expect(pasoPrevio(MARCA, "empaque", ["tostion"])).toBe("tostion");
-    expect(pasoPrevio(MARCA, "empaque", ["tostion", "molienda"])).toBe("molienda");
+  it("requeridos: la molienda de marca propia cuenta solo si ya se hizo", () => {
+    expect(pasosRequeridos(MARCA_PROPIA, false)).toEqual(["tostion", "empaque"]);
+    expect(pasosRequeridos(MARCA_PROPIA, true)).toEqual(["tostion", "molienda", "empaque"]);
+    expect(pasosRequeridos(COMPLETO, false)).toEqual(["trilla", "tostion", "molienda", "empaque"]);
   });
 });
 
-describe("siguientePaso: la cola de trabajo", () => {
-  it("excelso de 6 bultos: tostar 2 deja 4 pendientes, y al tostar todos pasa al siguiente paso", () => {
-    const req = pasosRequeridos(MARCA, false);
-    expect(siguientePaso(req, 6, {})).toEqual({ tipo: "tostion", pendientes: 6, total: 6 });
-    const dos = siguientePaso(req, 6, { tostion: 2 });
-    expect(dos).toEqual({ tipo: "tostion", pendientes: 4, total: 6 });
-    expect(textoSiguientePaso(dos!)).toBe("Tostión · 4 de 6 bultos pendientes");
-    // Con los 6 tostados, el lote de marca propia espera el empaque: sale de la cola de tostión.
-    expect(siguientePaso(req, 6, { tostion: 6 })).toEqual({ tipo: "empaque", pendientes: 6, total: 6 });
+// Mismos casos que `cafe.paso_previo` y `cafe.paso_origen` en `86_cafe_saldo_kg.test.sql`.
+describe("pasoPrevio y pasoOrigen (espejo de SQL)", () => {
+  it("servicio completo: el previo es el contratado anterior; el origen se salta la molienda", () => {
+    expect(["trilla", "tostion", "molienda", "empaque"].map((t) => pasoPrevio(COMPLETO, t as never))).toEqual([null, "trilla", "tostion", "molienda"]);
+    expect(["trilla", "tostion", "molienda", "empaque"].map((t) => pasoOrigen(COMPLETO, t as never))).toEqual([null, "trilla", "tostion", "tostion"]);
   });
-
-  it("sin pendientes en ningún paso requerido no hay siguiente", () => {
-    expect(siguientePaso(["trilla", "tostion"], 3, { trilla: 3, tostion: 3 })).toBeNull();
+  it("sin molienda contratada, el empaque sigue a la tostión", () => {
+    expect(pasoPrevio(SIN_MOLIENDA, "empaque")).toBe("tostion");
+    expect(pasoOrigen(SIN_MOLIENDA, "empaque")).toBe("tostion");
   });
-
-  it("la molienda a medias (marca propia) la hace requerida", () => {
-    expect(pasosRequeridos(MARCA, true)).toEqual(["tostion", "molienda", "empaque"]);
-    expect(siguientePaso(pasosRequeridos(MARCA, true), 4, { tostion: 4, molienda: 1 })).toEqual({
-      tipo: "molienda",
-      pendientes: 3,
-      total: 4,
-    });
-  });
-
-  it("un solo bulto se lee en singular", () => {
-    expect(textoSiguientePaso({ tipo: "trilla", pendientes: 1, total: 1 })).toBe("Trilla · 1 bulto pendiente");
-  });
-
-  it("procesadosPorTipo cuenta bultos, no procesos", () => {
-    expect(procesadosPorTipo(bultos(3, (n) => (n < 3 ? ["trilla", "tostion"] : ["trilla"])))).toEqual({ trilla: 3, tostion: 2 });
+  it("marca propia: la tostión sale de la raíz; molienda y empaque cuelgan de la tostión", () => {
+    expect(pasoOrigen(MARCA_PROPIA, "tostion")).toBeNull();
+    expect(pasoOrigen(MARCA_PROPIA, "molienda")).toBe("tostion");
+    expect(pasoOrigen(MARCA_PROPIA, "empaque")).toBe("tostion");
   });
 });
 
-describe("evaluarPasos: orden y motivos", () => {
-  it("lote recién recibido: solo el primer paso está disponible y los demás dicen qué falta", () => {
-    const r = evaluarPasos(COMPLETO, bultos(8));
-    expect(r.map((e) => [e.tipo, e.disponible])).toEqual([
-      ["trilla", true],
-      ["tostion", false],
+describe("evaluarPaso", () => {
+  it("la tostión de marca propia parte de la raíz con todo el saldo", () => {
+    const e = evaluarPaso(MARCA_PROPIA, "tostion", [origen({})]);
+    expect(e).toMatchObject({ disponible: true, motivo: null, kgDisponible: 320 });
+  });
+
+  it("320 kg con 118 kg tostados dejan 202 kg por tostar", () => {
+    const e = evaluarPaso(MARCA_PROPIA, "tostion", [origen({ consumidoKg: 118, saldoKg: 202 })]);
+    expect(e.kgDisponible).toBe(202);
+  });
+
+  it("sin tostión no hay empaque: dice qué falta", () => {
+    const e = evaluarPaso(MARCA_PROPIA, "empaque", [origen({})]);
+    expect(e).toMatchObject({ disponible: false, motivo: "Primero registra la tostión." });
+  });
+
+  it("el empaque ofrece las tostiones abiertas (más de una = elegir tanda)", () => {
+    const t1 = origen({ procesoId: "t1", tipo: "tostion", baseKg: 64, saldoKg: 64, estimado: true });
+    const t2 = origen({ procesoId: "t2", tipo: "tostion", baseKg: 54, saldoKg: 54, estimado: true });
+    const cerrada = origen({ procesoId: "t0", tipo: "tostion", baseKg: 52.4, consumidoKg: 52.4, saldoKg: 0 });
+    const e = evaluarPaso(MARCA_PROPIA, "empaque", [origen({}), cerrada, t1, t2]);
+    expect(e.origenes.map((o) => o.procesoId)).toEqual(["t1", "t2"]);
+    expect(e.kgDisponible).toBe(118);
+  });
+
+  it("un saldo dentro de la tolerancia ya no ofrece el paso", () => {
+    const e = evaluarPaso(MARCA_PROPIA, "tostion", [origen({ consumidoKg: 319.98, saldoKg: 0.02 })]);
+    expect(e).toMatchObject({ disponible: false, motivo: "No queda café por procesar en este paso." });
+  });
+
+  it("la molienda ofrece las tostiones que aún no se muelen", () => {
+    const sin = origen({ procesoId: "t1", tipo: "tostion", baseKg: 54, saldoKg: 54 });
+    const con = origen({ procesoId: "t2", tipo: "tostion", baseKg: 54, saldoKg: 54, conMolienda: true });
+    expect(evaluarPaso(MARCA_PROPIA, "molienda", [sin, con]).origenes.map((o) => o.procesoId)).toEqual(["t1"]);
+  });
+
+  it("la tostión de un servicio con trilla consume de la salida de la trilla", () => {
+    const trilla = origen({ procesoId: "tr", tipo: "trilla", baseKg: 405, saldoKg: 405 });
+    const e = evaluarPaso(COMPLETO, "tostion", [origen({ saldoKg: 0, consumidoKg: 500 }), trilla]);
+    expect(e).toMatchObject({ disponible: true, kgDisponible: 405 });
+  });
+
+  it("evaluarPasos recorre los pasos del lote", () => {
+    expect(evaluarPasos(MARCA_PROPIA, [origen({})]).map((e) => [e.tipo, e.disponible])).toEqual([
+      ["tostion", true],
       ["molienda", false],
       ["empaque", false],
     ]);
-    expect(r[0].elegibles).toHaveLength(8);
-    expect(r[1].motivo).toBe("Primero registra la trilla (bultos 1, 2, 3, 4, 5, 6, 7, 8).");
-  });
-
-  it("con un solo bulto el motivo no lista números", () => {
-    expect(evaluarPaso(TRILLA_Y_TUESTE, "tostion", bultos(1)).motivo).toBe("Primero registra la trilla.");
-  });
-
-  it("proceso parcial: tostar 2 bultos un día y 4 otro", () => {
-    const dosTostados = bultos(6, (n) => (n <= 2 ? ["tostion"] : []));
-    const tostion = evaluarPaso(MARCA, "tostion", dosTostados);
-    expect(tostion.disponible).toBe(true);
-    expect(tostion.elegibles).toEqual(["b3", "b4", "b5", "b6"]);
-    expect(tostion.hechos).toBe(2);
-    // La molienda ya admite los 2 tostados.
-    expect(evaluarPaso(MARCA, "molienda", dosTostados).elegibles).toEqual(["b1", "b2"]);
-
-    const todos = bultos(6, () => ["tostion"]);
-    const final = evaluarPaso(MARCA, "tostion", todos);
-    expect(final).toMatchObject({ disponible: false, motivo: "Ya se registró en todos los bultos.", hechos: 6 });
-  });
-
-  it("un bulto que ya pasó por un paso posterior no puede volver a uno anterior", () => {
-    expect(evaluarBulto(COMPLETO, "trilla", { id: "x", numero: 1, pasos: ["tostion"] })).toEqual({
-      estado: "bloqueado",
-      motivo: "Ya pasó por un paso posterior",
-    });
-    const r = evaluarPaso(COMPLETO, "trilla", bultos(2, () => ["tostion"]));
-    expect(r.disponible).toBe(false);
-    expect(r.motivo).toBe("Los bultos pendientes ya pasaron por un paso posterior.");
-  });
-
-  it("el empaque de marca propia se ofrece con los bultos tostados (lo registra el formulario de presentaciones)", () => {
-    const r = evaluarPaso(MARCA, "empaque", bultos(2, () => ["tostion"]));
-    expect(r).toMatchObject({ disponible: true, motivo: null });
-    expect(r.elegibles).toHaveLength(2);
-  });
-
-  it("y no antes de tostar: sin tostión no hay nada que empacar", () => {
-    const r = evaluarPaso(MARCA, "empaque", bultos(2, () => []));
-    expect(r).toMatchObject({ disponible: false, elegibles: [] });
-    expect(r.motivo).toContain("tostión");
-  });
-
-  it("el empaque de maquila sí (sin insumos)", () => {
-    const todos = bultos(2, () => ["trilla", "tostion", "molienda"]);
-    expect(evaluarPaso(COMPLETO, "empaque", todos).disponible).toBe(true);
-  });
-
-  it("molienda opcional de marca propia: el empaque de un bulto molido exige la molienda", () => {
-    expect(evaluarBulto(MARCA, "empaque", { id: "x", numero: 1, pasos: ["tostion"] }).estado).toBe("elegible");
-    expect(evaluarBulto(MARCA, "empaque", { id: "x", numero: 1, pasos: ["tostion", "molienda"] }).estado).toBe("elegible");
   });
 });
 
-describe("pasoInicial", () => {
-  it("preselecciona el siguiente paso de la cola", () => {
-    expect(pasoInicial(COMPLETO, bultos(8), COMPLETO.servicios)).toBe("trilla");
-    expect(pasoInicial(COMPLETO, bultos(8, () => ["trilla"]), COMPLETO.servicios)).toBe("tostion");
+describe("siguientePaso", () => {
+  it("el primero de los requeridos con kilos pendientes (202,0 kg por tostar · de 320,0 kg)", () => {
+    const s = siguientePaso(["tostion", "empaque"], [{ tipo: "tostion", kgBase: 320, kgPendientes: 202 }], 320);
+    expect(s).toEqual({ tipo: "tostion", pendienteKg: 202, baseKg: 320 });
+    expect(textoSiguientePaso(s!)).toBe("Tostión · 202,0 kg por tostar · de 320,0 kg");
   });
-
-  it("marca propia con todo tostado: se preselecciona el empaque (la molienda es opcional)", () => {
-    expect(pasoInicial(MARCA, bultos(3, () => ["tostion"]), pasosRequeridos(MARCA, false))).toBe("empaque");
-  });
-
-  it("sin nada disponible devuelve null", () => {
-    expect(pasoInicial(SOLO_TRILLA, bultos(2, () => ["trilla"]), ["trilla"])).toBeNull();
+  it("un paso sin procesos cuenta con lo recibido; completos → null", () => {
+    expect(siguientePaso(["trilla"], [], 500)).toEqual({ tipo: "trilla", pendienteKg: 500, baseKg: 500 });
+    expect(siguientePaso(["trilla"], [{ tipo: "trilla", kgBase: 500, kgPendientes: 0 }], 500)).toBeNull();
   });
 });
 
-describe("origenPeso: «Viene de la trilla del 06/11»", () => {
-  const conFecha = (pasos: TipoProceso[], fecha: string) => ({
-    id: "x",
-    numero: 1,
-    pasos,
-    hechos: Object.fromEntries(pasos.map((p) => [p, { fecha }])),
+describe("pasoInicial y origenPeso", () => {
+  it("preselecciona el siguiente paso si se puede registrar", () => {
+    expect(pasoInicial(MARCA_PROPIA, [origen({})], ["tostion", "empaque"], [], 320)).toBe("tostion");
   });
-
-  it("devuelve el paso previo y sus fechas, ordenadas y sin repetir", () => {
-    const r = origenPeso(COMPLETO, "tostion", [conFecha(["trilla"], "2026-11-08"), conFecha(["trilla"], "2026-11-06"), conFecha(["trilla"], "2026-11-06")]);
-    expect(r).toEqual({ previo: "trilla", fechas: ["2026-11-06", "2026-11-08"] });
+  it("sin nada disponible, null", () => {
+    expect(pasoInicial(MARCA_PROPIA, [origen({ consumidoKg: 320, saldoKg: 0 })], ["tostion", "empaque"], [{ tipo: "tostion", kgBase: 320, kgPendientes: 0 }], 320)).toBeNull();
   });
-
-  it("el primer paso no viene de ninguno", () => {
-    expect(origenPeso(COMPLETO, "trilla", [{ id: "x", numero: 1, pasos: [] }])).toEqual({ previo: null, fechas: [] });
+  it("origenPeso: el paso previo y su fecha", () => {
+    expect(origenPeso(origen({ procesoId: "tr", tipo: "trilla", fecha: "2026-11-06" }))).toEqual({ previo: "trilla", fecha: "2026-11-06" });
+    expect(origenPeso(origen({}))).toEqual({ previo: null, fecha: null });
   });
 });

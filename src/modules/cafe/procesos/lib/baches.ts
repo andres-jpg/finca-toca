@@ -1,8 +1,16 @@
-import { repartirPeso } from "../../lotes/lib/repartir-peso";
 import type { BacheEntrada } from "../types";
 
+/** Reparte `totalKg` en `n` partes iguales a gramos; la ÚLTIMA absorbe el resto (misma regla que `cafe.sugerir_baches`). */
+function repartirPeso(totalKg: number, n: number): number[] {
+  const totalG = Math.round(totalKg * 1000);
+  const base = Math.floor(totalG / n);
+  const partesG = Array.from({ length: n }, () => base);
+  partesG[n - 1] = totalG - base * (n - 1);
+  return partesG.map((g) => g / 1000);
+}
+
 // Baches de la tostión. `sugerirBaches` es la misma regla que `cafe.sugerir_baches()` en SQL; `bachesCuadran` la
-// misma comprobación que el constraint trigger de `cafe.baches` (1 g de tolerancia).
+// misma comprobación que el constraint trigger de `cafe.baches` (1 g de tolerancia, solo entradas).
 
 /**
  * Sugerencia de reparto en baches: n = ceil(peso / capacidad) y partes iguales a gramos, con el ÚLTIMO bache
@@ -25,33 +33,18 @@ export function sugerirBaches(pesoKg: number, capacidadKg: number): number[] {
   return repartirPeso(pesoKg, Math.ceil(pesoG / capacidadG));
 }
 
-/** Suma de entradas y de salidas de los baches, en kilos y sin ruido de coma flotante (a gramos). */
-export function totalesBaches(baches: readonly Pick<BacheEntrada, "peso_entrada_kg" | "peso_salida_kg">[]): {
-  entradaKg: number;
-  salidaKg: number;
-} {
+/** Suma de las entradas de los baches, en kilos y sin ruido de coma flotante (a gramos). */
+export function totalesBaches(baches: readonly Pick<BacheEntrada, "peso_entrada_kg">[]): { entradaKg: number } {
   let entrada = 0;
-  let salida = 0;
-  for (const b of baches) {
-    entrada += Math.round((Number.isFinite(b.peso_entrada_kg) ? b.peso_entrada_kg : 0) * 1000);
-    salida += Math.round((Number.isFinite(b.peso_salida_kg) ? b.peso_salida_kg : 0) * 1000);
-  }
-  return { entradaKg: entrada / 1000, salidaKg: salida / 1000 };
+  for (const b of baches) entrada += Math.round((Number.isFinite(b.peso_entrada_kg) ? b.peso_entrada_kg : 0) * 1000);
+  return { entradaKg: entrada / 1000 };
 }
 
 /**
- * ¿Los baches suman la entrada y la salida del proceso? Tolerancia de 1 g, como la base (`baches_no_cuadran`);
- * sin baches no cuadra: la tostión exige al menos uno.
+ * ¿Los baches suman los kilos a tostar? Tolerancia de 1 g, como la base (`baches_no_cuadran`); sin baches no cuadra:
+ * la tostión exige al menos uno. Los baches ya no llevan peso de salida (B-05).
  */
-export function bachesCuadran(
-  baches: readonly Pick<BacheEntrada, "peso_entrada_kg" | "peso_salida_kg">[],
-  entradaKg: number,
-  salidaKg: number,
-): boolean {
+export function bachesCuadran(baches: readonly Pick<BacheEntrada, "peso_entrada_kg">[], entradaKg: number): boolean {
   if (baches.length === 0) return false;
-  const t = totalesBaches(baches);
-  return (
-    Math.abs(Math.round(t.entradaKg * 1000) - Math.round(entradaKg * 1000)) <= 1 &&
-    Math.abs(Math.round(t.salidaKg * 1000) - Math.round(salidaKg * 1000)) <= 1
-  );
+  return Math.abs(Math.round(totalesBaches(baches).entradaKg * 1000) - Math.round(entradaKg * 1000)) <= 1;
 }

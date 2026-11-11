@@ -1,65 +1,79 @@
+import { etiquetaPresentacion } from "../../tipos/lib/productos";
 import { formatCOP, formatPct } from "@/modules/core/formato/numeros";
-import { costoBolsaYEtiqueta, estadoCosto, mensajeSinCosto, NOTA_COSTO_DIRECTO, type CostoLibra } from "../lib/costo-libra";
+import { estadoCosto, mensajeSinCosto, NOTA_COSTO_DIRECTO, type CostoLibra } from "../lib/costo-libra";
 
 const GUION = "—";
-
-function Fila({ etiqueta, valor, fuerte, detalle }: { etiqueta: string; valor: string; fuerte?: boolean; detalle?: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 py-2">
-      <dt className={fuerte ? "text-sm font-semibold text-gray-800" : "text-sm text-gray-600"}>
-        {etiqueta}
-        {detalle && <span className="ml-1 text-xs font-normal text-gray-500">{detalle}</span>}
-      </dt>
-      <dd className={`tabular-nums ${fuerte ? "text-base font-semibold text-gray-900" : "text-sm text-gray-800"}`}>{valor}</dd>
-    </div>
-  );
-}
+const moneda = (v: number | null) => (v === null ? GUION : formatCOP(Math.round(v)));
 
 /**
- * «Cuánto nos cuesta producir una libra (500 g)» (A-05 · HU-F1-17): café, bolsa y etiqueta, costo, precio de venta y margen.
- * Solo presenta lo que calculó `cafe.costo_libra_lote`; si falta un dato muestra el motivo en vez de un número inventado.
- * Es un bloque de la ficha de marca propia (el rediseño completo de la ficha es A-17).
+ * «Costo de producir una libra» por presentación (B-13): una columna por presentación (500 g, 2.500 g…) y las filas Café por
+ * libra · Empaque por libra · Costo por libra · Precio por libra · Margen por libra. Solo presenta lo que calculó
+ * `cafe.costo_libra_lote`; si falta un dato muestra el motivo en vez de un número inventado.
  */
-export function CostoLibraLote({ costo }: { costo: CostoLibra }) {
-  const estado = estadoCosto(costo);
-  if (estado === "no_aplica") return null;
+export function CostoLibraLote({ costos }: { costos: CostoLibra[] }) {
+  const aplican = costos.filter((c) => estadoCosto(c) !== "no_aplica");
+  if (aplican.length === 0) return null;
 
-  const aviso = mensajeSinCosto(estado);
-  const bolsaYEtiqueta = costoBolsaYEtiqueta(costo);
-  const moneda = (v: number | null) => (v === null ? GUION : formatCOP(v));
+  const avisos = [...new Set(aplican.flatMap((c) => (estadoCosto(c) === "sin_tostion" ? [] : [mensajeSinCosto(estadoCosto(c))])).filter((m): m is string => m !== null))];
+  const sinTostion = aplican.every((c) => estadoCosto(c) === "sin_tostion");
+  const mermaAcumulada = aplican[0].mermaTostion;
+
+  const filas: { etiqueta: string; fuerte?: boolean; valor: (c: CostoLibra) => string }[] = [
+    { etiqueta: "Café por libra", valor: (c) => moneda(c.costoCafe) },
+    { etiqueta: "Empaque por libra", valor: (c) => moneda(c.costoEmpaque) },
+    { etiqueta: "Costo por libra", fuerte: true, valor: (c) => moneda(c.costoLibra) },
+    { etiqueta: "Precio por libra", valor: (c) => moneda(c.precioVenta) },
+    { etiqueta: "Margen por libra", fuerte: true, valor: (c) => (c.margen === null ? GUION : `${formatCOP(c.margen)} (${formatPct(c.margenPct)})`) },
+  ];
 
   return (
     <section className="space-y-2 rounded-lg border border-stone-200 bg-white p-4 sm:p-5" aria-labelledby="titulo-costo-libra">
       <h2 id="titulo-costo-libra" className="text-lg font-semibold text-gray-800">
-        Cuánto nos cuesta producir una libra (500 g)
+        Costo de producir una libra
       </h2>
+      {mermaAcumulada !== null && <p className="text-xs text-gray-500">Con la merma de tostión acumulada del lote: {formatPct(mermaAcumulada * 100)}.</p>}
 
-      {estado === "sin_tostion" ? (
+      {sinTostion ? (
         <p role="status" className="rounded-md bg-stone-50 px-3 py-2 text-sm text-gray-600">
-          {aviso}
+          {mensajeSinCosto("sin_tostion")}
         </p>
       ) : (
         <>
-          <dl className="divide-y divide-stone-100">
-            <Fila
-              etiqueta="Café"
-              valor={moneda(costo.costoCafe === null ? null : Math.round(costo.costoCafe))}
-              detalle={costo.mermaTostion === null ? undefined : `merma de tostión ${formatPct(costo.mermaTostion * 100)}`}
-            />
-            <Fila etiqueta="Bolsa y etiqueta" valor={moneda(bolsaYEtiqueta)} />
-            <Fila etiqueta="Costo" valor={moneda(costo.costoLibra)} fuerte />
-            <Fila etiqueta="Precio de venta" valor={moneda(costo.precioVenta)} />
-            <Fila
-              etiqueta="Margen"
-              valor={costo.margen === null ? GUION : `${formatCOP(costo.margen)} (${formatPct(costo.margenPct)})`}
-              fuerte
-            />
-          </dl>
-          {aviso && (
-            <p role="status" className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wide text-gray-500">
+                  <th scope="col" className="py-2 pr-3 font-semibold">
+                    &nbsp;
+                  </th>
+                  {aplican.map((c) => (
+                    <th key={c.gramos} scope="col" className="px-3 py-2 text-right font-semibold">
+                      {etiquetaPresentacion(c.gramos)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {filas.map((f) => (
+                  <tr key={f.etiqueta}>
+                    <th scope="row" className={f.fuerte ? "py-2 pr-3 text-left font-semibold text-gray-800" : "py-2 pr-3 text-left font-normal text-gray-600"}>
+                      {f.etiqueta}
+                    </th>
+                    {aplican.map((c) => (
+                      <td key={c.gramos} className={`px-3 py-2 text-right tabular-nums ${f.fuerte ? "font-semibold text-gray-900" : "text-gray-800"}`}>
+                        {f.valor(c)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {avisos.map((aviso) => (
+            <p key={aviso} role="status" className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
               {aviso}
             </p>
-          )}
+          ))}
         </>
       )}
       <p className="text-xs text-gray-500">{NOTA_COSTO_DIRECTO}</p>

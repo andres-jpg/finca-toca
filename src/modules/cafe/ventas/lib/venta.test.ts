@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { avisoStock, enteroSigno, etiquetaEstadoVenta, etiquetaTipoVenta, subtotalLinea, textoFactura, textoVentaGuardada, totalUnidades, totalVenta } from "./venta";
+import { enteroSigno, estaAgotado, etiquetaEstadoVenta, etiquetaTipoVenta, subtotalLinea, limitarCantidadTexto, maximoVendible, textoFactura, textoMaximoDisponible, textoVentaGuardada, totalUnidades, totalVenta } from "./venta";
 
 describe("subtotalLinea", () => {
   it("cantidad × precio, en pesos", () => {
@@ -44,26 +44,44 @@ describe("totalUnidades", () => {
   });
 });
 
-describe("avisoStock", () => {
-  it("avisa cuando la cantidad supera el inventario, con lo que quedaría", () => {
-    const a = avisoStock(5, 8);
-    expect(a?.resto).toBe(-3);
-    expect(a?.texto).toBe("Hay 5 en inventario; quedarán −3. Puedes guardar igualmente.");
+describe("maximoVendible y estaAgotado (B-11)", () => {
+  it("el máximo es el stock entero; el stock heredado negativo cuenta como 0", () => {
+    expect(maximoVendible(14)).toBe(14);
+    expect(maximoVendible(0)).toBe(0);
+    expect(maximoVendible(-3)).toBe(0);
+    expect(maximoVendible(Number.NaN)).toBe(0);
   });
 
-  it("no avisa si alcanza (aunque quede en cero) ni si aún no hay cantidad", () => {
-    expect(avisoStock(5, 5)).toBeNull();
-    expect(avisoStock(5, 1)).toBeNull();
-    expect(avisoStock(5, 0)).toBeNull();
-    expect(avisoStock(5, Number.NaN)).toBeNull();
+  it("agotado con stock 0 o negativo", () => {
+    expect(estaAgotado(0)).toBe(true);
+    expect(estaAgotado(-3)).toBe(true);
+    expect(estaAgotado(1)).toBe(false);
   });
 
-  it("con el inventario ya negativo lo dice con signo", () => {
-    expect(avisoStock(-2, 1)?.texto).toBe("Hay −2 en inventario; quedarán −3. Puedes guardar igualmente.");
+  it("textoMaximoDisponible dice el máximo con punto de miles", () => {
+    expect(textoMaximoDisponible(14)).toBe("Máximo disponible: 14");
+    expect(textoMaximoDisponible(1200)).toBe("Máximo disponible: 1.200");
+  });
+});
+
+describe("limitarCantidadTexto (B-11)", () => {
+  it("recorta al stock lo que lo supera", () => {
+    expect(limitarCantidadTexto("20", 14)).toBe("14");
+    expect(limitarCantidadTexto("15", 14)).toBe("14");
   });
 
-  it("agrupa miles", () => {
-    expect(avisoStock(1200, 1500)?.texto).toBe("Hay 1.200 en inventario; quedarán −300. Puedes guardar igualmente.");
+  it("deja igual lo que cabe", () => {
+    expect(limitarCantidadTexto("14", 14)).toBe("14");
+    expect(limitarCantidadTexto("3", 14)).toBe("3");
+  });
+
+  it("deja el texto que aún no es un número para que el formulario lo señale", () => {
+    expect(limitarCantidadTexto("", 14)).toBe("");
+    expect(limitarCantidadTexto("abc", 14)).toBe("abc");
+  });
+
+  it("sin stock recorta a 0", () => {
+    expect(limitarCantidadTexto("2", 0)).toBe("0");
   });
 });
 

@@ -1,81 +1,14 @@
 import type { TipoProceso } from "../lotes/types";
 
-// Tipos del panel operativo de gerencia (FIN-115 · CO-34). Son la forma ya LEÍDA y validada de lo que devuelven
-// `cafe.kpis_periodo`, `cafe.produccion_diaria` y `cafe.ventas_diarias` (los números llegan como `number`; los
-// importes de la base son enteros de pesos o kilos con tres decimales).
+// Tipos del panel de gerencia («Cómo va el negocio», B-14). Son la forma ya LEÍDA y validada de lo que devuelven las
+// funciones de la base: `cafe.produccion_diaria`, `cafe.ventas_diarias`, `cafe.produccion_panel`,
+// `cafe.ventas_por_presentacion` y `cafe.proveedores_marca_propia` (los números llegan como `number`; los importes de la
+// base son enteros de pesos o kilos con tres decimales).
 
 /** Líneas del panel: una partición de los lotes (ver `lineaPanel`). */
 export type LineaPanel = "marca_propia" | "trilla" | "maquila";
-/** Líneas de servicio (las que cobran con tarifa). */
-export type LineaServicio = Exclude<LineaPanel, "marca_propia">;
 
-export type PeriodoPanel = "hoy" | "semana" | "mes" | "rango";
-
-export interface RecibidoLinea {
-  linea: LineaPanel;
-  kg: number;
-  lotes: number;
-}
-
-/** Merma de un tipo de proceso en el periodo. `mermaPct` es la guardada (3 decimales): para MOSTRAR se usa `pctDeMerma` con los kg. */
-export interface MermaTipo {
-  tipo: TipoProceso;
-  procesos: number;
-  kgEntrada: number;
-  kgSalida: number;
-  mermaKg: number;
-  mermaPct: number | null;
-  desvios: number;
-}
-
-export interface IngresoMarcaPropia {
-  total: number;
-  ventas: number;
-  cortesias: number;
-  unidadesCortesia: number;
-}
-
-export interface IngresoServicios {
-  total: number;
-  porLinea: { linea: LineaServicio; valor: number }[];
-}
-
-export interface InventarioPropio {
-  cafeEnPlantaKg: number;
-  lotesEnPlanta: number;
-  productoTerminadoKg: number;
-}
-
-export interface ClienteEnPlanta {
-  terceroId: string | null;
-  nombre: string;
-  kg: number;
-  lotes: number;
-}
-
-export interface InventarioTerceros {
-  kgEnPlanta: number;
-  lotes: number;
-  clientes: number;
-  /** Los cinco con más kilos, de mayor a menor. */
-  porCliente: ClienteEnPlanta[];
-}
-
-/** Todas las tarjetas del panel. `null` = «no aplica con la línea elegida» (no es cero). */
-export interface KpisPanel {
-  desde: string;
-  hasta: string;
-  hoy: string;
-  linea: LineaPanel | null;
-  recibido: RecibidoLinea[];
-  mermas: MermaTipo[];
-  desvios: number;
-  ingresoMarcaPropia: IngresoMarcaPropia | null;
-  ingresoServicios: IngresoServicios | null;
-  inventarioPropio: InventarioPropio | null;
-  inventarioTerceros: InventarioTerceros | null;
-  insumosBajoMinimo: number;
-}
+export type PeriodoPanel = "hoy" | "semana" | "mes";
 
 /** Una fila de `cafe.produccion_diaria`: un día, una línea y un tipo de proceso. */
 export interface FilaProduccion {
@@ -94,6 +27,28 @@ export interface VentaDiaria {
   total: number;
   nVentas: number;
   unidadesCortesia: number;
+}
+
+/** Una fila de `cafe.produccion_panel`: los kg que entran a un tipo de proceso en una línea, en el periodo. */
+export interface FilaProduccionPanel {
+  tipo: TipoProceso;
+  linea: LineaPanel;
+  procesos: number;
+  kgEntrada: number;
+  /** Entrada de los procesos que ya tienen salida: la base de la merma (una tanda de tostión sin cerrar no la tiene). */
+  kgEntradaMedida: number;
+  kgSalida: number;
+}
+
+/** Una fila de `cafe.ventas_por_presentacion`: lo vendido (sin cortesías ni anuladas) de un producto terminado. */
+export interface VentaPresentacion {
+  articuloId: string;
+  nombre: string;
+  tipoCafeId: string;
+  presentacionG: number;
+  unidades: number;
+  libras: number;
+  ingreso: number;
 }
 
 /** Un proveedor de marca propia en el panel (`cafe.proveedores_marca_propia`), de los lotes recibidos en el periodo. */

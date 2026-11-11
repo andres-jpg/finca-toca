@@ -8,7 +8,6 @@ import { DESTINOS_DIFERENCIA, FORMAS_CAFE, parsearUnidades } from "../lib/empaqu
 // formulario avise antes de guardar. Los pesos aceptan texto con COMA decimal y las unidades, enteros con punto de
 // miles: el formulario guarda lo que escribe el operario y el schema lo normaliza, en el navegador y en el Server Action.
 
-const MAX_BULTOS = 200;
 const MAX_KG = 10_000_000; // la base rechaza >= 10.000.000 (numeric(10,3))
 const MAX_UNIDADES = 99_999;
 const MAX_PRESENTACIONES = 20;
@@ -16,35 +15,21 @@ const MAX_PRESENTACIONES = 20;
 const enGramos = (n: number) => Math.abs(n * 1000 - Math.round(n * 1000)) < 1e-6;
 const vacio = (v: unknown) => v === null || v === undefined || (typeof v === "string" && v.trim() === "");
 
-/** Peso de entrada opcional: vacío = `null` (la base toma el disponible); escrito pero ilegible = error. */
+/** Peso opcional: vacío = `null`; escrito pero ilegible = error. */
 const kilosOpcional = z
-  .union([z.number(), z.string(), z.null()], { message: "El peso de entrada debe ser un número" })
+  .union([z.number(), z.string(), z.null()], { message: "El peso debe ser un número" })
   .nullish()
   .transform((v, ctx) => {
     if (vacio(v)) return null;
     const n = parsearDecimal(v as string | number);
     if (n === null || n <= 0) {
-      ctx.addIssue({ code: "custom", message: "El peso de entrada debe ser un número mayor que cero" });
+      ctx.addIssue({ code: "custom", message: "El peso debe ser un número mayor que cero" });
       return z.NEVER;
     }
     if (n >= MAX_KG) ctx.addIssue({ code: "custom", message: "El peso es demasiado grande" });
     else if (!enGramos(n)) ctx.addIssue({ code: "custom", message: "Usa como máximo 3 decimales (gramos)" });
     return n;
   });
-
-/** Peso obligatorio de la molienda: `permitirCero` admite 0 en la salida (se molió y no salió nada). */
-function kilosRequerido(nombre: string, permitirCero = false) {
-  return z.union([z.number(), z.string()], { message: `Indica el peso de ${nombre}` }).transform((v, ctx) => {
-    const n = parsearDecimal(v);
-    if (n === null || n < 0 || (n === 0 && !permitirCero)) {
-      ctx.addIssue({ code: "custom", message: `El peso de ${nombre} debe ser un número${permitirCero ? "" : " mayor que cero"}` });
-      return z.NEVER;
-    }
-    if (n >= MAX_KG) ctx.addIssue({ code: "custom", message: "El peso es demasiado grande" });
-    else if (!enGramos(n)) ctx.addIssue({ code: "custom", message: "Usa como máximo 3 decimales (gramos)" });
-    return n;
-  });
-}
 
 const unidades = z.union([z.number(), z.string()], { message: "Indica las unidades" }).transform((v, ctx) => {
   const n = parsearUnidades(v);
@@ -80,20 +65,32 @@ export const empaqueSchema = z
     loteId: z.uuid({ message: "El lote no es válido" }),
     /** `YYYY-MM-DD` en la zona del cliente. */
     fecha: z.string({ message: "Indica la fecha" }).regex(/^\d{4}-\d{2}-\d{2}$/, "La fecha no es válida"),
-    /** Bultos que se empacan. Un lote de un solo bulto manda el suyo (el formulario no muestra la selección). */
-    bultoIds: z.array(z.uuid({ message: "Bulto no válido" })).max(MAX_BULTOS),
-    /** Empaque de un café reabierto (CO-33): en vez de bultos del lote, la reapertura que se empaca. */
+    /** Tanda (la tostión) que se empaca; `null` = la única con café por empacar (la resuelve la base). */
+    origenProcesoId: z
+      .uuid({ message: "La tanda no es válida" })
+      .nullish()
+      .transform((v) => v ?? null),
+    /** Empaque de un café reabierto (CO-33): en vez de una tanda, la reapertura que se empaca. */
     reaperturaId: z
       .uuid({ message: "La reapertura no es válida" })
       .nullish()
       .transform((v) => v ?? null),
+    /** Peso total en báscula de la tanda (incluye el sobrante). Obligatorio en el flujo normal; la base lo valida. */
+    pesoBasculaKg: kilosOpcional,
+    /** Solo con un café reabierto (que no pasa por báscula): lo que llega a empaque. */
     pesoEntradaKg: kilosOpcional,
-    /** Marca propia con líneas de café molido: la molienda se registra en el mismo paso (A-02). */
-    molienda: z
-      .object({ entradaKg: kilosRequerido("entrada de la molienda"), salidaKg: kilosRequerido("salida de la molienda", true) })
+    /** Forma del sobrante de marca propia (queda como tostado sin empacar de esa forma). */
+    sobranteForma: z
+      .enum(FORMAS_CAFE)
       .nullish()
-      .transform((v) => v ?? null),
-    /** A dónde va lo que llega a empaque y no entra en bolsas. Obligatorio si sobra café (lo exige la base). */
+      .transform((v) => v ?? "grano"),
+    /** Tostado sin empacar de tandas anteriores que se incluye en las bolsas (B-09). No es báscula de la tanda. */
+    incluirTostado: z
+      .array(z.object({ loteOrigenId: z.uuid({ message: "El lote no es válido" }), forma: z.enum(FORMAS_CAFE), kg: kilosOpcional.refine((n) => n !== null, "Indica los kilos a incluir") }))
+      .max(20)
+      .nullish()
+      .transform((v) => v ?? []),
+    /** Solo el empaque de un café reabierto elige el destino del sobrante. */
     diferenciaDestino: z
       .enum(DESTINOS_DIFERENCIA, { message: "Elige el destino de la diferencia" })
       .nullish()
@@ -118,9 +115,6 @@ export const empaqueSchema = z
       }
       vistas.add(clave);
     }
-    if (v.molienda && v.molienda.salidaKg > v.molienda.entradaKg) {
-      ctx.addIssue({ code: "custom", path: ["molienda", "salidaKg"], message: "Lo que sale de la molienda no puede superar lo que entra" });
-    }
   });
 
 export type EmpaqueFormInput = z.input<typeof empaqueSchema>;
@@ -131,18 +125,20 @@ export function payloadEmpaque(v: EmpaqueValues): Json {
   return {
     lote_id: v.loteId,
     fecha: v.fecha,
-    bultos: v.bultoIds,
+    ...(v.origenProcesoId ? { origen_proceso_id: v.origenProcesoId } : {}),
     // Solo con un café reabierto (CO-33); sin él la RPC recibe lo mismo de siempre.
-    ...(v.reaperturaId ? { reapertura_id: v.reaperturaId } : {}),
-    peso_entrada_kg: v.pesoEntradaKg,
+    ...(v.reaperturaId ? { reapertura_id: v.reaperturaId, peso_entrada_kg: v.pesoEntradaKg, diferencia_destino: v.diferenciaDestino } : {}),
+    ...(v.pesoBasculaKg !== null ? { peso_bascula_kg: v.pesoBasculaKg } : {}),
+    sobrante_forma: v.sobranteForma,
+    ...(v.incluirTostado.length > 0
+      ? { incluir_tostado: v.incluirTostado.map((i) => ({ lote_origen_id: i.loteOrigenId, forma: i.forma, kg: i.kg })) }
+      : {}),
     lineas: v.lineas.map((l) => ({
       presentacion_g: l.presentacionG,
       unidades: l.unidades,
       ...(l.forma === "molido" ? { forma: "molido" } : {}),
       ...(l.bolsaCliente ? { bolsa_cliente: true } : {}),
     })),
-    ...(v.molienda ? { molienda: { peso_entrada_kg: v.molienda.entradaKg, peso_salida_kg: v.molienda.salidaKg } } : {}),
-    diferencia_destino: v.diferenciaDestino,
     observaciones: v.observaciones,
   };
 }

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Factory, PackageCheck } from "lucide-react";
+import { ArrowLeft, Download, Factory, PackageCheck } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { getHistorialCambios, type CambioAuditado } from "@/modules/core/auditoria/actions/historial.actions";
@@ -11,16 +11,16 @@ import { requireModuloPagina } from "@/modules/core/tenants/tenant.guards";
 import { AnularLoteButton } from "@/modules/cafe/lotes/components/anular-lote-button";
 import { EditarLote } from "@/modules/cafe/lotes/components/editar-lote";
 import { EdicionesLote } from "@/modules/cafe/lotes/components/ediciones-lote";
-import { BultosTabla } from "@/modules/cafe/lotes/components/bultos-tabla";
 import { EtapasTabla } from "@/modules/cafe/lotes/components/etapas-tabla";
 import { CostoLibraLote } from "@/modules/cafe/costo/components/costo-libra-lote";
-import { getCostoLibraLote } from "@/modules/cafe/costo/queries/costo.queries";
+import { getCostosLibraLote } from "@/modules/cafe/costo/queries/costo.queries";
 import { LoteCabecera } from "@/modules/cafe/lotes/components/lote-cabecera";
 import { CifrasLote } from "@/modules/cafe/lotes/components/cifras-lote";
 import { DondeEstaHoy } from "@/modules/cafe/lotes/components/donde-esta-hoy";
 import { RecorridoLote } from "@/modules/cafe/lotes/components/recorrido-lote";
-import { bultosPorEstado, empacadoPorPresentacion, llevaTostion, sinTostar } from "@/modules/cafe/lotes/lib/donde-esta-hoy";
+import { saldoPorEstado, empacadoPorPresentacion, llevaTostion, sinTostar } from "@/modules/cafe/lotes/lib/donde-esta-hoy";
 import { mermaProcesada } from "@/modules/cafe/lotes/lib/etapas";
+import { mermaTostionAcumulada, notaComprado } from "@/modules/cafe/lotes/lib/cifras";
 import { construirRecorrido } from "@/modules/cafe/lotes/lib/recorrido";
 import { getSaldoGranel } from "@/modules/cafe/empaque/queries/empaque.queries";
 import { LoteTimeline } from "@/modules/cafe/lotes/components/lote-timeline";
@@ -33,7 +33,7 @@ import { EmpacadoSeccion } from "@/modules/cafe/reapertura/components/empacado-s
 import { getReaperturasDeFicha } from "@/modules/cafe/reapertura/queries/reapertura.queries";
 import type { Remision } from "@/modules/cafe/remisiones/types";
 import {
-  getBultos,
+  getOrigenes,
   getEtapas,
   getLote,
   getResponsables,
@@ -42,7 +42,7 @@ import {
 
 /**
  * Ficha del lote: de dónde viene, qué procesos tuvo, cuánta merma y cuánto queda (HU-F1-05 y HU-F1-12). Todo sale de
- * las vistas `v_lotes`, `v_lote_etapas` y `v_bultos_estado`: nada se guarda a mano. La ven todos los miembros
+ * las vistas `v_lotes`, `v_lote_etapas` y `v_origenes_disponibles`: nada se guarda a mano. La ven todos los miembros
  * (Gerencia sin botones); «Ir a planta» es de quien opera, «Anular lote» de owner/admin y el historial de cambios
  * de owner/admin. En un lote de servicio, «Generar remisión» (CO-32) es de quien opera cuando el lote está listo y
  * de owner/admin también con servicios pendientes; tras entregar, la sección «Remisión de entrega» imprime y anula. Lo escondido es cosmético: cada acción repite módulo y rol y el RLS es la frontera real.
@@ -60,9 +60,9 @@ export default async function LotePage({ params }: { params: Promise<{ id: strin
 
   const esAdmin = sesion.rolTenant === "owner" || sesion.rolTenant === "admin";
   const conRemisiones = lote.linea === "servicio" && tieneModulo(sesion.tenant.modulos, "cafe.remisiones");
-  const [etapas, bultos, responsables, historial, remisiones, costoLibra] = await Promise.all([
+  const [etapas, origenes, responsables, historial, remisiones, costoLibra] = await Promise.all([
     getEtapas(lote.id),
-    getBultos(lote.id),
+    getOrigenes(lote.id),
     getResponsables(lote.id),
     esAdmin ? historialDelLote(lote.id) : Promise.resolve<CambioAuditado[] | null>(null),
     conRemisiones ? remisionesDelLote(lote.id) : Promise.resolve<Remision[]>([]),
@@ -71,7 +71,7 @@ export default async function LotePage({ params }: { params: Promise<{ id: strin
   // Reaperturas de producto empacado (CO-33): solo un lote de marca propia las tiene.
   const reaperturas =
     lote.linea === "marca_propia" ? await getReaperturasDeFicha(lote.id, responsables) : { saldos: [], reaperturas: [], procesos: [], eventos: [] };
-  const eventos = await getTimeline(lote, bultos, responsables, remisiones.map((r) => aEventoDeLinea(r, responsables)), reaperturas.eventos);
+  const eventos = await getTimeline(lote, responsables, remisiones.map((r) => aEventoDeLinea(r, responsables)), reaperturas.eventos);
 
   const zona = sesion.tenant.zonaHoraria;
 
@@ -79,27 +79,31 @@ export default async function LotePage({ params }: { params: Promise<{ id: strin
   const esMarcaPropia = lote.linea === "marca_propia";
   const granelKg = esMarcaPropia ? await granelDelLote(lote.id) : null;
   const procesosVigentes = eventos.flatMap((e) => (e.clase === "proceso" ? [e.datos] : []));
-  const grupos = bultosPorEstado(bultos);
+  const grupos = saldoPorEstado(origenes);
   const conTostion = llevaTostion(lote.serviciosRequeridos, etapas);
   const reabiertas = new Map(reaperturas.saldos.map((s) => [s.presentacionG, s.reabiertas]));
   const empacado = empacadoPorPresentacion(procesosVigentes, reabiertas);
-  const merma = mermaProcesada(etapas);
-  const etapasConMerma = etapas.filter((e) => e.tipo !== "empaque");
   const tostion = etapas.find((e) => e.tipo === "tostion");
-  // La insignia solo compara contra la referencia de la tostión cuando esa es la única etapa con merma.
+  // Con tostión, la merma es la de tostión acumulada (tandas empacadas); sin ella (solo trilla) se muestra la de lo procesado.
+  const merma = conTostion ? mermaTostionAcumulada(etapas) : mermaProcesada(etapas);
   const refTostion =
-    merma && etapasConMerma.length === 1 && tostion
+    merma && conTostion && tostion
       ? procesosVigentes.find((p) => p.tipo === "tostion" && p.anulacion === null && p.mermaReferenciaPct !== null)
       : undefined;
+  const puedeOperar = sesion.rolTenant !== "viewer" && tieneModulo(sesion.tenant.modulos, "cafe.procesos");
+  const tostadoPorEmpacarKg = (grupos.find((g) => g.paso === "tostion")?.pesoKg ?? 0) + (granelKg ?? 0);
   const recorrido = construirRecorrido({
+    loteId: lote.id,
     linea: lote.linea,
     estado: lote.estado,
     requeridos: lote.serviciosRequeridos,
     etapas,
+    pesoRecibidoKg: lote.pesoRecibidoKg,
+    tostadoPorEmpacarKg,
+    puedeOperar,
     agotado: grupos.length === 0 && !(granelKg && granelKg > 0) && empacado.length === 0 && etapas.length > 0,
   });
   const sinProcesos = etapas.length === 0;
-  const puedeOperar = sesion.rolTenant !== "viewer" && tieneModulo(sesion.tenant.modulos, "cafe.procesos");
   const verPlanta = puedeOperar && lotePendienteDeTrabajo(lote.estado);
   const puedeAnular = esAdmin && sinProcesos && lote.anulacion === null;
   // Remisión: Gerencia (`viewer`) no genera. Esconder el botón es cosmético; la action y la RPC lo exigen.
@@ -114,9 +118,15 @@ export default async function LotePage({ params }: { params: Promise<{ id: strin
             Lotes
           </Link>
         </Button>
-        {(esAdmin || verPlanta || puedeAnular || generar === "normal") && (
-          <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="flex flex-col gap-2 sm:flex-row">
             <EditarLote loteId={lote.id} esAdmin={esAdmin} zona={zona} />
+            {/* Excel de este lote (mismo exportador que el listado, filtrado por su código). Todos los roles. */}
+            <Button asChild variant="outline" className="h-11 sm:h-9">
+              <a href={`/api/export/cafe-lotes?q=${encodeURIComponent(lote.codigo)}`}>
+                <Download className="mr-2 h-4 w-4" />
+                Exportar a Excel
+              </a>
+            </Button>
             {generar === "normal" && (
               <Button asChild className="h-11 sm:h-9">
                 <Link href={rutaEntregar(lote.id)}>
@@ -135,7 +145,6 @@ export default async function LotePage({ params }: { params: Promise<{ id: strin
             )}
             {puedeAnular && <AnularLoteButton loteId={lote.id} codigo={lote.codigo} />}
           </div>
-        )}
       </div>
 
       <LoteCabecera lote={lote} etapas={etapas} zonaHoraria={zona} />
@@ -145,8 +154,10 @@ export default async function LotePage({ params }: { params: Promise<{ id: strin
       <CifrasLote
         esServicio={!esMarcaPropia}
         recibidoKg={lote.pesoRecibidoKg}
-        tostadoKg={conTostion ? (tostion?.pesoSalidaKg ?? 0) : null}
+        notaCompra={esMarcaPropia ? notaComprado(lote.precioCompraKg, lote.valorCompra) : null}
+        procesado={conTostion ? { kg: tostion?.kgProcesados ?? 0, tandas: tostion?.numProcesos ?? 0 } : null}
         merma={merma}
+        conTostion={conTostion}
         referencia={
           merma && refTostion
             ? { pct: merma.pct, referenciaPct: refTostion.mermaReferenciaPct, toleranciaPts: refTostion.toleranciaPts, tipo: "tostion" }
@@ -156,9 +167,22 @@ export default async function LotePage({ params }: { params: Promise<{ id: strin
         sinTostarKg={conTostion ? sinTostar(grupos).pesoKg : null}
       />
 
-      <DondeEstaHoy grupos={grupos} granelKg={granelKg} empacado={empacado} />
-
-      {costoLibra && <CostoLibraLote costo={costoLibra} />}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+        <section className="space-y-2 rounded-lg border border-stone-200 bg-white p-4 sm:p-5" aria-labelledby="titulo-timeline">
+          <h2 id="titulo-timeline" className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+            Historia del lote
+          </h2>
+          <LoteTimeline
+            eventos={eventos}
+            zonaHoraria={zona}
+            perfil={{ nivel: lote.nivelTueste, tempC: lote.perfilTempC, tiempoMin: lote.perfilTiempoMin }}
+          />
+        </section>
+        <div className="space-y-6">
+          <DondeEstaHoy grupos={grupos} granelKg={granelKg} empacado={empacado} />
+          {costoLibra && <CostoLibraLote costos={costoLibra} />}
+        </div>
+      </div>
 
       <RemisionLoteSeccion remisiones={remisiones} puedeAnular={esAdmin} zonaHoraria={zona} />
 
@@ -181,21 +205,7 @@ export default async function LotePage({ params }: { params: Promise<{ id: strin
         <EtapasTabla requeridos={lote.serviciosRequeridos} etapas={etapas} esServicio={lote.linea === "servicio"} />
       </section>
 
-      <section className="space-y-2" aria-labelledby="titulo-timeline">
-        <h2 id="titulo-timeline" className="text-lg font-semibold text-gray-800">
-          Historia del lote
-        </h2>
-        <LoteTimeline eventos={eventos} zonaHoraria={zona} />
-      </section>
-
       <EdicionesLote loteId={lote.id} zona={zona} />
-
-      <section className="space-y-2" aria-labelledby="titulo-bultos">
-        <h2 id="titulo-bultos" className="text-lg font-semibold text-gray-800">
-          Bultos
-        </h2>
-        <BultosTabla bultos={bultos} pasosDelLote={lote.serviciosRequeridos} />
-      </section>
 
       {historial && (
         <section className="space-y-2" aria-labelledby="titulo-historial">
@@ -233,7 +243,7 @@ async function historialDelLote(loteId: string): Promise<CambioAuditado[] | null
 /** El costo por libra es un extra de la ficha: si la función aún no existe en este entorno (migración pendiente), se omite. */
 async function costoLibraDelLote(loteId: string) {
   try {
-    return await getCostoLibraLote(loteId);
+    return await getCostosLibraLote(loteId);
   } catch {
     return null;
   }

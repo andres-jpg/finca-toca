@@ -6,6 +6,8 @@ export interface InsumoEmpaque extends StockArticulo {
   clase: ClaseInsumo;
   /** Peso nominal en gramos: es la presentación del producto terminado que se empaca con este insumo. */
   presentacionG: number;
+  /** Precio unitario vigente (COP); `null` si aún no se ha fijado (el costo por libra no se calcula sin él). */
+  precio: number | null;
 }
 
 /** Kardex de un insumo con los nombres que el log solo guarda como uuid. */

@@ -43,7 +43,7 @@ export function KardexProductoDialog({ producto, zonaHoraria, onClose }: KardexP
         <DialogHeader>
           <DialogTitle>Kardex · {producto?.nombre}</DialogTitle>
           <DialogDescription>
-            Cada entrada y salida de este producto. Las entradas son solo por empaque; el stock es la suma de sus movimientos y nunca se edita.
+            Cada entrada y salida de este producto. Las entradas llegan por empaque o por carga inicial; las correcciones, por «Ajustar inventario», con su motivo. El stock es la suma de sus movimientos y nunca se edita.
           </DialogDescription>
         </DialogHeader>
         {!actual ? (

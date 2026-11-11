@@ -70,7 +70,7 @@ export async function getExtrasTiquete(loteIds: readonly string[]): Promise<Map<
 
   const { data: lotes, error } = await cafe
     .from("v_lotes")
-    .select("id, created_at, fecha_recepcion, num_bultos, nivel_tueste, perfil_temp_c, perfil_tiempo_min")
+    .select("id, created_at, fecha_recepcion, nivel_tueste, perfil_temp_c, perfil_tiempo_min")
     .in("id", ids);
   if (error) throw new Error("No se pudieron cargar los datos de los lotes");
 
@@ -90,7 +90,6 @@ export async function getExtrasTiquete(loteIds: readonly string[]): Promise<Map<
     resultado.set(l.id as string, {
       llegadaEn: l.created_at as string,
       fechaRecepcion: l.fecha_recepcion as string,
-      numBultos: l.num_bultos as number,
       nivelTueste: (l.nivel_tueste as NivelTueste | null) ?? null,
       perfilTempC: l.perfil_temp_c ?? null,
       perfilTiempoMin: l.perfil_tiempo_min ?? null,

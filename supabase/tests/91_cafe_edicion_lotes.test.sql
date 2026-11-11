@@ -10,7 +10,7 @@
 -- Los lotes se crean con las RPC reales (registrar_recepcion / registrar_compra), como operativo.
 begin;
 
-select plan(16);
+select plan(25);
 
 -- 0. Preparación --------------------------------------------------------------------------------------------
 insert into auth.users (id, aud, role, email) values
@@ -102,10 +102,26 @@ $$;
 grant execute on function pg_temp.p(text, text, integer[], jsonb) to authenticated;
 
 -- Registra un proceso y guarda el resultado bajo `p_res`.
+-- Los baches ya no llevan salida (B-05): estas pruebas parten de tostiones CON salida (la que antes pesaba cada bache), así que
+-- se fija aquí como lo haría el empaque de la tanda (SECURITY DEFINER de prueba, con la bandera de edición de `editar_lote`).
+create or replace function pg_temp.fijar_salida(p_proceso uuid, p_extra jsonb) returns void language plpgsql security definer set search_path = '' as $$
+declare v numeric;
+begin
+  select sum((b ->> 'peso_salida_kg')::numeric) into v from jsonb_array_elements(p_extra -> 'baches') b where b ? 'peso_salida_kg';
+  if v is null then return; end if;
+  perform set_config('cafe.edicion_lote', 'on', true);
+  update cafe.procesos set peso_salida_kg = v where id = p_proceso;
+  perform set_config('cafe.edicion_lote', 'off', true);
+end $$;
+grant execute on function pg_temp.fijar_salida(uuid, jsonb) to authenticated;
+
 create or replace function pg_temp.reg(p_res text, p_k text, p_tipo text, p_nums integer[] default null, p_extra jsonb default '{}')
 returns void language plpgsql as $$
+declare v jsonb;
 begin
-  insert into res select p_res, cafe.registrar_proceso(pg_temp.p(p_k, p_tipo, p_nums, p_extra));
+  v := cafe.registrar_proceso(pg_temp.p(p_k, p_tipo, p_nums, p_extra));
+  insert into res values (p_res, v);
+  if p_tipo = 'tostion' then perform pg_temp.fijar_salida((v ->> 'id')::uuid, p_extra); end if;
 end $$;
 grant execute on function pg_temp.reg(text, text, text, integer[], jsonb) to authenticated;
 
@@ -173,27 +189,27 @@ returns jsonb language sql as $$
       'id', (select (r ->> 'id')::uuid from res where k = 'M1_t'),
       'baches', jsonb_build_array(jsonb_build_object(
         'id', (select id from cafe.baches where proceso_id = (select (r ->> 'id')::uuid from res where k = 'M1_t') and numero = 1),
-        'peso_salida_kg', 10.0, 'temperatura_c', 210))))))
+        'temperatura_c', 210))))))
 $$;
 grant execute on function pg_temp.edicion(text, boolean, text) to authenticated;
 
 insert into res select 'SIM', pg_temp.edicion('M1', true);
 select is((select r #>> '{antes,merma_tostion_pct}' from res where k = 'SIM'), '18.5', 'la previsualización mide la merma de antes');
-select is((select r #>> '{despues,merma_tostion_pct}' from res where k = 'SIM'), '22.2', 'y la de después (23,0 de 27 kg → 22,2 %)');
+select is((select r #>> '{despues,merma_tostion_pct}' from res where k = 'SIM'), '18.5', 'y la de después: corregir la temperatura no cambia la merma (la salida de la tostión la fija su empaque)');
 select is((select count(*)::int from cafe.lote_ediciones), 0, 'simular no deja historial');
-select is((select peso_salida_kg::text from cafe.baches where proceso_id = (select (r ->> 'id')::uuid from res where k = 'M1_t') and numero = 1),
-          '11.000', 'ni toca el bache');
+select is((select temperatura_c::text from cafe.baches where proceso_id = (select (r ->> 'id')::uuid from res where k = 'M1_t') and numero = 1),
+          '205.0', 'ni toca el bache');
 
 -- Guardar de verdad: recalcula el proceso y deja la traza con motivo.
 insert into res select 'REAL', pg_temp.edicion('M1', false);
 select is((select peso_salida_kg::text || '/' || merma_pct::text from cafe.procesos where id = (select (r ->> 'id')::uuid from res where k = 'M1_t')),
-          '21.000/22.222', 'el proceso suma sus baches y recalcula la merma');
+          '22.000/18.519', 'el proceso conserva su salida (la de su empaque) y su merma');
 select is(
   (select array_agg(campo || ':' || valor_anterior || '>' || valor_nuevo || ':' || motivo order by campo) from cafe.lote_ediciones where entidad = 'bache'),
-  array['peso_salida_kg:11.000>10.000:Pesaje mal digitado', 'temperatura_c:205.0>210.0:Pesaje mal digitado'],
+  array['temperatura_c:205.0>210.0:Pesaje mal digitado'],
   'la traza guarda campo, antes, después y motivo'
 );
-select ok((select count(*) from audit.log where tabla = 'cafe.lote_ediciones') >= 2, 'el historial queda en audit.log');
+select ok((select count(*) from audit.log where tabla = 'cafe.lote_ediciones') >= 1, 'el historial queda en audit.log');
 
 -- Una salida mayor que la entrada se rechaza.
 select throws_ok(
@@ -208,6 +224,50 @@ select throws_ok(
 select lives_ok(
   format($q$select cafe.editar_lote(jsonb_build_object('lote_id', %L, 'motivo', 'Llegó antes', 'lote', jsonb_build_object('llegada_at', '2026-11-01T14:30:00Z')))$q$, pg_temp.lid('M1')),
   'el admin corrige la hora de llegada'
+);
+
+-- B-16 (FIN-161) · Peso recibido: UN solo campo (`peso_recibido_kg`), con motivo; el valor de la compra y los saldos se recalculan.
+select pg_temp.comprar('M2', 27, 2);   -- 27 kg a $20.000/kg
+select is((select valor_compra::text from cafe.lotes where id = pg_temp.lid('M2')), '540000.00', 'compra de partida: 27 kg × $20.000');
+select throws_ok(
+  format($q$select cafe.editar_lote(jsonb_build_object('lote_id', %L, 'motivo', 'prueba', 'lote', jsonb_build_object('num_bultos', 3)))$q$, pg_temp.lid('M2')),
+  'P0001', 'datos_invalidos', 'una clave que no se puede corregir se rechaza, no se ignora en silencio'
+);
+select throws_ok(
+  format($q$select cafe.editar_lote(jsonb_build_object('lote_id', %L, 'motivo', 'prueba', 'lote', jsonb_build_object('peso_recibido_kg', 0)))$q$, pg_temp.lid('M2')),
+  'P0001', 'datos_invalidos', 'un peso recibido de cero se rechaza'
+);
+insert into res select 'PESO', cafe.editar_lote(jsonb_build_object(
+  'lote_id', pg_temp.lid('M2'), 'motivo', 'Báscula mal calibrada', 'lote', jsonb_build_object('peso_recibido_kg', 25.5)));
+select is(
+  (select peso_recibido_kg::text || '/' || valor_compra::text from cafe.lotes where id = pg_temp.lid('M2')),
+  '25.500/510000.00', 'corregir el peso recibido (27 → 25,5 kg) recalcula el valor de la compra'
+);
+select is(
+  (select array_agg(referencia || ':' || campo || ':' || valor_anterior || '>' || valor_nuevo || ':' || motivo order by campo)
+     from cafe.lote_ediciones where lote_id = pg_temp.lid('M2')),
+  array[(select codigo from cafe.lotes where id = pg_temp.lid('M2')) || ':peso_recibido_kg:27.000>25.500:Báscula mal calibrada'],
+  'la traza guarda el peso recibido, antes y después, con motivo'
+);
+select is(
+  (select (r #>> '{antes,peso_recibido_kg}') || '>' || (r #>> '{despues,peso_recibido_kg}') from res where k = 'PESO'),
+  '27.000>25.500', 'el «ver impacto» mide el peso recibido de antes y de después'
+);
+
+-- Con procesos: el peso no puede quedar por debajo de lo que ya se procesó, ni cambiarse por la vía directa.
+select throws_ok(
+  format($q$select cafe.editar_lote(jsonb_build_object('lote_id', %L, 'motivo', 'prueba', 'lote', jsonb_build_object('peso_recibido_kg', 20)))$q$, pg_temp.lid('M1')),
+  'P0001', 'edicion_incoherente', 'bajar el peso recibido por debajo de lo ya tostado se rechaza (hay que corregir también el proceso)'
+);
+select throws_ok(
+  format($q$update cafe.lotes set peso_recibido_kg = 26 where id = %L$q$, pg_temp.lid('M1')),
+  'P0001', 'lote_bloqueado', 'con procesos, el peso recibido no cambia por la vía directa'
+);
+insert into res select 'PESO2', cafe.editar_lote(jsonb_build_object(
+  'lote_id', pg_temp.lid('M1'), 'motivo', 'Se pesó de nuevo', 'lote', jsonb_build_object('peso_recibido_kg', 30)));
+select is(
+  (select peso_recibido_kg::text || '/' || valor_compra::text from cafe.lotes where id = pg_temp.lid('M1')),
+  '30.000/600000.00', 'con procesos registrados, el administrador corrige el peso recibido por la RPC y el valor se recalcula'
 );
 
 -- 4. Lote anulado / entregado -----------------------------------------------------------------------------------------

@@ -10,47 +10,46 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { formatKg, formatKgNum, formatPct } from "@/modules/core/formato/numeros";
-import { StockBadge } from "@/modules/core/inventario/components/stock-badge";
+import { formatCOP, formatKg, formatKgNum, formatPct } from "@/modules/core/formato/numeros";
 import { LineaBadge } from "../../components/linea-badge";
-import { calcularMerma } from "../../procesos/lib/merma";
+import { MermaBadge } from "../../components/merma-badge";
 import { fechaCorta, parsearDecimal } from "../../procesos/lib/numero";
-import { ARTICULO_PASO, origenPeso, type LotePasos } from "../../procesos/lib/pasos";
-import type { BultoPlanta, LoteParaProceso } from "../../procesos/types-planta";
-import { etiquetaPresentacion, nombreProductoTerminado } from "../../tipos/lib/productos";
+import { ARTICULO_PASO, type LotePasos } from "../../procesos/lib/pasos";
+import { referenciaDelPaso, type ConfigMerma } from "../../procesos/lib/resumen";
+import type { LoteParaProceso } from "../../procesos/types-planta";
+import { etiquetaPresentacion } from "../../tipos/lib/productos";
 import { registrarEmpaque } from "../actions/empaque.actions";
 import {
-  cuadreMolienda,
+  avisoMolido,
+  cierreEmpaque,
+  costoInsumosEmpaque,
   destinosDeLinea,
   enteroConMiles,
   ETIQUETA_DESTINO,
-  ETIQUETA_FORMA,
-  FORMAS_CAFE,
-  kgDeForma,
-  llegaConMolienda,
   faltantesDeInsumo,
   parsearUnidades,
-  resumenEmpaque,
   textoEmpacadas,
   textoFaltante,
   textoKgLinea,
+  type AcumuladoTandas,
   type DestinoDiferencia,
   type FormaCafe,
   type LineaEmpaqueEntrada,
-  type MoliendaEntrada,
 } from "../lib/empaque";
+import type { TostadoIncluible } from "../queries/empaque.queries";
 import { empaqueSchema } from "../schemas/empaque.schema";
-import type { ConfigEmpaque, ResultadoEmpaque } from "../types";
+import type { ConfigEmpaque, ResultadoEmpaque, TandaEmpaque } from "../types";
 
-// Formulario de EMPAQUE (A-01), pensado para tablet: campos y botones de 44 px como mínimo, teclado numérico
-// (`inputMode`) y ninguna pista que dependa del hover. Ya no muestra bultos ni pide «peso de salida»: lo que llega a
-// empaque es la salida del paso anterior que aún no se ha empacado (lo calcula el servidor) y el operario solo dice
-// cuántas bolsas de cada tamaño salieron. Lo que sobra NO es merma: hay que decir adónde fue (suelto, granel,
-// muestra o pérdida). Marca propia mueve inventario (bolsas, etiquetas, producto terminado) y avisa —no bloquea— si
-// faltan insumos; servicios a terceros solo registra las líneas, con tamaños libres.
+// Formulario de EMPAQUE (B-08), pensado para tablet: campos de 44 px como mínimo, teclado numérico y sin pistas que dependan
+// del hover. Marca propia: tabla FIJA «Bolsas empacadas · {Tipo de café}» con una fila por presentación activa y las cuatro
+// casillas (grano y molido, en bolsas) visibles desde el inicio, en cero; sin «Agregar línea». Terceros: líneas de bolsas del
+// cliente de peso libre. El cierre pide el peso total en báscula (incluye el sobrante); de él sale la merma de tostión DE LA
+// TANDA, que se asigna a su tostión (el empaque y la molienda no tienen merma). Sobrante: marca propia lo deja como «tostado
+// sin empacar» (B-09); terceros se entrega a granel.
 const CAMPO = "h-11 text-base";
+const CELDA = "h-11 w-24 text-right text-base tabular-nums";
 
-/** Empaque de un café REABIERTO (CO-33): sin bultos, lo que llega es todo lo reabierto (o su molienda). */
+/** Empaque de un café REABIERTO (CO-33): sin báscula ni tanda; lo que llega es todo lo reabierto (o su molienda). */
 export interface ReaperturaEmpaque {
   id: string;
   /** De dónde viene el café, para el texto de lo que llega: «Viene de la reapertura de 40 × Excelso 500 g (20 kg)». */
@@ -59,55 +58,66 @@ export interface ReaperturaEmpaque {
 
 interface EmpaqueFormProps {
   lote: Pick<LoteParaProceso["lote"], "id" | "linea" | "servicios" | "tipoCafe">;
-  bultos: BultoPlanta[];
   config: ConfigEmpaque;
+  /** Tandas (tostiones) con café por empacar; vacío si el lote no lleva tostión o es un café reabierto. */
+  tandas?: TandaEmpaque[];
+  /** Acumulado de las tandas ya cerradas del lote. */
+  acumuladoPrevio?: AcumuladoTandas | null;
+  /** Referencias de merma del cliente (banda de tostión: 18 % ± 2). */
+  merma?: ConfigMerma;
+  /** Tostado sin empacar del mismo tipo de café (B-09): se ofrece incluirlo. */
+  incluibles?: TostadoIncluible[];
   /** `YYYY-MM-DD` de hoy en la zona del cliente (lo calcula el servidor). */
   fechaHoy: string;
-  /** Bultos pendientes de empacar: se mandan sin mostrarlos (el operario no elige bultos). */
-  bultoIdsIniciales: string[];
-  /** Lo que llega a empaque (kg): salida del paso anterior pendiente de empacar. */
+  /** Solo sin tanda (reapertura, o terceros sin tostión): lo que llega a empaque (kg). */
   pesoDisponibleInicial: number | null;
-  /** Presente = se empaca un café reabierto en vez de bultos del lote. */
+  /** Presente = se empaca un café reabierto en vez de una tanda. */
   reapertura?: ReaperturaEmpaque;
 }
 
-/** Fila de tamaño libre (servicios a terceros): el tamaño se escribe en kg y se guarda en gramos. La bolsa siempre es del cliente. */
+/** Fila de tamaño libre (terceros): el peso por bolsa se elige rápido (10 kg, 5 kg) o se escribe (Otro). */
 interface FilaLibre {
   clave: number;
+  /** `10` | `5` | `otro`. */
+  tamano: string;
   kgTxt: string;
+  forma: FormaCafe;
   unidadesTxt: string;
 }
 
-/** Clave de las unidades escritas por presentación y forma (marca propia). */
-const claveUnidades = (g: number, forma: FormaCafe) => `${g}:${forma}`;
+const clave = (g: number, forma: FormaCafe) => `${g}:${forma}`;
 
-export function EmpaqueForm({ lote, bultos, config, fechaHoy, bultoIdsIniciales, pesoDisponibleInicial, reapertura }: EmpaqueFormProps) {
+const MERMA_POR_DEFECTO: ConfigMerma = { referenciaTrillaPct: 19, referenciaTostionPct: { bajo: 18, medio: 18, alto: 18 }, toleranciaPts: 2 };
+
+export function EmpaqueForm({ lote, config, tandas = [], acumuladoPrevio = null, merma = MERMA_POR_DEFECTO, incluibles = [], fechaHoy, pesoDisponibleInicial, reapertura }: EmpaqueFormProps) {
   const router = useRouter();
   const esMarcaPropia = lote.linea === "marca_propia";
-  const lotePasos: LotePasos = { linea: lote.linea, servicios: lote.servicios };
+  const _pasos: LotePasos = { linea: lote.linea, servicios: lote.servicios };
+  void _pasos;
+  const conTanda = tandas.length > 0 && !reapertura;
 
-  const llegaKg = pesoDisponibleInicial;
   const [fecha, setFecha] = useState(fechaHoy);
+  const [tandaId, setTandaId] = useState<string>(tandas[0]?.procesoId ?? "");
   const [unidadesTxt, setUnidadesTxt] = useState<Record<string, string>>({});
-  /** Forma que se está editando en cada presentación (el toggle Grano | Molido). */
-  const [formaActiva, setFormaActiva] = useState<Record<number, FormaCafe>>({});
-  const [molEntradaTxt, setMolEntradaTxt] = useState("");
-  const [molSalidaTxt, setMolSalidaTxt] = useState("");
-  const [filas, setFilas] = useState<FilaLibre[]>([{ clave: 1, kgTxt: "", unidadesTxt: "" }]);
+  const [filas, setFilas] = useState<FilaLibre[]>([{ clave: 1, tamano: "10", kgTxt: "10", forma: "grano", unidadesTxt: "" }]);
+  const [basculaTxt, setBasculaTxt] = useState("");
+  const [sobranteForma, setSobranteForma] = useState<FormaCafe>("grano");
+  const [incluirTxt, setIncluirTxt] = useState<Record<string, string>>({});
   const [destino, setDestino] = useState<DestinoDiferencia | null>(null);
   const [observaciones, setObservaciones] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Líneas de bolsas con lo que el operario escribió, en gramos enteros.
+  const tanda = tandas.find((t) => t.procesoId === tandaId) ?? tandas[0] ?? null;
+  const nombreTipo = lote.tipoCafe ?? "Café";
+
+  // Líneas de bolsas con lo que el operario escribió (solo las mayores que cero), en gramos enteros.
   const lineas: (LineaEmpaqueEntrada & { producto: string; bolsaCliente: boolean })[] = esMarcaPropia
     ? config.presentaciones.flatMap((p) =>
-        FORMAS_CAFE.flatMap((forma) => {
-          const unidades = parsearUnidades(unidadesTxt[claveUnidades(p.presentacionG, forma)]);
+        (["grano", "molido"] as const).flatMap((forma) => {
+          const unidades = parsearUnidades(unidadesTxt[clave(p.presentacionG, forma)]);
           if (unidades === null) return [];
-          const base = nombreProductoTerminado(lote.tipoCafe ?? "Café", p.presentacionG);
-          const producto = forma === "molido" ? (p.productoMolido?.nombre ?? `${base} molido`) : (p.producto?.nombre ?? base);
-          return [{ presentacionG: p.presentacionG, unidades, forma, bolsaCliente: false, producto }];
+          return [{ presentacionG: p.presentacionG, unidades, forma, bolsaCliente: false, producto: `${nombreTipo} ${etiquetaPresentacion(p.presentacionG)}${forma === "molido" ? " molido" : ""}` }];
         }),
       )
     : filas.flatMap((f) => {
@@ -115,23 +125,31 @@ export function EmpaqueForm({ lote, bultos, config, fechaHoy, bultoIdsIniciales,
         const unidades = parsearUnidades(f.unidadesTxt);
         if (kg === null || kg <= 0 || unidades === null) return [];
         const g = Math.round(kg * 1000);
-        // Bolsas del cliente (A-02): el peso es libre y la bolsa nunca descuenta insumos.
-        return [{ presentacionG: g, unidades, forma: "grano" as const, bolsaCliente: true, producto: etiquetaPresentacion(g) }];
+        return [{ presentacionG: g, unidades, forma: f.forma, bolsaCliente: true, producto: etiquetaPresentacion(g) }];
       });
 
-  // Molienda en el mismo paso (A-02): solo con líneas de café molido y sin reapertura (ahí ya está registrada).
-  const hayMolido = esMarcaPropia && lineas.some((l) => l.forma === "molido");
-  const pideMolienda = hayMolido && !reapertura;
-  const molEntrada = parsearDecimal(molEntradaTxt);
-  const molSalida = parsearDecimal(molSalidaTxt);
-  const molienda: MoliendaEntrada | null =
-    pideMolienda && molEntrada !== null && molEntrada > 0 && molSalida !== null && molSalida <= molEntrada ? { entradaKg: molEntrada, salidaKg: molSalida } : null;
-  const cuadreMol = llegaKg !== null ? cuadreMolienda(llegaKg, molienda, lineas) : null;
-  const mermaMol = molienda ? calcularMerma(molienda.entradaKg, molienda.salidaKg) : null;
-  const llegaEfectivaKg = llegaKg !== null && molienda ? llegaConMolienda(llegaKg, molienda) : llegaKg;
-  const moliendaIncompleta = pideMolienda && (molEntradaTxt.trim() !== "" || molSalidaTxt.trim() !== "") && molienda === null;
+  const molidoKg = lineas.filter((l) => l.forma === "molido").reduce((a, l) => a + (l.presentacionG * l.unidades) / 1000, 0);
+  const granoKg = lineas.filter((l) => l.forma === "grano").reduce((a, l) => a + (l.presentacionG * l.unidades) / 1000, 0);
 
-  const resumen = resumenEmpaque(llegaEfectivaKg, lineas);
+  // Tostado sin empacar que se incluye (B-09): por defecto nada; el operario marca cuánto.
+  const inclusiones = incluibles.flatMap((i) => {
+    const kg = parsearDecimal(incluirTxt[`${i.loteId}:${i.forma}`] ?? "");
+    return kg !== null && kg > 0 ? [{ loteOrigenId: i.loteId, forma: i.forma, kg }] : [];
+  });
+  const incluidoKg = inclusiones.reduce((a, i) => a + i.kg, 0);
+
+  const bascula = parsearDecimal(basculaTxt);
+  const llegaKg = conTanda ? (tanda?.entradaKg ?? null) : pesoDisponibleInicial;
+  const cierre = cierreEmpaque({
+    entradaKg: llegaKg ?? 0,
+    lineas,
+    basculaKg: conTanda ? bascula : (llegaKg ?? null),
+    incluidoKg,
+    acumuladoPrevio: conTanda ? acumuladoPrevio : null,
+  });
+  const basculaSupera = conTanda && bascula !== null && tanda !== null && bascula > tanda.entradaKg + 0.0005;
+  const referenciaPct = tanda?.nivelTueste ? referenciaDelPaso("tostion", merma, tanda.nivelTueste) : merma.referenciaTostionPct.medio;
+
   const faltantes = esMarcaPropia
     ? faltantesDeInsumo(
         config.presentaciones.map((p) => ({
@@ -143,60 +161,44 @@ export function EmpaqueForm({ lote, bultos, config, fechaHoy, bultoIdsIniciales,
       )
     : [];
 
-  const seleccionados = bultos.filter((b) => bultoIdsIniciales.includes(b.id));
-  const origen = origenPeso(lotePasos, "empaque", seleccionados);
-  const textoOrigen =
-    llegaKg === null
-      ? "No se pudo calcular lo que llega a empaque: recarga la página."
-      : reapertura
-        ? reapertura.origen
-        : origen.previo
-          ? `Viene de ${ARTICULO_PASO[origen.previo]} del ${origen.fechas.map((f) => fechaCorta(f)).join(" y ") || "—"}`
-          : "Café pendiente de empacar";
+  // Costo de los insumos de lo que se va a empacar, con el precio vigente (B-13). El que queda registrado es el de este momento.
+  const costoInsumos = esMarcaPropia
+    ? costoInsumosEmpaque(
+        config.presentaciones.map((p) => ({
+          unidades: lineas.filter((l) => l.presentacionG === p.presentacionG).reduce((n, l) => n + l.unidades, 0),
+          bolsaPrecio: p.bolsa?.precio ?? null,
+          etiquetaPrecio: p.etiqueta?.precio ?? null,
+        })),
+      )
+    : null;
 
+  const aviso = esMarcaPropia && conTanda ? avisoMolido(molidoKg, tanda?.moliendaKg ?? null) : null;
   const destinosPosibles = destinosDeLinea(lote.linea);
-  const falta = resumen?.haySobrante && destino === null;
-  const cuadreMalo = cuadreMol !== null && (cuadreMol.molidoSupera || cuadreMol.granoSupera);
-  const deshabilitado = enviando || resumen === null || lineas.length === 0 || resumen.supera || falta === true || moliendaIncompleta || cuadreMalo;
+  const necesitaDestino = Boolean(reapertura) && cierre.sobranteKg > 0;
+  const sinBascula = conTanda && bascula === null;
+  const deshabilitado = enviando || lineas.length === 0 || cierre.supera || basculaSupera || sinBascula || (necesitaDestino && destino === null) || (!conTanda && llegaKg === null);
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (moliendaIncompleta) {
-      setError("Revisa la molienda: lo que entra es mayor que cero y lo que sale no puede superarlo");
-      return;
-    }
-    if (cuadreMalo) {
-      setError("Las bolsas no cuadran con lo molido y lo que quedó sin moler");
-      return;
-    }
-    if (!resumen) {
-      setError("No se pudo calcular lo que llega a empaque");
-      return;
-    }
-    if (resumen.supera) {
-      setError("Las bolsas suman más de lo que llega a empaque");
-      return;
-    }
-    if (resumen.haySobrante && destino === null) {
-      setError("Elige el destino de la diferencia");
-      return;
-    }
+    if (cierre.supera) return setError("Las bolsas suman más que el peso en báscula. Revisar cantidades.");
+    if (basculaSupera) return setError("El peso en báscula supera lo que entró a tostión. Revisar cantidades.");
+    if (sinBascula) return setError("Indica el peso total en báscula.");
+    if (necesitaDestino && destino === null) return setError("Elige el destino del sobrante");
     const parsed = empaqueSchema.safeParse({
       loteId: lote.id,
       fecha,
-      bultoIds: reapertura ? [] : bultoIdsIniciales,
+      origenProcesoId: conTanda ? (tanda?.procesoId ?? null) : null,
       reaperturaId: reapertura?.id ?? null,
-      pesoEntradaKg: null,
-      molienda: molienda ? { entradaKg: molienda.entradaKg, salidaKg: molienda.salidaKg } : null,
+      pesoBasculaKg: conTanda ? bascula : null,
+      pesoEntradaKg: reapertura ? llegaKg : null,
+      sobranteForma,
+      incluirTostado: inclusiones,
+      diferenciaDestino: necesitaDestino ? destino : null,
       lineas: lineas.map(({ presentacionG, unidades, bolsaCliente, forma }) => ({ presentacionG, unidades, bolsaCliente, forma })),
-      diferenciaDestino: resumen.haySobrante ? destino : null,
       observaciones,
     });
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Revisa los campos");
-      return;
-    }
+    if (!parsed.success) return setError(parsed.error.issues[0]?.message ?? "Revisa los campos");
 
     setEnviando(true);
     const r = await registrarEmpaque(parsed.data);
@@ -210,18 +212,20 @@ export function EmpaqueForm({ lote, bultos, config, fechaHoy, bultoIdsIniciales,
   }
 
   function terminar(d: ResultadoEmpaque) {
-    toast.success(textoEmpacadas(d.lineas.map((l) => ({ unidades: l.unidades, producto: l.producto ?? etiquetaPresentacion(l.presentacion_g) }))), {
-      description:
-        d.diferencia_kg > 0 && d.diferencia_destino
-          ? `${formatKg(d.diferencia_kg)}: ${ETIQUETA_DESTINO[d.diferencia_destino].toLowerCase()}`
-          : "Todo el café quedó en bolsas",
-    });
+    const sobrante = d.sobrante_kg > 0 ? `Sobrante ${formatKg(d.sobrante_kg)}: ${esMarcaPropia ? "queda tostado sin empacar" : "se entrega a granel"}.` : "";
+    const costo = d.costo_insumos?.aplica ? ` Costo de insumos: ${formatCOP(d.costo_insumos.total)}${d.costo_insumos.completo ? "" : " (parcial: falta algún precio)"}.` : "";
+    const mermaTanda = d.merma_tostion ? ` Merma de tostión de la tanda: ${formatPct(d.merma_tostion.merma_pct)}.` : "";
+    toast.success(
+      lote.linea === "servicio" && d.lote_estado === "listo"
+        ? "Empaque registrado. Lote listo para entrega."
+        : "Empaque registrado.",
+      { description: `${textoEmpacadas(d.lineas.map((l) => ({ unidades: l.unidades, producto: l.producto ?? etiquetaPresentacion(l.presentacion_g) })))}. ${sobrante}${mermaTanda}${costo}`.trim() },
+    );
     for (const a of d.advertencias) {
       toast.warning(`${a.articulo ?? "Un insumo"} quedó en ${enteroConMiles(a.stock_resultante)}: registra la compra que falta.`);
     }
-    // Último servicio de un lote de terceros: se ofrece entregarlo ahora o dejarlo para después.
-    // El diálogo NO vive aquí: la Server Action revalida /planta/<lote> y la página se vuelve a pintar con otra `key`, así
-    // que este formulario se desmonta antes de poder mostrarlo. Lo pinta la página (`LoteListoDialog`) con `?listo=1`.
+    // Último servicio de un lote de terceros: se ofrece entregarlo ahora o dejarlo para después. El diálogo lo pinta la página
+    // (`LoteListoDialog`) con `?listo=1`: este formulario se desmonta al revalidar la ruta.
     if (lote.linea === "servicio" && d.lote_estado === "listo") {
       router.replace(`/dashboard/cafe/planta/${lote.id}?listo=1`);
       return;
@@ -230,7 +234,17 @@ export function EmpaqueForm({ lote, bultos, config, fechaHoy, bultoIdsIniciales,
     router.refresh();
   }
 
-  const boton = enviando ? "Guardando…" : "Registrar empaque";
+  const textoOrigen = reapertura
+    ? reapertura.origen
+    : conTanda && tanda
+      ? `Viene de ${ARTICULO_PASO.tostion} del ${fechaCorta(tanda.fecha)}`
+      : "Café pendiente de empacar";
+  const tostadoEstimadoKg = tanda && referenciaPct !== null ? Math.round(tanda.entradaKg * (1 - referenciaPct / 100) * 1000) / 1000 : null;
+
+  const totalFila = (g: number) =>
+    (["grano", "molido"] as const).reduce((a, f) => a + (parsearUnidades(unidadesTxt[clave(g, f)]) ?? 0) * g, 0) / 1000;
+  const totalColumna = (f: FormaCafe) => config.presentaciones.reduce((a, p) => a + ((parsearUnidades(unidadesTxt[clave(p.presentacionG, f)]) ?? 0) * p.presentacionG) / 1000, 0);
+  const totalBolsas = (f: FormaCafe) => config.presentaciones.reduce((a, p) => a + (parsearUnidades(unidadesTxt[clave(p.presentacionG, f)]) ?? 0), 0);
 
   return (
     <form onSubmit={guardar} noValidate className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
@@ -241,10 +255,30 @@ export function EmpaqueForm({ lote, bultos, config, fechaHoy, bultoIdsIniciales,
               <p className="flex items-center gap-2 text-sm text-gray-500">
                 Empaque <LineaBadge linea={lote.linea} />
               </p>
-              <p className="text-sm font-medium text-gray-600">Llega a empaque</p>
-              <p className="text-4xl font-bold tabular-nums text-gray-900" aria-live="polite">
-                {llegaKg !== null ? formatKg(llegaKg) : "—"}
-              </p>
+              {conTanda && tanda ? (
+                <dl className="grid gap-x-8 gap-y-2 sm:grid-cols-3">
+                  <div>
+                    <dt className="text-sm font-medium text-gray-600">Entró a tostión en esta tanda</dt>
+                    <dd className="text-3xl font-bold tabular-nums text-gray-900">{formatKg(tanda.entradaKg)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium text-gray-600">Molienda solicitada</dt>
+                    <dd className="text-3xl font-bold tabular-nums text-gray-900">{tanda.moliendaKg !== null ? formatKg(tanda.moliendaKg) : "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium text-gray-600">Tostado estimado</dt>
+                    <dd className="text-3xl font-bold tabular-nums text-gray-900">{tostadoEstimadoKg !== null ? formatKg(tostadoEstimadoKg) : "—"}</dd>
+                    <dd className="text-xs text-gray-500">Estimado</dd>
+                  </div>
+                </dl>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-gray-600">Llega a empaque</p>
+                  <p className="text-4xl font-bold tabular-nums text-gray-900" aria-live="polite">
+                    {llegaKg !== null ? formatKg(llegaKg) : "—"}
+                  </p>
+                </>
+              )}
               <p className="text-xs text-gray-500">{textoOrigen}</p>
             </div>
             <div className="w-full space-y-1.5 sm:w-56">
@@ -253,284 +287,211 @@ export function EmpaqueForm({ lote, bultos, config, fechaHoy, bultoIdsIniciales,
               {fecha !== fechaHoy && <p className="text-xs text-gray-500">Registro de un día anterior.</p>}
             </div>
           </div>
+
+          {tandas.length > 1 && !reapertura && (
+            <div className="space-y-1.5">
+              <Label id="emp-tanda">Tanda</Label>
+              <div role="radiogroup" aria-labelledby="emp-tanda" className="flex flex-wrap gap-2">
+                {tandas.map((t) => (
+                  <button
+                    key={t.procesoId}
+                    type="button"
+                    role="radio"
+                    aria-checked={tandaId === t.procesoId}
+                    onClick={() => setTandaId(t.procesoId)}
+                    className={cn("min-h-11 rounded-md border px-3 text-sm font-medium", tandaId === t.procesoId ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-800")}
+                  >
+                    Tostión del {fechaCorta(t.fecha)} · {formatKg(t.entradaKg)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm" aria-labelledby="emp-bolsas">
           <div>
             <h2 id="emp-bolsas" className="text-base font-semibold text-gray-800">
-              Bolsas
+              {esMarcaPropia ? `Bolsas empacadas · ${nombreTipo}` : "Bolsas del cliente"}
             </h2>
             <p className="text-xs text-gray-500">
-              {esMarcaPropia
-                ? "Elige la forma (grano o molido) y escribe cuántas unidades salieron de cada tamaño. Se descuentan una bolsa y una etiqueta por unidad y se suma el inventario de marca propia de esa forma."
-                : "Agrega una línea por cada tamaño de bolsa: el peso de la bolsa en kilos (libre) y cuántas unidades salieron."}
+              {esMarcaPropia ? "Digitar solo lo empacado; lo demás queda en cero." : "Peso libre por bolsa; no descuenta insumos."}
             </p>
-            {!esMarcaPropia && <p className="mt-1 text-xs font-medium text-gray-700">Bolsas del cliente · no descuenta insumos</p>}
           </div>
 
           {esMarcaPropia ? (
             <>
-              {config.presentaciones.length === 0 && (
-                <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                  No hay bolsas activas en el inventario de insumos: crea una en Insumos para poder empacar.
-                </p>
+              {config.presentaciones.length === 0 ? (
+                <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">No hay bolsas activas en el inventario de insumos: crear una en Insumos para poder empacar.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[40rem] border-separate border-spacing-y-1.5" aria-label={`Bolsas empacadas · ${nombreTipo}`}>
+                    <thead>
+                      <tr className="text-left text-xs font-medium text-gray-500">
+                        <th className="px-1">Presentación</th>
+                        <th className="px-1 text-right">Grano</th>
+                        <th className="px-1 text-right">bolsas</th>
+                        <th className="px-1 text-right">Molido</th>
+                        <th className="px-1 text-right">bolsas</th>
+                        <th className="px-1 text-right">Kilos</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {config.presentaciones.map((p) => {
+                        const g = p.presentacionG;
+                        const sinInsumo = !p.bolsa || !p.etiqueta;
+                        return (
+                          <tr key={g}>
+                            <th scope="row" className="px-1 text-left text-sm font-semibold text-gray-800">
+                              {etiquetaPresentacion(g)}
+                              {sinInsumo && <span className="block text-xs font-normal text-amber-700">Falta bolsa o etiqueta activa</span>}
+                            </th>
+                            {(["grano", "molido"] as const).map((forma) => (
+                              <td key={forma} colSpan={2} className="px-1 text-right">
+                                <Input
+                                  value={unidadesTxt[clave(g, forma)] ?? ""}
+                                  onChange={(ev) => setUnidadesTxt((u) => ({ ...u, [clave(g, forma)]: ev.target.value }))}
+                                  inputMode="numeric"
+                                  autoComplete="off"
+                                  enterKeyHint="next"
+                                  placeholder="0"
+                                  disabled={sinInsumo || enviando}
+                                  aria-label={`${etiquetaPresentacion(g)} ${forma}, bolsas`}
+                                  className={cn(CELDA, "ml-auto")}
+                                />
+                              </td>
+                            ))}
+                            <td className="px-1 text-right text-sm tabular-nums text-gray-700">{formatKgNum(totalFila(g))}</td>
+                          </tr>
+                        );
+                      })}
+                      <tr className="font-semibold text-gray-900">
+                        <th scope="row" className="px-1 text-left text-sm">
+                          Total
+                        </th>
+                        <td colSpan={2} className="px-1 text-right tabular-nums">
+                          {formatKgNum(totalColumna("grano"))} kg · {enteroConMiles(totalBolsas("grano"))}
+                        </td>
+                        <td colSpan={2} className="px-1 text-right tabular-nums">
+                          {formatKgNum(totalColumna("molido"))} kg · {enteroConMiles(totalBolsas("molido"))}
+                        </td>
+                        <td className="px-1 text-right tabular-nums">{formatKgNum(cierre.enBolsasKg)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               )}
-              <ul className="divide-y divide-gray-100">
-                {config.presentaciones.map((p) => {
-                  const g = p.presentacionG;
-                  const forma = formaActiva[g] ?? "grano";
-                  const clave = claveUnidades(g, forma);
-                  const unidades = parsearUnidades(unidadesTxt[clave]);
-                  const bloqueada = !p.bolsa || !p.etiqueta;
-                  const faltante = faltantes.filter((f) => f.presentacionG === g);
-                  const base = nombreProductoTerminado(lote.tipoCafe ?? "Café", g);
-                  const productoForma = forma === "molido" ? p.productoMolido : p.producto;
-                  const nombre = productoForma?.nombre ?? (forma === "molido" ? `${base} molido` : base);
-                  const hayTexto = (unidadesTxt[clave] ?? "").trim() !== "";
-                  const otra: FormaCafe = forma === "grano" ? "molido" : "grano";
-                  const unidadesOtra = parsearUnidades(unidadesTxt[claveUnidades(g, otra)]);
-                  return (
-                    <li key={g} className={cn("grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_11rem]", bloqueada && "opacity-70")}>
-                      <div className="min-w-0 space-y-2">
-                        <p className="text-lg font-semibold text-gray-900">
-                          {etiquetaPresentacion(g)} <span className="text-sm font-normal text-gray-500">· {nombre}</span>
-                        </p>
-                        <div role="radiogroup" aria-label={`Forma del café de ${etiquetaPresentacion(g)}`} className="inline-flex rounded-lg border border-gray-300 p-0.5">
-                          {FORMAS_CAFE.map((f) => (
-                            <button
-                              key={f}
-                              type="button"
-                              role="radio"
-                              aria-checked={forma === f}
-                              disabled={bloqueada || enviando}
-                              onClick={() => setFormaActiva((prev) => ({ ...prev, [g]: f }))}
-                              className={cn(
-                                "min-h-11 min-w-24 rounded-md px-4 text-base font-semibold transition-colors",
-                                forma === f ? "bg-gray-900 text-white" : "text-gray-700 hover:bg-gray-100",
-                              )}
-                            >
-                              {ETIQUETA_FORMA[f]}
-                            </button>
-                          ))}
-                        </div>
-                        {unidadesOtra !== null && (
-                          <p className="text-xs text-gray-600">
-                            También: {enteroConMiles(unidadesOtra)} u de {ETIQUETA_FORMA[otra].toLowerCase()}
-                          </p>
-                        )}
-                        {bloqueada ? (
-                          <p role="alert" className="text-sm text-amber-900">
-                            Falta {!p.bolsa && !p.etiqueta ? "la bolsa y la etiqueta" : !p.bolsa ? "la bolsa" : "la etiqueta"} de {etiquetaPresentacion(g)}: créala en Insumos para empacar este tamaño.
-                          </p>
-                        ) : (
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-gray-600">
-                            <span className="inline-flex items-center gap-1.5">
-                              Bolsas <StockBadge stock={p.bolsa!.stock} stockMinimo={p.bolsa!.stockMinimo} />
-                            </span>
-                            <span className="inline-flex items-center gap-1.5">
-                              Etiquetas <StockBadge stock={p.etiqueta!.stock} stockMinimo={p.etiqueta!.stockMinimo} />
-                            </span>
-                            <span className="text-gray-500">
-                              En inventario ({ETIQUETA_FORMA[forma].toLowerCase()}): {enteroConMiles(productoForma?.stock ?? 0)} u
-                            </span>
-                          </div>
-                        )}
-                        {faltante.map((f) => (
-                          <p key={f.clase} role="status" className="flex items-start gap-1.5 text-sm text-amber-900">
-                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                            {textoFaltante(f)}
-                          </p>
-                        ))}
-                      </div>
-
-                      <div className="space-y-1">
-                        <Label htmlFor={`emp-u-${g}`} className="sr-only">
-                          Unidades de {etiquetaPresentacion(g)} {ETIQUETA_FORMA[forma].toLowerCase()}
-                        </Label>
-                        <Input
-                          id={`emp-u-${g}`}
-                          inputMode="numeric"
-                          autoComplete="off"
-                          placeholder="Unidades"
-                          disabled={bloqueada || enviando}
-                          className={cn(CAMPO, "text-right tabular-nums")}
-                          aria-invalid={hayTexto && unidades === null}
-                          value={unidadesTxt[clave] ?? ""}
-                          onChange={(e) => setUnidadesTxt((prev) => ({ ...prev, [clave]: e.target.value }))}
-                        />
-                        <p className={cn("text-right text-xs tabular-nums", hayTexto && unidades === null ? "text-red-600" : "text-gray-500")}>
-                          {hayTexto && unidades === null ? "Solo números enteros" : `equivale a ${unidades ? textoKgLinea(g, unidades) : "0,000"} kg`}
-                        </p>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-              <Button asChild type="button" variant="outline" className="h-11">
-                <Link href="/dashboard/cafe/inventario?tab=insumos">
-                  <Plus className="h-4 w-4" aria-hidden /> Otro tamaño de bolsa
-                </Link>
-              </Button>
+              <p className="text-xs text-gray-500">Las presentaciones salen de Configuración. Una nueva presentación agrega una fila.</p>
+              {faltantes.map((f) => (
+                <p key={`${f.clase}-${f.presentacionG}`} className="flex items-start gap-1.5 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                  {textoFaltante(f)}
+                </p>
+              ))}
             </>
           ) : (
-            <>
-              <ul className="space-y-3">
-                {filas.map((f, i) => {
-                  const kg = parsearDecimal(f.kgTxt);
-                  const unidades = parsearUnidades(f.unidadesTxt);
-                  const malKg = f.kgTxt.trim() !== "" && (kg === null || kg <= 0);
-                  const malU = f.unidadesTxt.trim() !== "" && unidades === null;
-                  return (
-                    <li key={f.clave} className="grid gap-3 rounded-md border border-gray-100 p-3 sm:grid-cols-[9rem_8rem_minmax(0,1fr)_auto] sm:items-start">
-                      <div className="space-y-1">
-                        <Label htmlFor={`emp-kg-${f.clave}`}>Peso de la bolsa (kg)</Label>
-                        <Input
-                          id={`emp-kg-${f.clave}`}
-                          inputMode="decimal"
-                          autoComplete="off"
-                          placeholder="Ej: 2,5"
-                          disabled={enviando}
-                          className={cn(CAMPO, "text-right tabular-nums")}
-                          aria-invalid={malKg}
-                          value={f.kgTxt}
-                          onChange={(e) => setFilas((prev) => prev.map((x) => (x.clave === f.clave ? { ...x, kgTxt: e.target.value } : x)))}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor={`emp-fu-${f.clave}`}>Cantidad</Label>
-                        <Input
-                          id={`emp-fu-${f.clave}`}
-                          inputMode="numeric"
-                          autoComplete="off"
-                          placeholder="Ej: 12"
-                          disabled={enviando}
-                          className={cn(CAMPO, "text-right tabular-nums")}
-                          aria-invalid={malU}
-                          value={f.unidadesTxt}
-                          onChange={(e) => setFilas((prev) => prev.map((x) => (x.clave === f.clave ? { ...x, unidadesTxt: e.target.value } : x)))}
-                        />
-                      </div>
-                      <p className={cn("text-xs tabular-nums sm:mt-7", malKg || malU ? "text-red-600" : "text-gray-500")}>
-                        {malKg ? "El peso es un número mayor que cero" : malU ? "Solo números enteros" : kg && unidades ? `equivale a ${formatKg(kg * unidades)}` : ""}
-                      </p>
-                      {filas.length > 1 && (
-                        <Button
+            <div className="space-y-2">
+              {filas.map((f, i) => (
+                <div key={f.clave} className="flex flex-wrap items-end gap-3 rounded-md border border-gray-200 p-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Peso por bolsa</Label>
+                    <div role="radiogroup" aria-label="Peso por bolsa" className="inline-flex overflow-hidden rounded-md border border-gray-300">
+                      {[
+                        { v: "10", t: "10 kg" },
+                        { v: "5", t: "5 kg" },
+                        { v: "otro", t: "Otro (kg)" },
+                      ].map((o) => (
+                        <button
+                          key={o.v}
                           type="button"
-                          variant="ghost"
-                          className="h-11 w-11 p-0 sm:mt-6"
-                          aria-label={`Quitar la línea ${i + 1}`}
-                          disabled={enviando}
-                          onClick={() => setFilas((prev) => prev.filter((x) => x.clave !== f.clave))}
+                          role="radio"
+                          aria-checked={f.tamano === o.v}
+                          onClick={() => setFilas((fs) => fs.map((x, j) => (j === i ? { ...x, tamano: o.v, kgTxt: o.v === "otro" ? "" : o.v } : x)))}
+                          className={cn("min-h-11 px-3 text-sm font-medium", f.tamano === o.v ? "bg-gray-900 text-white" : "bg-white text-gray-700")}
                         >
-                          <Trash2 className="h-4 w-4" aria-hidden />
-                        </Button>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-              <Button
-                type="button"
-                variant="outline"
-                className="h-11"
-                disabled={enviando}
-                onClick={() => setFilas((prev) => [...prev, { clave: Math.max(0, ...prev.map((x) => x.clave)) + 1, kgTxt: "", unidadesTxt: "" }])}
-              >
-                <Plus className="h-4 w-4" aria-hidden /> Otro tamaño de bolsa
+                          {o.t}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {f.tamano === "otro" && (
+                    <Input
+                      value={f.kgTxt}
+                      onChange={(ev) => setFilas((fs) => fs.map((x, j) => (j === i ? { ...x, kgTxt: ev.target.value } : x)))}
+                      inputMode="decimal"
+                      placeholder="kg"
+                      aria-label="Peso por bolsa en kilos"
+                      className={cn(CELDA, "w-28")}
+                    />
+                  )}
+                  <div role="radiogroup" aria-label="Forma" className="inline-flex overflow-hidden rounded-md border border-gray-300">
+                    {(["grano", "molido"] as const).map((forma) => (
+                      <button
+                        key={forma}
+                        type="button"
+                        role="radio"
+                        aria-checked={f.forma === forma}
+                        onClick={() => setFilas((fs) => fs.map((x, j) => (j === i ? { ...x, forma } : x)))}
+                        className={cn("min-h-11 px-3 text-sm font-medium", f.forma === forma ? "bg-gray-900 text-white" : "bg-white text-gray-700")}
+                      >
+                        {forma === "grano" ? "Grano" : "Molido"}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Bolsas</Label>
+                    <Input
+                      value={f.unidadesTxt}
+                      onChange={(ev) => setFilas((fs) => fs.map((x, j) => (j === i ? { ...x, unidadesTxt: ev.target.value } : x)))}
+                      inputMode="numeric"
+                      placeholder="0"
+                      aria-label="Número de bolsas"
+                      className={CELDA}
+                    />
+                  </div>
+                  <p className="pb-3 text-sm tabular-nums text-gray-700">
+                    {parsearDecimal(f.kgTxt) && parsearUnidades(f.unidadesTxt) ? `${textoKgLinea(Math.round((parsearDecimal(f.kgTxt) ?? 0) * 1000), parsearUnidades(f.unidadesTxt) ?? 0)} kg` : "—"}
+                  </p>
+                  {filas.length > 1 && (
+                    <Button type="button" variant="ghost" className="h-11 w-11 p-0 text-gray-500 hover:text-red-600" aria-label="Quitar las bolsas" onClick={() => setFilas((fs) => fs.filter((_, j) => j !== i))}>
+                      <Trash2 className="h-5 w-5" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+              <Button type="button" variant="outline" className="h-11" onClick={() => setFilas((fs) => [...fs, { clave: Math.max(0, ...fs.map((x) => x.clave)) + 1, tamano: "10", kgTxt: "10", forma: "grano", unidadesTxt: "" }])}>
+                <Plus className="mr-2 h-4 w-4" />
+                Agregar bolsas
               </Button>
-            </>
+            </div>
           )}
+          {aviso && <p className="rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-700">{aviso}</p>}
         </section>
 
-        {pideMolienda && (
-          <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm" aria-labelledby="emp-molienda">
-            <div>
-              <h2 id="emp-molienda" className="text-base font-semibold text-gray-800">
-                Molienda del café molido
-              </h2>
-              <p className="text-xs text-gray-500">
-                Cuánto café entra a moler y cuánto sale. Se registra la molienda del lote sin salir de esta pantalla. Déjalo vacío solo si estos bultos ya se molieron en Planta.
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="emp-mol-e">Entra a moler (kg)</Label>
+        {esMarcaPropia && incluibles.length > 0 && !reapertura && (
+          <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm" aria-labelledby="emp-incluir">
+            <h2 id="emp-incluir" className="text-base font-semibold text-gray-800">
+              Tostado sin empacar
+            </h2>
+            {incluibles.map((i) => (
+              <div key={`${i.loteId}:${i.forma}`} className="flex flex-wrap items-center gap-3">
+                <p className="text-sm text-gray-700">
+                  Hay {formatKg(i.kg)} de {nombreTipo} en {i.forma === "grano" ? "grano" : "molido"} sin empacar ({i.codigo}). Incluir en este empaque.
+                </p>
                 <Input
-                  id="emp-mol-e"
+                  value={incluirTxt[`${i.loteId}:${i.forma}`] ?? ""}
+                  onChange={(ev) => setIncluirTxt((t) => ({ ...t, [`${i.loteId}:${i.forma}`]: ev.target.value }))}
                   inputMode="decimal"
-                  autoComplete="off"
-                  placeholder={cuadreMol ? undefined : `Ej: ${formatKgNum(kgDeMolido(lineas))}`}
-                  disabled={enviando}
-                  className={cn(CAMPO, "text-right tabular-nums")}
-                  aria-invalid={moliendaIncompleta}
-                  value={molEntradaTxt}
-                  onChange={(e) => setMolEntradaTxt(e.target.value)}
+                  placeholder="kg"
+                  aria-label={`Kilos de ${i.codigo} ${i.forma} a incluir`}
+                  className={cn(CELDA, "w-28")}
                 />
+                <Button type="button" variant="outline" className="h-11" onClick={() => setIncluirTxt((t) => ({ ...t, [`${i.loteId}:${i.forma}`]: String(Math.min(i.kg, i.forma === "grano" ? granoKg : molidoKg)).replace(".", ",") }))}>
+                  Incluir todo
+                </Button>
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="emp-mol-s">Sale de la molienda (kg)</Label>
-                <Input
-                  id="emp-mol-s"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  disabled={enviando}
-                  className={cn(CAMPO, "text-right tabular-nums")}
-                  aria-invalid={moliendaIncompleta}
-                  value={molSalidaTxt}
-                  onChange={(e) => setMolSalidaTxt(e.target.value)}
-                />
-              </div>
-            </div>
-            {moliendaIncompleta && (
-              <p role="alert" className="text-sm text-red-700">
-                Lo que entra es un número mayor que cero y lo que sale no puede superarlo.
-              </p>
-            )}
-            {mermaMol && (
-              <p className="text-sm text-gray-700" aria-live="polite">
-                Merma de molienda: <span className="font-semibold tabular-nums">{formatKg(mermaMol.mermaKg)}</span> · {formatPct(mermaMol.mermaPct)}
-                <span className="ml-1 text-xs text-gray-500">(sin referencia definida todavía: solo informativa)</span>
-              </p>
-            )}
-            {cuadreMol?.molidoSupera && (
-              <p role="alert" className="text-sm font-medium text-red-700">
-                El café molido en bolsas suma {formatKg(cuadreMol.molidoKg)} y de la molienda solo salen {formatKg(molienda!.salidaKg)}.
-              </p>
-            )}
-            {cuadreMol?.granoSupera && (
-              <p role="alert" className="text-sm font-medium text-red-700">
-                El café en grano suma {formatKg(cuadreMol.granoKg)} y sin moler quedan {formatKg(cuadreMol.sinMolerKg)}.
-              </p>
-            )}
-          </section>
-        )}
-
-        {resumen?.haySobrante && (
-          <section className="space-y-3 rounded-lg border border-amber-200 bg-amber-50/60 p-4 shadow-sm" aria-labelledby="emp-destino">
-            <div>
-              <h2 id="emp-destino" className="text-base font-semibold text-gray-800">
-                Sobran {formatKg(resumen.diferenciaKg)}: ¿qué pasó con ese café?
-              </h2>
-              <p className="text-xs text-gray-600">Elige un destino para poder guardar. No es merma: el café queda registrado donde corresponde.</p>
-            </div>
-            <div role="radiogroup" aria-labelledby="emp-destino" className="grid gap-2 sm:grid-cols-3">
-              {destinosPosibles.map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  role="radio"
-                  aria-checked={destino === d}
-                  disabled={enviando}
-                  onClick={() => setDestino(d)}
-                  className={cn(
-                    "min-h-14 rounded-lg border px-4 py-3 text-left text-base font-semibold transition-colors",
-                    destino === d ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50",
-                  )}
-                >
-                  {ETIQUETA_DESTINO[d]}
-                </button>
-              ))}
-            </div>
+            ))}
+            <p className="text-xs text-gray-500">Lo incluido no cuenta como peso en báscula ni altera la merma de la tanda.</p>
           </section>
         )}
 
@@ -538,89 +499,113 @@ export function EmpaqueForm({ lote, bultos, config, fechaHoy, bultoIdsIniciales,
           <Label htmlFor="emp-obs">Observaciones (opcional)</Label>
           <Textarea id="emp-obs" rows={2} className="text-base" value={observaciones} onChange={(e) => setObservaciones(e.target.value)} />
         </section>
-
-        {error && (
-          <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-            {error}
-          </p>
-        )}
       </div>
 
       <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
-        <ResumenEnVivo resumen={resumen} destino={destino} llegaOriginalKg={llegaKg} />
-        {/* En pantalla ancha el botón vive aquí; en tablet va en la barra fija de abajo. */}
-        <div className="hidden space-y-4 xl:block">
+        <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm" aria-labelledby="emp-cierre">
+          <h2 id="emp-cierre" className="text-base font-semibold text-gray-800">
+            Cierre del empaque
+          </h2>
+          <dl className="space-y-2 text-sm">
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-gray-600">En bolsas (kg)</dt>
+              <dd className="font-semibold tabular-nums text-gray-900">{formatKgNum(cierre.enBolsasKg)}</dd>
+            </div>
+            {incluidoKg > 0 && (
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-gray-600">Incluido de tandas anteriores (kg)</dt>
+                <dd className="font-semibold tabular-nums text-gray-900">{formatKgNum(incluidoKg)}</dd>
+              </div>
+            )}
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-gray-600">Sobrante (kg)</dt>
+              <dd className={cn("font-semibold tabular-nums", cierre.supera ? "text-red-600" : "text-gray-900")}>{conTanda || reapertura ? formatKgNum(Math.max(cierre.sobranteKg, 0)) : "—"}</dd>
+            </div>
+          </dl>
+          {cierre.sobranteKg > 0 && conTanda && (
+            <p className="text-xs text-gray-500">{esMarcaPropia ? "Queda tostado sin empacar." : "Se entrega a granel."}</p>
+          )}
+          {esMarcaPropia && conTanda && cierre.sobranteKg > 0 && molidoKg > 0 && (
+            <div role="radiogroup" aria-label="Forma del sobrante" className="inline-flex overflow-hidden rounded-md border border-gray-300">
+              {(["grano", "molido"] as const).map((f) => (
+                <button key={f} type="button" role="radio" aria-checked={sobranteForma === f} onClick={() => setSobranteForma(f)} className={cn("min-h-11 px-3 text-sm font-medium", sobranteForma === f ? "bg-gray-900 text-white" : "bg-white text-gray-700")}>
+                  Sobrante en {f}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {conTanda && (
+            <div className="space-y-1.5">
+              <Label htmlFor="emp-bascula">Peso total en báscula (kg)</Label>
+              <Input id="emp-bascula" value={basculaTxt} onChange={(e) => setBasculaTxt(e.target.value)} inputMode="decimal" autoComplete="off" placeholder="Ej: 44,3" className={CAMPO} aria-invalid={basculaSupera} />
+              <p className="text-xs text-gray-500">Incluye el sobrante.</p>
+              {basculaSupera && tanda && <p role="alert" className="text-xs font-medium text-red-600">El peso en báscula supera lo que entró a tostión ({formatKg(tanda.entradaKg)}). Revisar cantidades.</p>}
+            </div>
+          )}
+
+          {cierre.supera && (
+            <p role="alert" className="text-sm font-medium text-red-600">
+              Las bolsas suman más que el peso en báscula. Revisar cantidades.
+            </p>
+          )}
+
+          {necesitaDestino && (
+            <div className="space-y-1.5">
+              <Label id="emp-destino">Destino del sobrante</Label>
+              <div role="radiogroup" aria-labelledby="emp-destino" className="flex flex-wrap gap-2">
+                {destinosPosibles.map((d) => (
+                  <button key={d} type="button" role="radio" aria-checked={destino === d} onClick={() => setDestino(d)} className={cn("min-h-11 rounded-md border px-3 text-sm", destino === d ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-800")}>
+                    {ETIQUETA_DESTINO[d]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {costoInsumos && lineas.length > 0 && (
+            <p className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3 text-sm">
+              <span className="text-gray-600">Costo de insumos (bolsas y etiquetas)</span>
+              <span className="font-semibold tabular-nums text-gray-900">
+                {formatCOP(costoInsumos.total)}
+                {!costoInsumos.completo && <span className="ml-2 text-xs font-normal text-amber-700">falta el precio de algún insumo (Insumos)</span>}
+              </span>
+            </p>
+          )}
+
+          {conTanda && (
+            <div className="space-y-1 border-t border-gray-100 pt-3 text-sm">
+              <p className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-gray-600">Merma de tostión · esta tanda</span>
+                <span className="font-semibold tabular-nums text-gray-900">
+                  {cierre.mermaPct !== null ? `${formatPct(cierre.mermaPct)}` : "—"}
+                  {cierre.mermaPct !== null && <MermaBadge mermaPct={cierre.mermaPct} referenciaPct={referenciaPct} toleranciaPts={merma.toleranciaPts} tipo="tostion" conAyuda={false} className="ml-2" />}
+                </span>
+              </p>
+              <p className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-gray-600">Acumulado del lote</span>
+                <span className="tabular-nums text-gray-900">
+                  {cierre.acumulado ? `${formatKgNum(cierre.acumulado.entradaKg)} → ${formatKgNum(cierre.acumulado.basculaKg)} kg · ${formatPct(cierre.acumulado.mermaPct)}` : "—"}
+                </span>
+              </p>
+            </div>
+          )}
+        </section>
+
+        {error && (
+          <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
+          </p>
+        )}
+        <div className="space-y-3">
           <Button type="submit" className="h-12 w-full text-base" disabled={deshabilitado}>
-            {boton}
+            {enviando ? "Guardando…" : "Registrar empaque"}
           </Button>
           <Button asChild type="button" variant="outline" className="h-11 w-full">
             <Link href="/dashboard/cafe/planta">Cancelar</Link>
           </Button>
         </div>
       </aside>
-
-      {/* Tablet (< 1280 px): una sola columna, así que el cuadre en vivo y el botón de guardar quedan fijos al pie. */}
-      <div className="sticky bottom-0 z-10 flex flex-row-reverse items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-3 shadow-lg xl:hidden">
-        <p className="min-w-0 text-right text-sm text-gray-600">
-          {resumen && !resumen.supera ? (
-            <>
-              Diferencia <span className="text-xl font-bold tabular-nums text-gray-900">{formatKg(resumen.diferenciaKg)}</span>
-            </>
-          ) : resumen?.supera ? (
-            <span className="font-semibold text-red-700">Bolsas de más: {formatKg(resumen.excesoKg)}</span>
-          ) : (
-            "Diferencia: —"
-          )}
-        </p>
-        <Button type="submit" className="h-12 shrink-0 px-6 text-base" disabled={deshabilitado}>
-          {boton}
-        </Button>
-      </div>
     </form>
-  );
-}
-
-/** Cuadre en vivo: Llega · Usado en bolsas · Diferencia (y su destino). La diferencia no es merma. */
-/** Kilos de las líneas de café molido, para sugerir cuánto entra a moler. */
-function kgDeMolido(lineas: readonly LineaEmpaqueEntrada[]): number {
-  return kgDeForma(lineas, "molido");
-}
-
-function ResumenEnVivo({ resumen, destino, llegaOriginalKg }: { resumen: ReturnType<typeof resumenEmpaque>; destino: DestinoDiferencia | null; llegaOriginalKg: number | null }) {
-  return (
-    <section aria-live="polite" className="space-y-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <h2 className="text-base font-semibold text-gray-800">Resumen del empaque</h2>
-      <dl className="space-y-2 text-sm">
-        <div className="flex items-baseline justify-between gap-3">
-          <dt className="text-gray-500">Llega</dt>
-          <dd className="tabular-nums text-gray-900">{resumen ? formatKg(resumen.llegaKg) : "—"}</dd>
-        </div>
-        {resumen && llegaOriginalKg !== null && Math.abs(resumen.llegaKg - llegaOriginalKg) > 0.0005 && (
-          <p className="text-xs text-gray-500">Con la molienda: {formatKg(llegaOriginalKg)} tostados → {formatKg(resumen.llegaKg)} a empaque.</p>
-        )}
-        <div className="flex items-baseline justify-between gap-3">
-          <dt className="text-gray-500">Usado en bolsas</dt>
-          <dd className="text-lg font-semibold tabular-nums text-gray-900">{resumen ? formatKg(resumen.usadoKg) : "—"}</dd>
-        </div>
-        <div className="flex items-baseline justify-between gap-3">
-          <dt className="text-gray-500">Diferencia</dt>
-          <dd className="tabular-nums text-gray-900">
-            {resumen && !resumen.supera ? <span className="text-lg font-semibold">{formatKg(resumen.diferenciaKg)}</span> : "—"}
-          </dd>
-        </div>
-        {resumen?.haySobrante && (
-          <div className="flex items-baseline justify-between gap-3">
-            <dt className="text-gray-500">Destino</dt>
-            <dd className={cn("text-right text-sm", destino ? "font-medium text-gray-900" : "text-amber-800")}>{destino ? ETIQUETA_DESTINO[destino] : "Elige uno"}</dd>
-          </div>
-        )}
-      </dl>
-      {resumen?.supera && (
-        <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
-          Las bolsas suman más de lo que llega a empaque ({formatKgNum(resumen.excesoKg)} kg de más). Baja las unidades.
-        </p>
-      )}
-      <p className="text-xs text-gray-500">Cuadre: bolsas + diferencia = lo que llega. El empaque no genera merma.</p>
-    </section>
   );
 }

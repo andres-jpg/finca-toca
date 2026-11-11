@@ -4,6 +4,7 @@ import { getKardex, getStock } from "@/modules/core/inventario/queries/inventari
 import type { StockArticulo } from "@/modules/core/inventario/types";
 import { callRpc } from "@/modules/core/rpc/call-rpc";
 import { leerAtributosInsumo } from "../../insumos/lib/insumos";
+import { getPreciosInsumos } from "../../insumos/queries/insumos.queries";
 import { etiquetaPresentacion } from "../../tipos/lib/productos";
 import { construirMatriz, leerAtributosProducto, type MatrizProductoTerminado, type ProductoTerminado, type TipoCafeMatriz } from "../lib/matriz";
 import {
@@ -21,7 +22,7 @@ import {
 // Módulo plano (no "use server"): solo lo llama código de servidor. La autorización es el RLS: sin el módulo o sin
 // membresía en el cliente actual las listas salen vacías. El stock nunca se guarda: es la suma de movimientos.
 
-const aInsumo = (s: StockArticulo): InsumoPresentacion => ({ id: s.articulo_id, nombre: s.nombre, stock: s.stock, stockMinimo: s.stock_minimo });
+const aInsumo = (s: StockArticulo, precios: ReadonlyMap<string, number>): InsumoPresentacion => ({ id: s.articulo_id, nombre: s.nombre, stock: s.stock, stockMinimo: s.stock_minimo, precio: precios.get(s.articulo_id) ?? null });
 
 /**
  * Presentaciones que ofrece el formulario de empaque de un lote: una por cada bolsa ACTIVA, con su bolsa, su
@@ -30,10 +31,11 @@ const aInsumo = (s: StockArticulo): InsumoPresentacion => ({ id: s.articulo_id, 
  */
 export async function getConfigEmpaque(loteId: string): Promise<ConfigEmpaque> {
   const supabase = await createClient();
-  const [{ data: lote }, insumos, productos] = await Promise.all([
+  const [{ data: lote }, insumos, productos, precios] = await Promise.all([
     supabase.schema("cafe").from("lotes").select("tipo_cafe_id").eq("id", loteId).maybeSingle(),
     getStock({ tipo: "insumo" }),
     getStock({ tipo: "producto_terminado" }),
+    getPreciosInsumos(),
   ]);
 
   const bolsas = new Map<number, StockArticulo>();
@@ -61,8 +63,8 @@ export async function getConfigEmpaque(loteId: string): Promise<ConfigEmpaque> {
       const molido = molidoDelTipo.get(g);
       return {
         presentacionG: g,
-        bolsa: aInsumo(bolsas.get(g)!),
-        etiqueta: etiqueta ? aInsumo(etiqueta) : null,
+        bolsa: aInsumo(bolsas.get(g)!, precios),
+        etiqueta: etiqueta ? aInsumo(etiqueta, precios) : null,
         producto: producto ? { id: producto.articulo_id, nombre: producto.nombre, stock: producto.stock } : null,
         productoMolido: molido ? { id: molido.articulo_id, nombre: molido.nombre, stock: molido.stock } : null,
       };
@@ -239,13 +241,32 @@ export async function getLineasEmpaque(procesoIds: readonly string[]): Promise<M
   return resultado;
 }
 
-/**
- * Saldo de tostado a granel de un lote de marca propia (kg): lo que «quedó a granel» al empacar (A-01). Sale de los
- * empaques vigentes (`cafe.v_granel_lote`); 0 si no hay. Lo consumirá el inventario de A-15.
- */
 export async function getSaldoGranel(loteId: string): Promise<number> {
   const supabase = await createClient();
-  const { data, error } = await supabase.schema("cafe").from("v_granel_lote").select("kg_granel").eq("lote_id", loteId).maybeSingle();
-  if (error) throw new Error("No se pudo cargar el saldo a granel");
-  return Number(data?.kg_granel ?? 0);
+  const { data, error } = await supabase.schema("cafe").from("v_inventario_tostado").select("kg").eq("lote_id", loteId);
+  if (error) throw new Error("No se pudo cargar el tostado sin empacar");
+  return (data ?? []).reduce((a, f) => a + Number(f.kg ?? 0), 0);
+}
+
+/** Tostado sin empacar del MISMO tipo de café que el lote (B-09): lo que el empaque ofrece incluir. */
+export interface TostadoIncluible {
+  loteId: string;
+  codigo: string;
+  forma: "grano" | "molido";
+  kg: number;
+}
+
+export async function getTostadoIncluible(tipoCafeId: string): Promise<TostadoIncluible[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .schema("cafe")
+    .from("v_inventario_tostado")
+    .select("lote_id, lote_codigo, forma, kg")
+    .eq("tipo_cafe_id", tipoCafeId)
+    .gt("kg", 0)
+    .order("lote_codigo");
+  if (error) throw new Error("No se pudo cargar el tostado sin empacar");
+  return (data ?? []).flatMap((f) =>
+    f.lote_id && f.lote_codigo ? [{ loteId: f.lote_id, codigo: f.lote_codigo, forma: f.forma as "grano" | "molido", kg: Number(f.kg ?? 0) }] : [],
+  );
 }

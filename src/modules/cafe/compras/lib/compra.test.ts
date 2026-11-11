@@ -1,14 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   calcularValorCompra,
-  diferenciaPesos,
   formatearCOP,
   aTextoDecimal,
   formatearKg,
   parsearDecimal,
   parsearPrecio,
-  pesoDesdeBultos,
-  sumaPesos,
   tieneMaxDecimales,
 } from "./compra";
 
@@ -61,38 +58,6 @@ describe("formatearKg", () => {
     expect(formatearKg(1234.5)).toBe("1.234,5");
     expect(formatearKg(33.334)).toBe("33,3");
     expect(formatearKg(NaN)).toBe("0,0");
-  });
-});
-
-describe("pesoDesdeBultos", () => {
-  it("peso por bulto × número de bultos (parámetro cafe.peso_bulto_kg = 62,5)", () => {
-    expect(pesoDesdeBultos(6, 62.5)).toBe(375);
-    expect(pesoDesdeBultos(1, 62.5)).toBe(62.5);
-    expect(pesoDesdeBultos(3, 33.333)).toBe(99.999);
-  });
-
-  it("0 si falta alguno", () => {
-    expect(pesoDesdeBultos(0, 62.5)).toBe(0);
-    expect(pesoDesdeBultos(6, NaN)).toBe(0);
-  });
-});
-
-describe("sumaPesos / diferenciaPesos", () => {
-  it("suma sin deriva de coma flotante", () => {
-    expect(sumaPesos([0.1, 0.2])).toBe(0.3);
-    expect(sumaPesos([62.5, 62.5, 62.5, 62.5, 62.5, 62.5])).toBe(375);
-    expect(sumaPesos([])).toBe(0);
-  });
-
-  it("0 cuando cuadran, la diferencia con signo cuando no", () => {
-    expect(diferenciaPesos([62.5, 62.5, 62.5, 62.5, 62.5, 62.5], 375)).toBe(0);
-    expect(diferenciaPesos([60, 60, 60, 60, 60, 60], 375)).toBe(-15);
-    expect(diferenciaPesos([100, 300], 375)).toBe(25);
-  });
-
-  it("tolera 1 g, como la base", () => {
-    expect(diferenciaPesos([40.5, 59.501], 100)).toBe(0);
-    expect(diferenciaPesos([40.5, 59.502], 100)).toBe(0.002);
   });
 });
 

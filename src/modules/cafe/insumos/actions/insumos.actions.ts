@@ -18,10 +18,12 @@ import {
   compraInsumoSchema,
   editarInsumoSchema,
   insumoSchema,
+  precioInsumoSchema,
   type AjusteInsumoFormInput,
   type CompraInsumoFormInput,
   type EditarInsumoFormInput,
   type InsumoFormInput,
+  type PrecioInsumoFormInput,
 } from "../schemas/insumo.schema";
 import { REF_TERCERO, type KardexInsumo } from "../types";
 
@@ -122,6 +124,24 @@ export async function desactivarInsumo(id: string): Promise<Result<Articulo>> {
 /** Reactivar una bolsa vuelve a generar los productos terminados que falten (lo hace un trigger). */
 export async function reactivarInsumo(id: string): Promise<Result<Articulo>> {
   return cambiarActivo(id, true);
+}
+
+/**
+ * Fija el precio unitario vigente de un insumo (B-13): una fila nueva en el historial `cafe.insumo_precios`. Rige para los
+ * empaques que se registren después; los ya registrados conservan el precio con que se hicieron. Solo owner/admin (también en el RLS).
+ */
+export async function fijarPrecioInsumo(input: PrecioInsumoFormInput): Promise<Result<{ precio: number }>> {
+  await autorizar(ROLES_MAESTRO);
+  const parsed = precioInsumoSchema.safeParse(input);
+  if (!parsed.success) return datosInvalidos(parsed.error.issues[0]?.message);
+  if (!(await cargarInsumo(parsed.data.articuloId))) return noEncontrado();
+
+  const supabase = await createClient();
+  const { error } = await supabase.schema("cafe").from("insumo_precios").insert({ articulo_id: parsed.data.articuloId, precio: parsed.data.precio });
+  if (error) return { ok: false, code: "error_inesperado", message: "No se pudo guardar el precio." };
+  revalidatePath(RUTA);
+  revalidatePath("/dashboard/cafe/lotes");
+  return { ok: true, data: { precio: parsed.data.precio } };
 }
 
 // --- Movimientos ----------------------------------------------------------------------------------------

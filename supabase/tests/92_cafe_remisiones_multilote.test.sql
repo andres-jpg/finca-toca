@@ -99,10 +99,25 @@ returns jsonb language sql as $$
 $$;
 grant execute on function pg_temp.p(text, text, jsonb) to authenticated;
 
+-- Los baches ya no llevan salida (B-05): estas pruebas parten de tostiones CON salida (la que antes pesaba cada bache), así que
+-- se fija aquí como lo haría el empaque de la tanda (SECURITY DEFINER de prueba, con la bandera de edición de `editar_lote`).
+create or replace function pg_temp.fijar_salida(p_proceso uuid, p_extra jsonb) returns void language plpgsql security definer set search_path = '' as $$
+declare v numeric;
+begin
+  select sum((b ->> 'peso_salida_kg')::numeric) into v from jsonb_array_elements(p_extra -> 'baches') b where b ? 'peso_salida_kg';
+  if v is null then return; end if;
+  perform set_config('cafe.edicion_lote', 'on', true);
+  update cafe.procesos set peso_salida_kg = v where id = p_proceso;
+  perform set_config('cafe.edicion_lote', 'off', true);
+end $$;
+grant execute on function pg_temp.fijar_salida(uuid, jsonb) to authenticated;
+
 create or replace function pg_temp.reg(p_k text, p_tipo text, p_extra jsonb default '{}')
 returns void language plpgsql as $$
+declare v jsonb;
 begin
-  perform cafe.registrar_proceso(pg_temp.p(p_k, p_tipo, p_extra));
+  v := cafe.registrar_proceso(pg_temp.p(p_k, p_tipo, p_extra));
+  if p_tipo = 'tostion' then perform pg_temp.fijar_salida((v ->> 'id')::uuid, p_extra); end if;
 end $$;
 grant execute on function pg_temp.reg(text, text, jsonb) to authenticated;
 

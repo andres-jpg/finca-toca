@@ -1,12 +1,12 @@
 -- Compra de café para marca propia (FIN-106 · CO-25): cafe.registrar_compra(), cafe.ultimo_precio_compra() y
--- cafe.repartir_peso(). Cubre el caso feliz (375 kg en 6 bultos a $18.500 → MP-2026-0001 y $6.937.500), el
+-- cafe.repartir_peso(). Cubre el caso feliz (375 kg a $18.500 → MP-2026-0001 y $6.937.500), el
 -- precio sugerido, las validaciones, el rollback sin consumir consecutivo, los permisos por rol y módulo y el
 -- aislamiento entre clientes. Todo se crea AQUÍ dentro de la transacción (rollback al final): dos clientes de
 -- café (A y B) y uno de ganadería (G), sin depender de los usuarios del seed.
 --   c1 owner A   c2 admin A   c3 operativo A   c4 viewer A   c5 owner B   c6 owner G (ganadería)
 begin;
 
-select plan(90);
+select plan(78);
 
 -- 0. Preparación --------------------------------------------------------------------------------------------
 insert into auth.users (id, aud, role, email) values
@@ -135,18 +135,9 @@ select is(
               l.valor_compra, l.factura_proveedor, l.servicios, l.nivel_tueste, l.anulado_at)::text
      from cafe.lotes l where l.codigo = 'MP-2026-0001'),
   row('marca_propia'::cafe.linea_lote, (select id from ids where clave = 'xa'), (select id from ids where clave = 'ta'),
-      '2026-11-05'::date, 375::numeric(10,3), 6::smallint, 18500::numeric(12,2), 6937500::numeric(14,2), 'FV-1234', '{}'::cafe.tipo_proceso[],
+      '2026-11-05'::date, 375::numeric(10,3), null::smallint, 18500::numeric(12,2), 6937500::numeric(14,2), 'FV-1234', '{}'::cafe.tipo_proceso[],
       null::cafe.nivel_tueste, null::timestamptz)::text,
   'el lote es de marca propia, con el precio como snapshot y sin servicios'
-);
-select is((select count(*)::int from cafe.lote_bultos where lote_id = (select (r ->> 'id')::uuid from r1)), 6, 'crea 6 bultos');
-select is(
-  (select array_agg(b.peso_kg order by b.numero) from cafe.lote_bultos b where b.lote_id = (select (r ->> 'id')::uuid from r1)),
-  array[62.5, 62.5, 62.5, 62.5, 62.5, 62.5]::numeric[], 'de 62,5 kg cada uno, numerados del 1 al 6'
-);
-select is(
-  (select array_agg(b.numero order by b.numero) from cafe.lote_bultos b where b.lote_id = (select (r ->> 'id')::uuid from r1)),
-  array[1, 2, 3, 4, 5, 6]::smallint[], 'numerados 1..6'
 );
 select is(pg_temp.ultimo_mp(), 1, 'el contador MP avanzó a 1');
 
@@ -191,16 +182,12 @@ select tests.autenticar_como('owner-a@compra.test');
 select is(cafe.ultimo_precio_compra((select id from ids where clave = 'ta'), (select id from ids where clave = 'xa')), 18500::numeric,
   'un lote de servicio no cuenta para el precio sugerido');
 
--- 5. Pesos por bulto y redondeo -----------------------------------------------------------------------------
+-- 5. Redondeo -----------------------------------------------------------------------------
 select is(
   (select cafe.registrar_compra(pg_temp.compra(jsonb_build_object(
     'tipo_cafe_id', (select id from ids where clave = 'ca'), 'fecha', '2026-11-07', 'peso_kg', 100, 'num_bultos', 2,
     'pesos_bultos', jsonb_build_array(40.5, 59.5)))) ->> 'codigo'),
   'MP-2026-0004', 'con pesos por bulto explícitos'
-);
-select is(
-  (select array_agg(b.peso_kg order by b.numero) from cafe.lote_bultos b join cafe.lotes l on l.id = b.lote_id where l.codigo = 'MP-2026-0004'),
-  array[40.5, 59.5]::numeric[], 'se guardan los pesos enviados'
 );
 
 select is(
@@ -211,10 +198,6 @@ select is(
 );
 select is((select valor_compra from cafe.lotes where codigo = 'MP-2026-0005'), 41150::numeric, 'el lote guarda el mismo valor');
 
-select is(
-  (select array_agg(b.peso_kg order by b.numero) from cafe.lote_bultos b join cafe.lotes l on l.id = b.lote_id where l.codigo = 'MP-2026-0003'),
-  array[62.5, 62.5, 62.5, 62.5, 62.5, 62.5]::numeric[], 'sin pesos explícitos reparte en partes iguales'
-);
 
 -- 6. Validaciones: cada una falla sin consumir consecutivo ---------------------------------------------------
 select throws_ok($$select cafe.registrar_compra(pg_temp.compra(jsonb_build_object('tipo_cafe_id', (select id from ids where clave = 'xi'))))$$,
@@ -238,23 +221,12 @@ select throws_ok($$select cafe.registrar_compra(pg_temp.compra('{"peso_kg": -5}'
 select throws_ok($$select cafe.registrar_compra(pg_temp.compra('{"peso_kg": null}'))$$, 'P0001', 'datos_invalidos', 'sin peso');
 select throws_ok($$select cafe.registrar_compra(pg_temp.compra('{"peso_kg": "375"}'))$$, 'P0001', 'datos_invalidos', 'peso como texto');
 select throws_ok($$select cafe.registrar_compra(pg_temp.compra('{"peso_kg": 100.0005}'))$$, 'P0001', 'datos_invalidos', 'más de 3 decimales en el peso');
-select throws_ok($$select cafe.registrar_compra(pg_temp.compra('{"num_bultos": 0}'))$$, 'P0001', 'datos_invalidos', 'cero bultos');
-select throws_ok($$select cafe.registrar_compra(pg_temp.compra('{"num_bultos": 2.5}'))$$, 'P0001', 'datos_invalidos', 'bultos fraccionarios');
-select throws_ok($$select cafe.registrar_compra(pg_temp.compra('{"num_bultos": 201}'))$$, 'P0001', 'datos_invalidos', 'más de 200 bultos');
 select throws_ok($$select cafe.registrar_compra(pg_temp.compra('{"precio_kg": -1}'))$$, 'P0001', 'datos_invalidos', 'precio negativo');
 select throws_ok($$select cafe.registrar_compra(pg_temp.compra('{"precio_kg": null}'))$$, 'P0001', 'datos_invalidos', 'sin precio');
 select throws_ok($$select cafe.registrar_compra(pg_temp.compra('{"fecha": "31/02/2026"}'))$$, 'P0001', 'datos_invalidos', 'fecha inválida');
 select throws_ok($$select cafe.registrar_compra(pg_temp.compra('{"fecha": null}'))$$, 'P0001', 'datos_invalidos', 'sin fecha');
 select throws_ok($$select cafe.registrar_compra('[]'::jsonb)$$, 'P0001', 'datos_invalidos', 'una entrada que no es objeto');
 select throws_ok($$select cafe.registrar_compra(null)$$, 'P0001', 'datos_invalidos', 'ni nula');
-select throws_ok($$select cafe.registrar_compra(pg_temp.compra('{"pesos_bultos": [60, 60, 60, 60, 60, 60]}'))$$,
-  'P0001', 'bultos_no_cuadran', 'pesos por bulto que no suman el total');
-select throws_ok($$select cafe.registrar_compra(pg_temp.compra('{"pesos_bultos": [187.5, 187.5]}'))$$,
-  'P0001', 'bultos_no_cuadran', 'ni una lista con otro número de bultos');
-select throws_ok($$select cafe.registrar_compra(pg_temp.compra('{"pesos_bultos": [375, 0, 0, 0, 0, 0]}'))$$,
-  'P0001', 'datos_invalidos', 'un bulto en cero');
-select throws_ok($$select cafe.registrar_compra(pg_temp.compra('{"pesos_bultos": "62.5"}'))$$,
-  'P0001', 'datos_invalidos', 'pesos por bulto que no son una lista');
 select is(pg_temp.ultimo_mp(), 5, 'ninguna validación consumió consecutivo (siguen 5 compras)');
 
 -- Precio cero es válido (≥ 0): una muestra regalada también se registra. Lo hace un operativo.
@@ -266,23 +238,23 @@ select is(
 );
 select is((select valor_compra from cafe.lotes where codigo = 'MP-2026-0006'), 0::numeric, 'con valor 0');
 
--- 7. Rollback: si falla la inserción de bultos no se consume el consecutivo -----------------------------------
+-- 7. Rollback: si falla la inserción del lote no se consume el consecutivo -----------------------------------
 reset role;
 create function cafe.test_falla_bultos() returns trigger language plpgsql as $$
 begin
   raise exception using errcode = 'P0001', message = 'falla_simulada';
 end $$;
-create trigger zz_falla before insert on cafe.lote_bultos for each row execute function cafe.test_falla_bultos();
+create trigger zz_falla before insert on cafe.lotes for each row execute function cafe.test_falla_bultos();
 
 reset role;
 select tests.autenticar_como('owner-a@compra.test');
 select throws_ok($$select cafe.registrar_compra(pg_temp.compra('{"fecha": "2026-11-09"}'))$$, 'P0001', 'falla_simulada',
-  'si la inserción de los bultos falla, la compra falla');
+  'si la inserción del lote falla, la compra falla');
 select is(pg_temp.ultimo_mp(), 6, 'el consecutivo no se consumió');
 select is((select count(*)::int from cafe.lotes where codigo = 'MP-2026-0007'), 0, 'ni quedó el lote a medias');
 
 reset role;
-drop trigger zz_falla on cafe.lote_bultos;
+drop trigger zz_falla on cafe.lotes;
 drop function cafe.test_falla_bultos();
 reset role;
 select tests.autenticar_como('owner-a@compra.test');
@@ -355,8 +327,8 @@ reset role;
 select is((select count(*)::int from cafe.lotes where tenant_id = (select id from ids where clave = 'a') and linea = 'marca_propia'), 9,
   'A conserva sus 9 lotes de marca propia (8 de 2026 y 1 de 2027)');
 select is(
-  (select count(distinct tenant_id)::int from cafe.lote_bultos b where b.lote_id in (select id from cafe.lotes where codigo = 'MP-2026-0001')),
-  2, 'MP-2026-0001 existe en los dos clientes, cada uno con sus bultos'
+  (select count(distinct tenant_id)::int from cafe.lotes l where l.codigo = 'MP-2026-0001'),
+  2, 'MP-2026-0001 existe en los dos clientes, cada uno con su serie'
 );
 
 -- 10. Auditoría -------------------------------------------------------------------------------------------------

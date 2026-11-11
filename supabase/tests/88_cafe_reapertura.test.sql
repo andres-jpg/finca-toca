@@ -9,7 +9,7 @@
 --   p1 owner A   p2 admin A   p3 operativo A   p4 viewer A   p5 owner B
 begin;
 
-select plan(96);
+select plan(93);
 
 -- 0. Preparación --------------------------------------------------------------------------------------------
 insert into auth.users (id, aud, role, email) values
@@ -71,6 +71,14 @@ grant execute on function pg_temp.comprar(text, numeric, integer, text) to authe
 create or replace function pg_temp.lid(p_k text) returns uuid language sql as $$ select (r ->> 'id')::uuid from res where k = p_k $$;
 grant execute on function pg_temp.lid(text) to authenticated;
 
+-- Peso en báscula de la tanda: lo que dejó la tostión abierta del lote (su salida, o su entrada si aún no la tiene).
+create or replace function pg_temp.tostado(p_k text) returns numeric language sql as $$
+  select sum(coalesce(t.peso_salida_kg, t.peso_entrada_kg)) from cafe.procesos t
+   where t.lote_id = pg_temp.lid(p_k) and t.tipo = 'tostion' and t.anulado_at is null
+     and not exists (select 1 from cafe.procesos e where e.origen_proceso_id = t.id and e.tipo = 'empaque' and e.anulado_at is null)
+$$;
+grant execute on function pg_temp.tostado(text) to authenticated;
+
 create or replace function pg_temp.barr(p_k text) returns uuid[] language sql as $$
   select array_agg(b.id order by b.numero) from cafe.lote_bultos b where b.lote_id = pg_temp.lid(p_k)
 $$;
@@ -91,7 +99,7 @@ grant execute on function pg_temp.tostar(text, text) to authenticated;
 create or replace function pg_temp.empacar(p_res text, p_k text, p_lineas integer[][]) returns void language plpgsql as $$
 begin
   insert into res select p_res, cafe.registrar_empaque(jsonb_build_object(
-    'lote_id', pg_temp.lid(p_k), 'fecha', pg_temp.hoy(), 'bultos', to_jsonb(pg_temp.barr(p_k)), 'diferencia_destino', 'perdida',
+    'lote_id', pg_temp.lid(p_k), 'fecha', pg_temp.hoy(), 'peso_bascula_kg', pg_temp.tostado(p_k),
     'lineas', (select jsonb_agg(jsonb_build_object('presentacion_g', p_lineas[i][1], 'unidades', p_lineas[i][2]) order by i)
                  from generate_subscripts(p_lineas, 1) i)));
 end $$;
@@ -315,10 +323,6 @@ select throws_ok(
   'P0001', 'reapertura_solo_molienda_empaque', 'trilla sobre una reapertura: reapertura_solo_molienda_empaque'
 );
 select throws_ok(
-  $$select cafe.registrar_proceso(pg_temp.pr('MP1', 'R1', 'molienda', jsonb_build_object('peso_salida_kg', 19.8, 'bultos', to_jsonb(pg_temp.barr('MP1')))))$$,
-  'P0001', 'datos_invalidos', 'una reapertura no lleva bultos'
-);
-select throws_ok(
   $$select cafe.registrar_proceso(pg_temp.pr('MP1', 'R1', 'molienda', '{"peso_salida_kg": 19.8, "peso_entrada_kg": 25}'))$$,
   'P0001', 'peso_supera_disponible', 'moler 25 kg de 20 reabiertos: peso_supera_disponible'
 );
@@ -387,10 +391,6 @@ select is(
   pg_temp.detalle($$select cafe.registrar_empaque(pg_temp.pe('MP1', 'R1', array[[2500, 8]]))$$),
   'Las bolsas suman 20 kg y a empaque solo llegan 19.8 kg (el café reabierto).',
   'el mensaje habla del café reabierto, no de bultos'
-);
-select throws_ok(
-  $$select cafe.registrar_empaque(pg_temp.pe('MP1', 'R1', array[[2500, 7]], jsonb_build_object('bultos', to_jsonb(pg_temp.barr('MP1')))))$$,
-  'P0001', 'datos_invalidos', 'el empaque de una reapertura no lleva bultos'
 );
 select throws_ok(
   $$select cafe.registrar_empaque(pg_temp.pe('MP2', 'R1', array[[2500, 7]]))$$,
@@ -518,12 +518,6 @@ select throws_ok(
   format($$insert into cafe.procesos (lote_id, tipo, fecha, peso_entrada_kg, peso_salida_kg, nivel_tueste, reapertura_id)
            values (%L, 'tostion', current_date, 10, 9, 'medio', %L)$$, pg_temp.lid('MP1'), pg_temp.rid('R1')),
   '23514', null, 'la base rechaza una tostión colgada de una reapertura (CHECK)'
-);
-select throws_ok(
-  format($$insert into cafe.proceso_bultos (proceso_id, bulto_id, tipo, lote_id)
-           select %L, b.id, 'molienda', b.lote_id from cafe.lote_bultos b where b.lote_id = %L limit 1$$,
-         (select r ->> 'id' from res where k = 'M1'), pg_temp.lid('MP1')),
-  'P0001', 'datos_invalidos', 'un proceso de reapertura no admite bultos (trigger)'
 );
 
 -- Atomicidad: si el movimiento falla (artículo inactivo), no queda reapertura.

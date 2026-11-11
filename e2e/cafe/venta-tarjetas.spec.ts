@@ -8,7 +8,7 @@ test.use(usarRol("cafeAdmin"));
 // unidad), con el total en vivo y el aviso de stock. Punto de partida por la API (30 × 500 g empacados).
 
 test("venta nueva por tarjetas de producto: toques, total en vivo y descuento de inventario @tablet", async ({ page }) => {
-  const lote = await crearCompra({ bultos: 2, pesoKg: 125 });
+  const lote = await crearCompra({ pesoKg: 125 });
   await tostarYEmpacar(lote, 125, [{ presentacion_g: 500, unidades: 30 }]);
   const antes = await stockDe("Excelso 500 g");
 
