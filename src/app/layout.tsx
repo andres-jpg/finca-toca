@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: "/icon.png",
-    apple: "/icon.png",
+    apple: "/icon-192.png", // opaco: iOS rellena de negro la transparencia
   },
 };
 
