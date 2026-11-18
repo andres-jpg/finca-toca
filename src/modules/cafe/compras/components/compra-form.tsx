@@ -197,7 +197,7 @@ export function CompraForm({ tipos, fechaHoy }: CompraFormProps) {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="compra-factura">Nº de factura del proveedor (opcional)</Label>
+            <Label htmlFor="compra-factura">Identificador de la compra (opcional)</Label>
             <Input id="compra-factura" value={factura} onChange={(e) => setFactura(e.target.value)} maxLength={60} className={CAMPO} />
             {error("facturaProveedor") && <p className={ERROR}>{error("facturaProveedor")}</p>}
           </div>

@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { construirPayload, describirImpacto, formularioInicial, instanteDesdeZona, partesEnZona, valorLegible, type DatosEdicion } from "./edicion";
+import { construirPayload, describirImpacto, formularioInicial, instanteDesdeZona, partesEnZona, serviciosAgregables, serviciosCoherentes, valorLegible, type DatosEdicion } from "./edicion";
 
 const ZONA = "America/Bogota";
 const datos: DatosEdicion = {
   loteId: "l1", codigo: "MP-2026-0001", linea: "marca_propia", fechaRecepcion: "2026-11-05", llegadaEn: "2026-11-05T12:15:00.000Z",
   precioCompraKg: 20000, facturaProveedor: null, observaciones: null,
   pesoRecibidoKg: 27,
+  terceroId: "t1", tipoCafeId: "x1", tiposCafe: [{ id: "x1", nombre: "Excelso" }, { id: "x2", nombre: "Pergamino" }],
+  servicios: [], nivelTueste: null, humedadPct: null, densidad: null, tieneProcesos: true,
   procesos: [
     { id: "p1", tipo: "tostion", fecha: "2026-11-05", pesoEntradaKg: 27, pesoSalidaKg: 22, observaciones: null,
       baches: [{ id: "b1", numero: 1, pesoEntradaKg: 13.5, pesoSalidaKg: 11, temperaturaC: 205, tiempoMin: null }, { id: "b2", numero: 2, pesoEntradaKg: 13.5, pesoSalidaKg: 11, temperaturaC: null, tiempoMin: 12 }] },
@@ -79,4 +81,39 @@ describe("valorLegible", () => {
     expect(valorLegible("observaciones", null, ZONA)).toBe("—");
     expect(valorLegible("peso_recibido_kg", "25.500", ZONA)).toBe("25,5 kg");
   });
+});
+
+describe("edición de proveedor, tipo, servicios y calidad", () => {
+  const maquila: DatosEdicion = { ...datos, linea: "servicio", precioCompraKg: null, tipoCafeId: null, servicios: ["tostion", "empaque"], nivelTueste: "medio", humedadPct: 11, densidad: 700, tieneProcesos: false, procesos: [] };
+  const form = (d: DatosEdicion) => formularioInicial(d, ZONA);
+
+  it("sin cambios no hay payload", () => expect(construirPayload(maquila, form(maquila), ZONA)).toEqual({}));
+  it("cambiar el proveedor y el tipo de café (marca propia)", () => {
+    const f = { ...form(datos), terceroId: "t2", tipoCafeId: "x2" };
+    expect(construirPayload(datos, f, ZONA).lote).toEqual({ tercero_id: "t2", tipo_cafe_id: "x2" });
+  });
+  it("el tipo de café no viaja en maquila", () => {
+    const f = { ...form(maquila), tipoCafeId: "x2" };
+    expect(construirPayload(maquila, f, ZONA)).toEqual({});
+  });
+  it("añadir molienda", () => {
+    const f = { ...form(maquila), serviciosAgregar: ["molienda" as const] };
+    expect(construirPayload(maquila, f, ZONA).lote).toEqual({ servicios_agregar: ["molienda"] });
+  });
+  it("añadir la tostión lleva el nivel", () => {
+    const solo = { ...maquila, servicios: ["trilla" as const], nivelTueste: null };
+    const f = { ...form(solo), serviciosAgregar: ["tostion" as const], nivelTueste: "alto" };
+    expect(construirPayload(solo, f, ZONA).lote).toEqual({ servicios_agregar: ["tostion"], nivel_tueste: "alto" });
+  });
+  it("calidad: cambiar y borrar", () => {
+    const f = { ...form(maquila), humedadPct: "12,5", densidad: "" };
+    expect(construirPayload(maquila, f, ZONA).lote).toEqual({ humedad_pct: 12.5, densidad: null });
+  });
+  it("servicios agregables y coherencia", () => {
+    expect(serviciosAgregables(["tostion", "empaque"])).toEqual(["trilla", "molienda"]);
+    expect(serviciosCoherentes(["trilla"], ["molienda"])).toBe(false);
+    expect(serviciosCoherentes(["trilla"], ["tostion", "molienda"])).toBe(true);
+    expect(serviciosCoherentes(["tostion", "empaque"], ["molienda"])).toBe(true);
+  });
+  it("servicios legibles en el historial", () => expect(valorLegible("servicios", "tostion, empaque", ZONA)).toBe("Tostión, Empaque"));
 });

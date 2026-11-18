@@ -45,7 +45,8 @@ export const terceroSchema = z.object({
     ),
   nombre: z
     .string({ message: "El nombre es obligatorio" })
-    .transform(normalizarNombre)
+    // Los nombres de terceros van siempre en mayúscula (lo repite el trigger de la base).
+    .transform((v) => normalizarNombre(v).toLocaleUpperCase("es-CO"))
     .pipe(
       z
         .string()

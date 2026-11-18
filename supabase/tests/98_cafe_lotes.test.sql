@@ -51,8 +51,8 @@ with t as (
     join ids i on i.clave = x.clave
   returning tenant_id, nombre, id
 )
-insert into ids select case t.nombre when 'Proveedor A' then 'ta' when 'Proveedor A2' then 'ta2'
-                                     when 'Proveedor B' then 'tb' else 'tg' end, t.id from t;
+insert into ids select case t.nombre when 'PROVEEDOR A' then 'ta' when 'PROVEEDOR A2' then 'ta2'
+                                     when 'PROVEEDOR B' then 'tb' else 'tg' end, t.id from t;
 insert into ids
 select case when i.clave = 'a' then 'xa' else 'xb' end, t.id
   from cafe.tipos_cafe t join ids i on i.id = t.tenant_id and i.clave in ('a', 'b')

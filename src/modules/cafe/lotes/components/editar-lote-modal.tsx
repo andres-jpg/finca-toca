@@ -8,13 +8,20 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TerceroCombobox } from "@/modules/core/terceros/components/tercero-combobox";
 import { Textarea } from "@/components/ui/textarea";
 import { guardarEdicion, previsualizarEdicion, type ResultadoEdicion } from "../actions/edicion.actions";
-import { construirPayload, describirImpacto, formularioInicial, hayCambios, type DatosEdicion, type FormEdicion } from "../edicion/edicion";
+import { construirPayload, describirImpacto, formularioInicial, hayCambios, serviciosAgregables, serviciosCoherentes, type DatosEdicion, type FormEdicion, type TipoServicio } from "../edicion/edicion";
 
 const MENSAJE_SIN_RESPUESTA = "No se pudo guardar la corrección: no hubo respuesta del servidor. No se cambió nada; revisa tu conexión e inténtalo de nuevo.";
 
 const ETIQUETA_PROCESO: Record<string, string> = { trilla: "Trilla", tostion: "Tostión", molienda: "Molienda", empaque: "Empaque" };
+const NIVELES = [
+  { valor: "bajo", etiqueta: "Bajo" },
+  { valor: "medio", etiqueta: "Medio" },
+  { valor: "alto", etiqueta: "Alto" },
+];
 
 function Campo({ id, etiqueta, children }: { id: string; etiqueta: string; children: React.ReactNode }) {
   return (
@@ -40,6 +47,11 @@ export function EditarLoteModal({ datos, zona }: { datos: DatosEdicion; zona: st
   const payload = useMemo(() => construirPayload(datos, form, zona), [datos, form, zona]);
   const firma = JSON.stringify([payload, motivo.trim()]);
   const cambios = hayCambios(payload);
+  const esMarcaPropia = datos.linea === "marca_propia";
+  const agregables = serviciosAgregables(datos.servicios);
+  const sinTostion = !datos.servicios.includes("tostion");
+  const serviciosOk = serviciosCoherentes(datos.servicios, form.serviciosAgregar);
+  const nivelOk = !form.serviciosAgregar.includes("tostion") || form.nivelTueste !== "";
   const motivoOk = motivo.trim().length >= 3;
   const vistaVigente = vista?.firma === firma ? vista.r : null;
 
@@ -135,10 +147,42 @@ export function EditarLoteModal({ datos, zona }: { datos: DatosEdicion; zona: st
                     <Input id="edit-precio" inputMode="decimal" value={form.precioCompraKg} onChange={(e) => cambiar((f) => void (f.precioCompraKg = e.target.value))} />
                   </Campo>
                 )}
-                <Campo id="edit-factura" etiqueta="Factura del proveedor">
+                <Campo id="edit-factura" etiqueta="Identificador de la compra">
                   <Input id="edit-factura" value={form.facturaProveedor} onChange={(e) => cambiar((f) => void (f.facturaProveedor = e.target.value))} />
                 </Campo>
               </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Campo id="edit-tercero" etiqueta={esMarcaPropia ? "Proveedor" : "Cliente"}>
+                  <TerceroCombobox
+                    value={form.terceroId}
+                    onChange={(id) => cambiar((f) => void (f.terceroId = id))}
+                    rol={esMarcaPropia ? "proveedor" : "cliente_servicio"}
+                    placeholder={esMarcaPropia ? "Selecciona un proveedor" : "Selecciona un cliente"}
+                    disabled={datos.tieneProcesos}
+                  />
+                </Campo>
+                {esMarcaPropia && (
+                  <Campo id="edit-tipo" etiqueta="Tipo de café">
+                    <Select value={form.tipoCafeId} onValueChange={(v) => cambiar((f) => void (f.tipoCafeId = v))} disabled={datos.tieneProcesos}>
+                      <SelectTrigger id="edit-tipo" className="w-full">
+                        <SelectValue placeholder="Selecciona un tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {datos.tiposCafe.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Campo>
+                )}
+              </div>
+              {datos.tieneProcesos && (
+                <p className="text-xs text-gray-500">
+                  El lote ya empezó a procesarse: {esMarcaPropia ? "el proveedor y el tipo de café" : "el cliente"} ya no se pueden cambiar.
+                </p>
+              )}
               <Campo id="edit-obs" etiqueta="Observaciones">
                 <Textarea id="edit-obs" rows={2} value={form.observaciones} onChange={(e) => cambiar((f) => void (f.observaciones = e.target.value))} />
               </Campo>
@@ -156,6 +200,69 @@ export function EditarLoteModal({ datos, zona }: { datos: DatosEdicion; zona: st
                 que ya consumieron, corrige también su peso de entrada.
               </p>
             </fieldset>
+
+            {!esMarcaPropia && (
+              <fieldset className="space-y-3 rounded-md border border-gray-200 p-3">
+                <legend className="px-1 text-sm font-semibold text-gray-800">Servicios y calidad</legend>
+                <div className="space-y-1">
+                  <p className="text-xs text-gray-600">Servicios contratados</p>
+                  <p className="text-sm text-gray-800">{datos.servicios.map((x) => ETIQUETA_PROCESO[x]).join(" · ") || "—"}</p>
+                </div>
+                {datos.tieneProcesos ? (
+                  <p className="text-xs text-gray-500">El lote ya empezó a procesarse: ya no se pueden añadir servicios.</p>
+                ) : agregables.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-gray-600">Añadir servicios (solo se pueden añadir, no quitar)</p>
+                    <div className="flex flex-wrap gap-x-5 gap-y-2">
+                      {agregables.map((sv: TipoServicio) => (
+                        <label key={sv} className="flex items-center gap-2 text-sm text-gray-800">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={form.serviciosAgregar.includes(sv)}
+                            onChange={(e) =>
+                              cambiar((f) => {
+                                f.serviciosAgregar = e.target.checked ? [...f.serviciosAgregar, sv] : f.serviciosAgregar.filter((x) => x !== sv);
+                                if (!f.serviciosAgregar.includes("tostion")) f.nivelTueste = "";
+                              })
+                            }
+                          />
+                          {ETIQUETA_PROCESO[sv]}
+                        </label>
+                      ))}
+                    </div>
+                    {!serviciosOk && <p className="text-xs text-red-600">La molienda y el empaque requieren tostión: añádela también.</p>}
+                    {form.serviciosAgregar.includes("tostion") && sinTostion && (
+                      <Campo id="edit-nivel" etiqueta="Nivel de tueste de la tostión">
+                        <Select value={form.nivelTueste} onValueChange={(v) => cambiar((f) => void (f.nivelTueste = v))}>
+                          <SelectTrigger id="edit-nivel" className="w-full sm:w-48">
+                            <SelectValue placeholder="Selecciona un nivel" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {NIVELES.map((n) => (
+                              <SelectItem key={n.valor} value={n.valor}>
+                                {n.etiqueta}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Campo>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500">Ya están contratados todos los servicios.</p>
+                )}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <Campo id="edit-humedad" etiqueta="Humedad (%)">
+                    <Input id="edit-humedad" inputMode="decimal" value={form.humedadPct} onChange={(e) => cambiar((f) => void (f.humedadPct = e.target.value))} />
+                  </Campo>
+                  <Campo id="edit-densidad" etiqueta="Densidad">
+                    <Input id="edit-densidad" inputMode="decimal" value={form.densidad} onChange={(e) => cambiar((f) => void (f.densidad = e.target.value))} />
+                  </Campo>
+                </div>
+                <p className="text-xs text-gray-600">La calidad se mide al recibir el café; las alertas se evalúan de nuevo con los rangos actuales.</p>
+              </fieldset>
+            )}
 
             {datos.procesos.map((p) => {
               const fp = form.procesos[p.id];
@@ -239,7 +346,7 @@ export function EditarLoteModal({ datos, zona }: { datos: DatosEdicion; zona: st
                 {ocupado ? "Guardando…" : "Confirmar y guardar"}
               </Button>
             ) : (
-              <Button type="button" onClick={verImpacto} disabled={ocupado || !motivoOk || !cambios} className="h-11 sm:h-9">
+              <Button type="button" onClick={verImpacto} disabled={ocupado || !motivoOk || !cambios || !serviciosOk || !nivelOk} className="h-11 sm:h-9">
                 {ocupado ? "Calculando…" : "Ver impacto"}
               </Button>
             )}

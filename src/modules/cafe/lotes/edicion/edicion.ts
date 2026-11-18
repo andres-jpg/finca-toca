@@ -35,7 +35,33 @@ export interface DatosEdicion {
   observaciones: string | null;
   /** Peso recibido actual del lote (kg). */
   pesoRecibidoKg: number;
+  /** Proveedor (marca propia) o cliente (maquila). */
+  terceroId: string;
+  tipoCafeId: string | null;
+  /** Tipos de café entre los que elegir (activos + el actual). */
+  tiposCafe: { id: string; nombre: string }[];
+  /** Servicios contratados (solo maquila), en orden de planta. */
+  servicios: TipoServicio[];
+  nivelTueste: NivelTueste | null;
+  humedadPct: number | null;
+  densidad: number | null;
+  /** El lote ya empezó a procesarse: proveedor/cliente, tipo de café y servicios dejan de ser editables. */
+  tieneProcesos: boolean;
   procesos: ProcesoEditable[];
+}
+
+export type TipoServicio = "trilla" | "tostion" | "molienda" | "empaque";
+export type NivelTueste = "bajo" | "medio" | "alto";
+
+/** Servicios que aún se pueden añadir a un lote sin procesos: los no contratados. La molienda y el empaque exigen tostión. */
+export function serviciosAgregables(contratados: readonly TipoServicio[]): TipoServicio[] {
+  return (["trilla", "tostion", "molienda", "empaque"] as const).filter((s) => !contratados.includes(s));
+}
+
+/** Los servicios elegidos para añadir son coherentes: molienda y empaque requieren tostión (contratada o añadida). */
+export function serviciosCoherentes(contratados: readonly TipoServicio[], agregar: readonly TipoServicio[]): boolean {
+  const todos = [...contratados, ...agregar];
+  return !(todos.includes("molienda") || todos.includes("empaque")) || todos.includes("tostion");
 }
 
 /** Lo que el formulario muestra y el usuario cambia (textos, tal como se teclean). */
@@ -48,6 +74,14 @@ export interface FormEdicion {
   observaciones: string;
   /** Peso recibido del lote (kg): un solo campo (el saldo por kilos no lleva bultos). */
   pesoRecibidoKg: string;
+  terceroId: string;
+  tipoCafeId: string;
+  /** Servicios a AÑADIR (los ya contratados no se tocan). */
+  serviciosAgregar: TipoServicio[];
+  /** Solo al añadir la tostión. */
+  nivelTueste: string;
+  humedadPct: string;
+  densidad: string;
   procesos: Record<
     string,
     { fecha: string; pesoEntradaKg: string; pesoSalidaKg: string; observaciones: string; baches: Record<string, { pesoEntradaKg: string; pesoSalidaKg: string; temperaturaC: string; tiempoMin: string }> }
@@ -95,6 +129,12 @@ export function formularioInicial(d: DatosEdicion, zona: string): FormEdicion {
     facturaProveedor: d.facturaProveedor ?? "",
     observaciones: d.observaciones ?? "",
     pesoRecibidoKg: String(d.pesoRecibidoKg),
+    terceroId: d.terceroId,
+    tipoCafeId: d.tipoCafeId ?? "",
+    serviciosAgregar: [],
+    nivelTueste: "",
+    humedadPct: d.humedadPct === null ? "" : String(d.humedadPct),
+    densidad: d.densidad === null ? "" : String(d.densidad),
     procesos: Object.fromEntries(
       d.procesos.map((p) => [
         p.id,
@@ -134,6 +174,18 @@ export function construirPayload(d: DatosEdicion, f: FormEdicion, zona: string):
   if (f.observaciones.trim() !== (d.observaciones ?? "")) lote.observaciones = f.observaciones.trim() || null;
   const peso = numero(f.pesoRecibidoKg);
   if (peso !== d.pesoRecibidoKg) lote.peso_recibido_kg = peso;
+  if (f.terceroId && f.terceroId !== d.terceroId) lote.tercero_id = f.terceroId;
+  if (d.linea === "marca_propia" && f.tipoCafeId && f.tipoCafeId !== d.tipoCafeId) lote.tipo_cafe_id = f.tipoCafeId;
+  if (d.linea === "servicio") {
+    if (f.serviciosAgregar.length > 0) {
+      lote.servicios_agregar = f.serviciosAgregar;
+      if (f.serviciosAgregar.includes("tostion")) lote.nivel_tueste = f.nivelTueste || null;
+    }
+    const hum = numero(f.humedadPct);
+    if (hum !== d.humedadPct) lote.humedad_pct = hum;
+    const den = numero(f.densidad);
+    if (den !== d.densidad) lote.densidad = den;
+  }
 
   const procesos: NonNullable<PayloadEdicion["procesos"]> = [];
   for (const p of d.procesos) {
@@ -215,7 +267,13 @@ const CAMPOS: Record<string, string> = {
   fecha_recepcion: "Fecha de recepción",
   llegada_at: "Hora de llegada",
   precio_compra_kg: "Precio de compra por kg",
-  factura_proveedor: "Factura del proveedor",
+  factura_proveedor: "Identificador de la compra",
+  tercero_id: "Proveedor o cliente",
+  tipo_cafe_id: "Tipo de café",
+  servicios: "Servicios contratados",
+  nivel_tueste: "Nivel de tueste",
+  humedad_pct: "Humedad (%)",
+  densidad: "Densidad",
   observaciones: "Observaciones",
   peso_recibido_kg: "Peso recibido",
   fecha: "Fecha",
@@ -224,6 +282,8 @@ const CAMPOS: Record<string, string> = {
   temperatura_c: "Temperatura (°C)",
   tiempo_min: "Tiempo (min)",
 };
+
+const ETIQUETA_SERVICIO: Record<string, string> = { trilla: "Trilla", tostion: "Tostión", molienda: "Molienda", empaque: "Empaque" };
 
 export const etiquetaCampo = (campo: string) => CAMPOS[campo] ?? campo;
 
@@ -235,5 +295,8 @@ export function valorLegible(campo: string, valor: string | null, zona: string):
   if (campo === "peso_entrada_kg" || campo === "peso_salida_kg" || campo === "peso_recibido_kg") return kg(Number(valor));
   if (campo === "precio_compra_kg") return formatCOP(Number(valor));
   if (campo === "temperatura_c" || campo === "tiempo_min") return String(Number(valor));
+  if (campo === "servicios") return valor.split(", ").map((x) => ETIQUETA_SERVICIO[x] ?? x).join(", ");
+  if (campo === "nivel_tueste") return valor.charAt(0).toUpperCase() + valor.slice(1);
+  if (campo === "humedad_pct") return `${Number(valor).toLocaleString("es-CO")} %`;
   return valor;
 }

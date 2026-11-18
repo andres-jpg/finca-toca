@@ -10,7 +10,7 @@
 -- Los lotes se crean con las RPC reales (registrar_recepcion / registrar_compra), como operativo.
 begin;
 
-select plan(25);
+select plan(33);
 
 -- 0. Preparación --------------------------------------------------------------------------------------------
 insert into auth.users (id, aud, role, email) values
@@ -278,6 +278,44 @@ select throws_ok(
   'P0001', 'lote_anulado', 'un lote anulado no se edita'
 );
 
+-- 4b. Proveedor/cliente, tipo de café, servicios y calidad ------------------------------------------------------------
+select pg_temp.recibir('S2', 100, 2, array['trilla']);
+select throws_ok(
+  format($q$select cafe.editar_lote(jsonb_build_object('lote_id', %L, 'motivo', 'prueba', 'lote', jsonb_build_object('servicios_agregar', jsonb_build_array('molienda'))))$q$, pg_temp.lid('S2')),
+  'P0001', 'servicios_invalidos', 'la molienda sin tostión se rechaza'
+);
+select throws_ok(
+  format($q$select cafe.editar_lote(jsonb_build_object('lote_id', %L, 'motivo', 'prueba', 'lote', jsonb_build_object('servicios_agregar', jsonb_build_array('tostion'))))$q$, pg_temp.lid('S2')),
+  'P0001', 'falta_nivel_tueste', 'añadir la tostión exige el nivel de tueste'
+);
+select throws_ok(
+  format($q$select cafe.editar_lote(jsonb_build_object('lote_id', %L, 'motivo', 'prueba', 'lote', jsonb_build_object('servicios_agregar', jsonb_build_array('trilla'))))$q$, pg_temp.lid('S2')),
+  'P0001', 'servicios_invalidos', 'un servicio ya contratado no se vuelve a añadir (y nunca se quitan)'
+);
+select throws_ok(
+  format($q$select cafe.editar_lote(jsonb_build_object('lote_id', %L, 'motivo', 'prueba', 'lote', jsonb_build_object('tercero_id', %L)))$q$, pg_temp.lid('S2'), (select id from ids where clave = 'pa')),
+  'P0001', 'tercero_no_es_cliente_servicio', 'el cliente de una maquila tiene que ser cliente de servicios'
+);
+insert into res select 'SERV2', cafe.editar_lote(jsonb_build_object(
+  'lote_id', pg_temp.lid('S2'), 'motivo', 'Contrató más servicios',
+  'lote', jsonb_build_object('servicios_agregar', jsonb_build_array('tostion', 'molienda'), 'nivel_tueste', 'medio', 'humedad_pct', 12.5, 'densidad', 700)));
+select is(
+  (select array_to_string(servicios, ',') || '/' || nivel_tueste::text || '/' || molienda_solicitada_modo || '/' || humedad_pct::text
+     from cafe.lotes where id = pg_temp.lid('S2')),
+  'trilla,tostion,molienda,empaque/medio/todo/12.50', 'se añaden tostión y molienda (el empaque entra con la tostión), con nivel, molienda pedida y calidad'
+);
+select is(
+  (select count(*)::int from cafe.lote_perfil_tostion where lote_id = pg_temp.lid('S2') and nivel = 'medio' and kg = 81),
+  1, 'la tostión añadida deja su perfil con el café que le entra (100 kg − 19 % de trilla)'
+);
+select is(
+  (select count(*)::int from cafe.lote_ediciones where lote_id = pg_temp.lid('S2') and campo in ('servicios', 'nivel_tueste', 'humedad_pct', 'densidad')),
+  4, 'cada cambio queda en el historial con su motivo'
+);
+select throws_ok(
+  format($q$select cafe.editar_lote(jsonb_build_object('lote_id', %L, 'motivo', 'prueba', 'lote', jsonb_build_object('tipo_cafe_id', gen_random_uuid())))$q$, pg_temp.lid('M1')),
+  'P0001', 'lote_bloqueado', 'con procesos, el tipo de café no cambia'
+);
 -- 5. Aislamiento: otro cliente no ve el historial ni edita el lote ajeno -----------------------------------------------
 reset role;
 select tests.autenticar_como('owner-b@procesos.test');

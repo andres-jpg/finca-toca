@@ -133,7 +133,7 @@ export function LoteCabecera({ lote, etapas, zonaHoraria }: { lote: LoteFicha; e
             {formatearCOP(lote.valorCompra)}
           </Dato>
         )}
-        {lote.facturaProveedor && <Dato etiqueta="Factura del proveedor">{lote.facturaProveedor}</Dato>}
+        {lote.facturaProveedor && <Dato etiqueta="Identificador de la compra">{lote.facturaProveedor}</Dato>}
 
         {esServicio && (
           <Dato etiqueta="Valor de los servicios" className="tabular-nums">

@@ -25,7 +25,7 @@ describe("terceroSchema — casos válidos", () => {
       tipo_identificacion: "NIT",
       identificacion: "9001234567",
       digito_verificacion: 7,
-      nombre: "Café Pepe S.A.S.",
+      nombre: "CAFÉ PEPE S.A.S.",
       direccion: "Calle 10 # 5-20",
       telefono: "300 123 4567",
       email: "pepe@cafe.co",

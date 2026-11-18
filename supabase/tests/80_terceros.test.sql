@@ -6,7 +6,7 @@
 --   v01 Café Pepe S.A.S. (NIT 9001234567, VB)   v02 operativo   v03 viewer-bait   e01 El Velero
 begin;
 
-select plan(98);
+select plan(99);
 
 -- Helper: `detail` con el que falla una sentencia (lo que callRpc entrega como `message`).
 create or replace function pg_temp.detalle_de(p_sql text)
@@ -82,7 +82,7 @@ select ok(
 select is(
   (select array_agg(tgname::text order by tgname) from pg_trigger
     where tgrelid = 'public.terceros'::regclass and not tgisinternal),
-  array['audit_terceros', 'set_updated', 'terceros_normalizar', 'terceros_proteger_consumidor_final'],
+  array['audit_terceros', 'set_updated', 'terceros_normalizar', 'terceros_proteger_consumidor_final', 'terceros_zz_nombre_mayuscula'],
   'terceros tiene sus triggers (auditoría, set_updated, normalizar y proteger consumidor final)'
 );
 
@@ -92,6 +92,7 @@ select is(public.normalizar_identificacion('900 123 456 7'), '9001234567', 'espa
 select is(public.normalizar_identificacion('ab-12.3'), 'AB123', 'se pasa a mayúsculas (pasaportes)');
 select is(public.normalizar_identificacion(null), '', 'null → cadena vacía');
 select is(public.normalizar_nombre('  Café    Pepe   S.A.S.  '), 'Café Pepe S.A.S.', 'nombre con trim y espacios colapsados');
+
 select is(public.normalizar_nombre(E'a\t b\n c'), 'a b c', 'tabuladores y saltos de línea también se colapsan');
 
 -- 2. Sin el módulo activo no se ve ni se escribe nada -----------------------------------------------------
@@ -140,7 +141,7 @@ select is(
 );
 select is(
   (select nombre from public.terceros where id = '90000000-0000-0000-0000-0000000000a1'),
-  'Café Pepe S.A.S.', 'el nombre se guarda con trim y espacios colapsados'
+  'CAFÉ PEPE S.A.S.', 'el nombre se guarda con trim y espacios colapsados'
 );
 select is(
   (select direccion || '|' || telefono || '|' || email from public.terceros where id = '90000000-0000-0000-0000-0000000000a1'),
@@ -273,7 +274,11 @@ select is(
 );
 select is(
   (select nombre from public.terceros where id = '90000000-0000-0000-0000-0000000000a2'),
-  'Creado en línea', 'y el dato sigue igual'
+  'CREADO EN LÍNEA', 'y el dato sigue igual'
+);
+select is(
+  (select count(*)::int from public.terceros where not es_consumidor_final and nombre <> upper(nombre)),
+  0, 'todos los nombres de terceros se guardan en mayúscula (salvo el Consumidor final, registro del sistema)'
 );
 select ok((select count(*) from public.terceros) >= 4, 'el operativo lee los terceros del cliente');
 select throws_ok(
@@ -442,11 +447,11 @@ select is(
 );
 select is(
   (select nombre from public.buscar_terceros_similares('Distribuidora La Esperanza', '1.0.0.6') limit 1),
-  'Distribuidora La Esperanza Oeste', 'la coincidencia de identificación va primero'
+  'DISTRIBUIDORA LA ESPERANZA OESTE', 'la coincidencia de identificación va primero'
 );
 select is(
   (select nombre from public.buscar_terceros_similares('distribuidora   la esperanza', null) limit 1),
-  'Distribuidora La Esperanza', 'el nombre idéntico va primero y no distingue mayúsculas ni espacios de más'
+  'DISTRIBUIDORA LA ESPERANZA', 'el nombre idéntico va primero y no distingue mayúsculas ni espacios de más'
 );
 select is(
   (select count(*)::int from public.buscar_terceros_similares('Panadería Nada Que Ver', null)),

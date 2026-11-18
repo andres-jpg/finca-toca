@@ -53,8 +53,8 @@ with t as (
     join ids i on i.clave = x.clave
   returning nombre, id
 )
-insert into ids select case t.nombre when 'Proveedor A' then 'ta' when 'Proveedor A2' then 'ta2'
-                                     when 'Solo cliente' then 'tcli' when 'Prov inactivo' then 'tinac'
+insert into ids select case t.nombre when 'PROVEEDOR A' then 'ta' when 'PROVEEDOR A2' then 'ta2'
+                                     when 'SOLO CLIENTE' then 'tcli' when 'PROV INACTIVO' then 'tinac'
                                      else 'tb' end, t.id from t;
 
 -- Tipos de café: xa/ca (Excelso/Consumo de A), xb (Excelso de B) e xi (un tipo inactivo de A).

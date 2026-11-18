@@ -139,25 +139,25 @@ select tests.autenticar_como('viewer-a@provs.test');
 create temp table r as select cafe.proveedores_marca_propia() as j;
 grant select on r to authenticated;
 select is(jsonb_array_length((select j -> 'proveedores' from r)), 2, 'dos proveedores: sin el lote anulado ni el de servicio');
-select is((select (p ->> 'nombre') from r, jsonb_array_elements(j -> 'proveedores') p limit 1), 'Proveedor Uno', 'el de más kilos primero');
+select is((select (p ->> 'nombre') from r, jsonb_array_elements(j -> 'proveedores') p limit 1), 'PROVEEDOR UNO', 'el de más kilos primero');
 select is(
   (select row((p ->> 'lotes')::int, (p ->> 'kg')::numeric, (p ->> 'precio_kg')::numeric)::text
-     from r, jsonb_array_elements(j -> 'proveedores') p where p ->> 'nombre' = 'Proveedor Uno'),
+     from r, jsonb_array_elements(j -> 'proveedores') p where p ->> 'nombre' = 'PROVEEDOR UNO'),
   '(2,150.000,30000.00)', 'proveedor 1: 2 lotes, 150 kg, precio por kg ponderado');
 select is(
-  (select (p ->> 'merma_tostion_pct')::numeric from r, jsonb_array_elements(j -> 'proveedores') p where p ->> 'nombre' = 'Proveedor Uno'),
+  (select (p ->> 'merma_tostion_pct')::numeric from r, jsonb_array_elements(j -> 'proveedores') p where p ->> 'nombre' = 'PROVEEDOR UNO'),
   19.000, 'merma de tostión ponderada con la tostión del lote 1 (100 → 81 kg)');
 select is(
-  (select (p ->> 'costo_kg_tostado')::numeric from r, jsonb_array_elements(j -> 'proveedores') p where p ->> 'nombre' = 'Proveedor Uno'),
+  (select (p ->> 'costo_kg_tostado')::numeric from r, jsonb_array_elements(j -> 'proveedores') p where p ->> 'nombre' = 'PROVEEDOR UNO'),
   37037.04, 'costo por kg tostado = precio / (1 − merma) = 30.000 / 0,81');
 select is(
-  (select p -> 'humedad_pct' from r, jsonb_array_elements(j -> 'proveedores') p where p ->> 'nombre' = 'Proveedor Uno'),
+  (select p -> 'humedad_pct' from r, jsonb_array_elements(j -> 'proveedores') p where p ->> 'nombre' = 'PROVEEDOR UNO'),
   'null'::jsonb, 'sin humedad medida no se inventa');
 select is(
-  (select p -> 'merma_tostion_pct' from r, jsonb_array_elements(j -> 'proveedores') p where p ->> 'nombre' = 'Proveedor Dos'),
+  (select p -> 'merma_tostion_pct' from r, jsonb_array_elements(j -> 'proveedores') p where p ->> 'nombre' = 'PROVEEDOR DOS'),
   'null'::jsonb, 'sin tostión: merma y costo por kg tostado quedan en null');
 select is(
-  (select p -> 'costo_kg_tostado' from r, jsonb_array_elements(j -> 'proveedores') p where p ->> 'nombre' = 'Proveedor Dos'),
+  (select p -> 'costo_kg_tostado' from r, jsonb_array_elements(j -> 'proveedores') p where p ->> 'nombre' = 'PROVEEDOR DOS'),
   'null'::jsonb, 'idem el costo por kg tostado');
 
 -- 3. Periodo, validaciones y permisos ---------------------------------------------------------------------------------

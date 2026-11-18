@@ -70,8 +70,8 @@ with t as (
     join ids i on i.clave = x.t
   returning nombre, id
 )
-insert into ids select case nombre when 'Cliente A' then 'ca' when 'Cliente A2' then 'ca2' when 'Proveedor A' then 'pa'
-                                   when 'Cliente B' then 'cb' else lower(replace(nombre, ' ', '')) end, id from t;
+insert into ids select case nombre when 'CLIENTE A' then 'ca' when 'CLIENTE A2' then 'ca2' when 'PROVEEDOR A' then 'pa'
+                                   when 'CLIENTE B' then 'cb' else lower(replace(nombre, ' ', '')) end, id from t;
 insert into ids select 'xa', t.id from cafe.tipos_cafe t join ids i on i.id = t.tenant_id and i.clave = 'a' where t.nombre = 'Excelso';
 insert into ids select 'cfa', id from public.terceros where tenant_id = (select id from ids where clave = 'a') and es_consumidor_final;
 insert into ids select 'cfb', id from public.terceros where tenant_id = (select id from ids where clave = 'b') and es_consumidor_final;
@@ -335,11 +335,11 @@ select is(pg_temp.j('kA', '{inventario_terceros,lotes}'), '8'::jsonb, 'inventari
 select is(pg_temp.j('kA', '{inventario_terceros,clientes}'), '7'::jsonb, 'inventario de terceros: 7 clientes');
 select is(
   (pg_temp.j('kA', '{inventario_terceros,por_cliente}') #> '{0}') - 'tercero_id',
-  '{"nombre": "Cliente A", "kg": 380, "lotes": 2}'::jsonb, 'el primer cliente: Cliente A, 380 kg en 2 lotes (L1 y L4)'
+  '{"nombre": "CLIENTE A", "kg": 380, "lotes": 2}'::jsonb, 'el primer cliente: Cliente A, 380 kg en 2 lotes (L1 y L4)'
 );
 select is(
   (select jsonb_agg(c ->> 'nombre') from jsonb_array_elements(pg_temp.j('kA', '{inventario_terceros,por_cliente}')) c),
-  '["Cliente A", "Cliente A2", "Extra 5", "Extra 4", "Extra 3"]'::jsonb, 'solo los cinco con más kilos, de mayor a menor'
+  '["CLIENTE A", "CLIENTE A2", "EXTRA 5", "EXTRA 4", "EXTRA 3"]'::jsonb, 'solo los cinco con más kilos, de mayor a menor'
 );
 select is(pg_temp.j('kA', '{insumos_bajo_minimo}'), '0'::jsonb, 'sin mínimos configurados no hay insumos bajo mínimo');
 

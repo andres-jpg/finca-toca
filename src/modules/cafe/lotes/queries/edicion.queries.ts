@@ -19,9 +19,13 @@ export interface EdicionLote {
 export async function getDatosEdicion(loteId: string): Promise<DatosEdicion | null> {
   const supabase = await createClient();
   const cafe = supabase.schema("cafe");
-  const [{ data: bloqueo }, { data: lote }, { data: procesos }] = await Promise.all([
+  const [{ data: bloqueo }, { data: lote }, { data: procesos }, { data: ultimo }] = await Promise.all([
     cafe.rpc("lote_bloqueo_edicion", { p_lote: loteId }),
-    cafe.from("lotes").select("id, codigo, linea, fecha_recepcion, created_at, precio_compra_kg, factura_proveedor, observaciones, peso_recibido_kg").eq("id", loteId).maybeSingle(),
+    cafe
+      .from("lotes")
+      .select("id, codigo, linea, fecha_recepcion, created_at, precio_compra_kg, factura_proveedor, observaciones, peso_recibido_kg, tercero_id, tipo_cafe_id, servicios, nivel_tueste, humedad_pct, densidad")
+      .eq("id", loteId)
+      .maybeSingle(),
     cafe
       .from("procesos")
       .select("id, tipo, fecha, peso_entrada_kg, peso_salida_kg, observaciones, created_at, baches(id, numero, peso_entrada_kg, peso_salida_kg, temperatura_c, tiempo_min)")
@@ -30,8 +34,10 @@ export async function getDatosEdicion(loteId: string): Promise<DatosEdicion | nu
       .is("reapertura_id", null)
       .neq("tipo", "empaque")
       .order("created_at"),
+    cafe.rpc("orden_ultimo_proceso", { p_lote: loteId }),
   ]);
   if (!lote || bloqueo) return null;
+  const { data: tipos } = await cafe.from("tipos_cafe").select("id, nombre, activo").order("orden").order("nombre");
   return {
     loteId: lote.id,
     codigo: lote.codigo,
@@ -42,6 +48,15 @@ export async function getDatosEdicion(loteId: string): Promise<DatosEdicion | nu
     facturaProveedor: lote.factura_proveedor,
     observaciones: lote.observaciones,
     pesoRecibidoKg: Number(lote.peso_recibido_kg),
+    terceroId: lote.tercero_id,
+    tipoCafeId: lote.tipo_cafe_id,
+    tiposCafe: (tipos ?? []).filter((t) => t.activo || t.id === lote.tipo_cafe_id).map((t) => ({ id: t.id, nombre: t.nombre })),
+    servicios: lote.servicios,
+    nivelTueste: lote.nivel_tueste,
+    humedadPct: lote.humedad_pct === null ? null : Number(lote.humedad_pct),
+    densidad: lote.densidad === null ? null : Number(lote.densidad),
+    // Sin `.neq("tipo","empaque")`: cualquier proceso vigente (también el empaque) bloquea tercero, tipo y servicios.
+    tieneProcesos: Boolean(ultimo),
     procesos: (procesos ?? []).map(
       (p): ProcesoEditable => ({
         id: p.id,

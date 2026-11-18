@@ -301,7 +301,7 @@ select is(
   (select row(x.cliente_nombre, x.cliente_identificacion, x.peso_recibido_kg, x.peso_entregado_kg, x.merma_total_kg,
               x.merma_total_pct, x.valor_servicios, x.recibido_por, x.fecha, x.forzada, x.anulada_at)::text
      from cafe.remisiones x where x.id = pg_temp.lid('R1')),
-  row('Juan Pérez', '9100001', 500.000::numeric, 330.000::numeric, 170.000::numeric, 34.000::numeric,
+  row('JUAN PÉREZ', '9100001', 500.000::numeric, 330.000::numeric, 170.000::numeric, 34.000::numeric,
       1923000.00::numeric, 'Pedro Gómez', current_date, false, null::timestamptz)::text,
   'recibido 500, entregado 330, merma 170 kg (34,0 %), valor $1.923.000, el cliente congelado y quién recoge sin espacios'
 );
