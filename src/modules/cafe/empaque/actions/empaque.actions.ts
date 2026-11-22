@@ -12,16 +12,21 @@ import { fechaHoyEnZona } from "../../insumos/lib/insumos";
 import { getKardexProducto } from "../queries/empaque.queries";
 import {
   convertirPresentacionSchema,
+  empacarTostadoSchema,
   empaqueSchema,
+  molerTostadoSchema,
+  payloadEmpacarTostado,
   payloadConvertirPresentacion,
   payloadEmpaque,
   payloadSalidaPt,
   salidaPtSchema,
   type ConvertirPresentacionFormInput,
+  type EmpacarTostadoFormInput,
   type EmpaqueFormInput,
+  type MolerTostadoFormInput,
   type SalidaPtFormInput,
 } from "../schemas/empaque.schema";
-import type { KardexProducto, ResultadoConversion, ResultadoEmpaque } from "../types";
+import type { KardexProducto, ResultadoConversion, ResultadoEmpaque, ResultadoEmpaqueDesdePlanta } from "../types";
 
 // Server Actions del empaque de marca propia y del inventario de producto terminado (FIN-111). Cada una: módulo
 // activo → rol de la membresía → Zod → RPC. Son endpoints POST públicos: la frontera real son las RPC
@@ -75,6 +80,42 @@ export async function registrarEmpaque(input: EmpaqueFormInput): Promise<Result<
   if (!r.ok) return r;
   revalidarEmpaque(parsed.data.loteId);
   // El costo de insumos queda estampado en las líneas al registrarlas (precio vigente de ese momento): se lee para el cierre.
+  const costo = await callRpc<"cafe", "costo_insumos_empaque", { total: number; completo: boolean; aplica: boolean }>("cafe", "costo_insumos_empaque", { p_proceso: r.data.proceso_id });
+  return { ok: true, data: { ...r.data, costo_insumos: costo.ok ? costo.data : null } };
+}
+
+/**
+ * Muele kilos del tostado en grano que hay en planta de un lote de marca propia (pasan a «molido» en planta). Se puede repetir
+ * las veces que haga falta: no toca la tanda ni su merma. Todo o nada.
+ */
+export async function molerTostado(input: MolerTostadoFormInput): Promise<Result<{ molido_kg: number; grano_restante_kg: number; molido_en_planta_kg: number }>> {
+  await requireModulo("cafe.procesos");
+  await requireModulo("cafe.inventario");
+  await requireRolTenant(ROLES_OPERACION);
+  const parsed = molerTostadoSchema.safeParse(input);
+  if (!parsed.success) return datosInvalidos(parsed.error.issues[0]?.message);
+  const r = await callRpc<"cafe", "moler_tostado", { molido_kg: number; grano_restante_kg: number; molido_en_planta_kg: number }>("cafe", "moler_tostado", {
+    p: { lote_id: parsed.data.loteId, kg: parsed.data.kg },
+  });
+  if (r.ok) revalidarEmpaque(parsed.data.loteId);
+  return r;
+}
+
+/**
+ * Empaca desde el tostado en planta de un lote de marca propia (sin báscula ni tanda): descuenta bolsas y etiquetas, suma el
+ * producto terminado y resta el café de la planta. No puede empacar más de lo que hay en planta de cada forma.
+ */
+export async function empacarDesdePlanta(input: EmpacarTostadoFormInput): Promise<Result<ResultadoEmpaqueDesdePlanta>> {
+  await requireModulo("cafe.procesos");
+  await requireModulo("cafe.inventario");
+  const sesion = await requireRolTenant(ROLES_OPERACION);
+  const parsed = empacarTostadoSchema.safeParse(input);
+  if (!parsed.success) return datosInvalidos(parsed.error.issues[0]?.message);
+  if (parsed.data.fecha > fechaHoyEnZona(sesion.tenant.zonaHoraria)) return datosInvalidos("La fecha del empaque no puede ser futura.");
+
+  const r = await callRpc<"cafe", "empacar_tostado", ResultadoEmpaqueDesdePlanta>("cafe", "empacar_tostado", { p: payloadEmpacarTostado(parsed.data) });
+  if (!r.ok) return r;
+  revalidarEmpaque(parsed.data.loteId);
   const costo = await callRpc<"cafe", "costo_insumos_empaque", { total: number; completo: boolean; aplica: boolean }>("cafe", "costo_insumos_empaque", { p_proceso: r.data.proceso_id });
   return { ok: true, data: { ...r.data, costo_insumos: costo.ok ? costo.data : null } };
 }

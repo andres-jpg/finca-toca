@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   evaluarPaso,
+  destinoTrilla,
   evaluarPasos,
+  evaluarPasosPrevistos,
   origenPeso,
   pasoInicial,
   pasoOrigen,
@@ -134,5 +136,45 @@ describe("pasoInicial y origenPeso", () => {
   it("origenPeso: el paso previo y su fecha", () => {
     expect(origenPeso(origen({ procesoId: "tr", tipo: "trilla", fecha: "2026-11-06" }))).toEqual({ previo: "trilla", fecha: "2026-11-06" });
     expect(origenPeso(origen({}))).toEqual({ previo: null, fecha: null });
+  });
+});
+
+describe("evaluarPasosPrevistos / destinoTrilla", () => {
+  const tipos = (l: LotePasos, o: OrigenPlanta[]) => evaluarPasosPrevistos(l, o).map((e) => e.tipo);
+  const tanda = (modo: OrigenPlanta["moliendaModo"]) => origen({ procesoId: "t1", tipo: "tostion", moliendaModo: modo });
+
+  it("un lote solo de trilla no ofrece tostión ni molienda", () => {
+    const L: LotePasos = { linea: "servicio", servicios: ["trilla"] };
+    expect(tipos(L, [origen({})])).toEqual(["trilla"]);
+    expect(destinoTrilla(L)).toBe("Listo para entregar");
+  });
+  it("con tostión la trilla lleva a «Por tostar»", () => {
+    expect(destinoTrilla(SIN_MOLIENDA)).toBe("Por tostar");
+  });
+  it("quita la molienda si la tanda se decidió sin ella", () => {
+    expect(tipos(COMPLETO, [tanda("ninguna")])).toEqual(["trilla", "tostion", "empaque"]);
+    expect(tipos(COMPLETO, [tanda("todo")])).toEqual(["trilla", "tostion", "molienda", "empaque"]);
+  });
+  it("marca propia solo muestra la molienda cuando una tanda la pide", () => {
+    expect(tipos(MARCA_PROPIA, [origen({})])).toEqual(["tostion", "empaque"]);
+    expect(tipos(MARCA_PROPIA, [tanda("ninguna")])).toEqual(["tostion", "empaque"]);
+    expect(tipos(MARCA_PROPIA, [tanda("mitad")])).toEqual(["tostion", "molienda", "empaque"]);
+  });
+});
+
+describe("molienda ya hecha", () => {
+  it("una tanda ya molida no vuelve a ofrecer la molienda (ni aparece en «Por moler»)", () => {
+    const molida = origen({ procesoId: "t1", tipo: "tostion", moliendaModo: "todo", conMolienda: true, saldoKg: 135.3, baseKg: 135.3, moliendaKg: 135.3 });
+    const e = evaluarPaso(COMPLETO, "molienda", [molida]);
+    expect(e.disponible).toBe(false);
+    expect(e.motivo).toBe("La molienda ya está confirmada.");
+    // …y el empaque sí queda disponible.
+    expect(evaluarPaso(COMPLETO, "empaque", [molida]).disponible).toBe(true);
+  });
+  it("con otra tanda sin moler, solo esa se ofrece", () => {
+    const molida = origen({ procesoId: "t1", tipo: "tostion", moliendaModo: "todo", conMolienda: true });
+    const pendiente = origen({ procesoId: "t2", tipo: "tostion", moliendaModo: "todo", conMolienda: false, moliendaKg: 20 });
+    const e = evaluarPaso(COMPLETO, "molienda", [molida, pendiente]);
+    expect(e.origenes.map((o) => o.procesoId)).toEqual(["t2"]);
   });
 });

@@ -115,7 +115,8 @@ export function evaluarPaso(lote: LotePasos, tipo: TipoProceso, origenes: readon
   const piden = delTipo.filter((o) => o.moliendaModo !== "ninguna");
   const pendientesDeMoler = piden.filter((o) => !o.conMolienda);
   let elegibles = delTipo.filter((o) => o.saldoKg > toleranciaSaldoKg(o.baseKg));
-  if (tipo === "molienda") elegibles = pendientesDeMoler.length > 0 ? pendientesDeMoler : piden;
+  // La molienda solo se ofrece para las tandas que la piden y aún no se han molido: una tanda ya molida no vuelve a «Por moler».
+  if (tipo === "molienda") elegibles = pendientesDeMoler;
   if (tipo === "empaque") elegibles = elegibles.filter((o) => !tandaRequiereMolienda(lote, o) || o.conMolienda);
   const kgDe = (o: OrigenPlanta) => (tipo === "molienda" ? (o.moliendaKg ?? o.baseKg) : o.saldoKg);
   const kgDisponible = Math.round(elegibles.reduce((a, o) => a + kgDe(o) * 1000, 0)) / 1000;
@@ -128,6 +129,9 @@ export function evaluarPaso(lote: LotePasos, tipo: TipoProceso, origenes: readon
   if (tipo === "molienda" && piden.length === 0) {
     return { ...base, disponible: false, motivo: "La tostión se decidió sin molienda." };
   }
+  if (tipo === "molienda" && pendientesDeMoler.length === 0) {
+    return { ...base, disponible: false, motivo: "La molienda ya está confirmada." };
+  }
   if (tipo === "empaque" && delTipo.some((o) => o.saldoKg > toleranciaSaldoKg(o.baseKg) && tandaRequiereMolienda(lote, o) && !o.conMolienda)) {
     return { ...base, disponible: false, motivo: "Primero confirma la molienda de este café." };
   }
@@ -137,6 +141,26 @@ export function evaluarPaso(lote: LotePasos, tipo: TipoProceso, origenes: readon
 /** Todos los pasos del lote, en orden, cada uno con su evaluación. */
 export function evaluarPasos(lote: LotePasos, origenes: readonly OrigenPlanta[]): EvaluacionPaso[] {
   return pasosDelLote(lote).map((tipo) => evaluarPaso(lote, tipo, origenes));
+}
+
+/**
+ * Los pasos que SÍ se van a ejecutar en este lote: los de `evaluarPasos` menos la molienda cuando no se va a hacer. La molienda
+ * se descarta si alguna tanda ya se decidió «sin molienda» y ninguna la pide, o si es marca propia y aún no hay tostión que la
+ * pida (en marca propia la molienda nace de la decisión de la tostión). Así la pantalla no ofrece botones de pasos que nadie
+ * va a registrar. En un lote de servicio sin tostión todavía, la molienda contratada se conserva.
+ */
+export function evaluarPasosPrevistos(lote: LotePasos, origenes: readonly OrigenPlanta[]): EvaluacionPaso[] {
+  const tandas = origenes.filter((o) => o.tipo === "tostion");
+  const moliendaPrevista = tandas.length > 0 ? tandas.some((o) => tandaRequiereMolienda(lote, o)) : lote.linea === "servicio";
+  return evaluarPasos(lote, origenes).filter((e) => e.tipo !== "molienda" || moliendaPrevista);
+}
+
+/**
+ * Destino que se muestra en el botón de registrar la trilla: el paso contratado que sigue (tostión) o, si la trilla es el
+ * único servicio, que el lote queda listo. Nunca anuncia un paso que el lote no tiene.
+ */
+export function destinoTrilla(lote: LotePasos): string {
+  return lote.servicios.includes("tostion") ? "Por tostar" : "Listo para entregar";
 }
 
 /** Lo que el avance necesita de una etapa (fila de `v_lote_etapas`). */

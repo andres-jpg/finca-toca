@@ -17,20 +17,17 @@ test.use(usarRol("cafeAdmin"));
 // los 30 baches sugeridos, molienda, empaque (incluido en la maquila), remisión de entrega impresa con copia y lote
 // «Entregado». Todo por la interfaz.
 
-test("servicio trilla + maquila: recepción con aviso de humedad, planta completa, remisión con copia @tablet", async ({
+test("servicio trilla + maquila: recepción, planta completa, remisión con copia @tablet", async ({
   page,
   context,
 }) => {
-  // --- 1. Recepción: 500 kg, humedad 13 % (rango 10–12 %) ---------------------------------------------------
+  // --- 1. Recepción: 500 kg ---------------------------------------------------
   await irA(page, "/dashboard/cafe/recibir?tipo=servicios");
   await page.getByText("Selecciona o crea el cliente").click();
   await page.getByRole("option", { name: /Cliente E2E/ }).click();
+  await page.getByLabel("Tipo de café").click();
+  await page.getByRole("option", { name: "Excelso" }).click();
   await page.getByLabel("Peso recibido (kg)").fill("500");
-  await page.getByLabel("Humedad (%)").fill("13");
-  await expect(page.getByRole("status").filter({ hasText: "Humedad 13 % fuera del rango 10–12 %" })).toContainText(
-    "Puedes guardar igualmente",
-  );
-  await page.getByLabel("Densidad").fill("680");
   // Los servicios son botones de alternancia (A-08): tostión habilita la molienda y trae el empaque incluido.
   for (const servicio of ["Trilla", "Tostión", "Molienda"]) {
     await page.getByRole("button", { name: servicio, exact: true }).click();
@@ -41,13 +38,10 @@ test("servicio trilla + maquila: recepción con aviso de humedad, planta complet
 
   const codigo = (await textoDelAviso(page, /Recepción registrada: MQ-/)).match(/MQ-\d{4}-\d+/)?.[0];
   expect(codigo, "el aviso trae el código del lote MQ").toBeTruthy();
-  // La alerta de calidad avisa, pero el lote se guardó.
-  await expect(aviso(page, /Alertas de calidad: Humedad alta/)).toBeVisible();
   await expect(page).toHaveURL(/\/dashboard\/cafe\/lotes$/, { timeout: NAVEGACION_LENTA });
 
   // --- 2. Trilla: 500 → 405 kg (merma 19 %, la de referencia) -------------------------------------------------------
   await abrirPlanta(page, codigo!);
-  await expect(page.getByText("Calidad al recibir: Humedad alta")).toBeVisible();
   await expect(page.getByLabel("Entrada: pergamino del lote (kg)")).toHaveValue("500");
   await page.getByLabel("Peso final (kg)").fill("405");
   const merma = page.getByRole("region", { name: "Merma" });
@@ -75,10 +69,7 @@ test("servicio trilla + maquila: recepción con aviso de humedad, planta complet
 
   await abrirPlanta(page, codigo!);
   await page.getByRole("radio", { name: /^Empaque/ }).click();
-  // Bolsas del cliente (peso libre): 132 × 2,5 kg = 330 kg; el peso total en báscula (332 kg) incluye el sobrante de 2 kg.
-  await page.getByRole("radio", { name: "Otro (kg)" }).click();
-  await page.getByLabel("Peso por bolsa en kilos").fill("2,5");
-  await page.getByLabel("Número de bolsas").fill("132");
+  // Terceros: solo el peso total en báscula (332 kg); no se registran las bolsas del cliente.
   await page.getByLabel("Peso total en báscula (kg)").fill("332");
   await page.getByRole("button", { name: "Registrar empaque" }).click();
   // Era el último servicio. (Aparece el diálogo «Lote listo · ¿Entregar ahora?»; se prueba en entrega.spec.ts, aquí se sigue por la ficha.)

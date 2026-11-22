@@ -58,6 +58,7 @@ export const MENSAJES_RPC: Readonly<Record<string, string>> = {
   tanda_con_empaque: "Esta tanda ya tiene su empaque.",
   bascula_supera_entrada: "El peso en báscula supera lo que entró a tostión. Revisar cantidades.",
   salida_asignada_por_empaque: "La salida de esta tostión la fijó su empaque: corrígela desde el empaque.",
+  etiquetas_invalidas: "Las etiquetas no pueden ser más que las bolsas de esa línea.",
   tostado_insuficiente: "No hay tanto tostado sin empacar de ese lote. Revisar cantidades.",
   peso_supera_disponible: "El peso de entrada supera el que hay disponible para este proceso.",
   peso_final_supera_entrada: "El peso final supera la entrada. Revisar el peso.",

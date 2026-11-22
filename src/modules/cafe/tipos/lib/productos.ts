@@ -14,3 +14,12 @@ export function etiquetaPresentacion(gramos: number): string {
 export function nombreProductoTerminado(tipo: string, presentacionG: number): string {
   return `${tipo.trim().replace(/\s+/g, " ")} ${etiquetaPresentacion(presentacionG)}`;
 }
+
+/**
+ * Nombre para mostrar de un producto terminado: el de la base lleva «molido» solo en el molido («Excelso 500 g molido»);
+ * el de grano se rotula «Excelso 500 g grano» para que la forma sea siempre explícita. Si ya trae la forma no la repite.
+ * Solo es presentación: el nombre guardado en `articulos` no cambia.
+ */
+export function nombreProductoVisible(nombre: string): string {
+  return /\s(molido|grano)$/i.test(nombre.trim()) ? nombre.trim() : `${nombre.trim()} grano`;
+}

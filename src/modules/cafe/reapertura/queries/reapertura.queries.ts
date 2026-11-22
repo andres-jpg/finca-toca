@@ -5,6 +5,7 @@ import type { ReaperturaLinea } from "../../lotes/lib/linea-tiempo";
 import { textoReapertura } from "../lib/reapertura";
 import { COPY } from "../../copy";
 import type { EstadoReapertura, ProcesoDeReapertura, ReaperturaVista, SaldoPresentacion } from "../types";
+import { nombreProductoVisible } from "../../tipos/lib/productos";
 
 // Módulo plano (no "use server"): solo lo llama código de servidor. La autorización es el RLS: las vistas son
 // `security_invoker`, así que sin el módulo `cafe.procesos` activo, o sin membresía en el cliente actual, todo sale
@@ -79,7 +80,7 @@ export async function getSaldosReabribles(loteId: string): Promise<SaldoPresenta
       {
         presentacionG: s.presentacion_g,
         articuloId: s.articulo_pt_id,
-        producto: producto?.nombre ?? COPY.productoRespaldo,
+        producto: producto ? nombreProductoVisible(producto.nombre) : COPY.productoRespaldo,
         empacadas: num(s.unidades_empacadas),
         reabiertas: num(s.unidades_reabiertas),
         saldo: Math.max(0, num(s.saldo)),

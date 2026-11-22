@@ -263,3 +263,7 @@ Los nombres llevan el prefijo de fecha que dé `pnpm db:diff` al crearlas. Tras 
 - B-05 y B-08 quedan acoplados en el release.
 - Tolerancia de saldo (0,05 kg o 0,5 %) y reutilización de `peso_entrada_kg` como `kg_entrada` son decisiones de este ADR, no del ticket: Andrés debe confirmarlas.
 - Hasta el contract coexisten datos de bultos de solo lectura y columnas ocultas.
+
+## Enmienda (nov-2026): empaque desde planta en marca propia
+
+«Una tanda, un empaque» sigue valiendo para el cierre de la tanda (la báscula y la merma se fijan una sola vez), que ahora admite **cero bolsas** (todo el tostado queda en planta). El café que queda en planta (`cafe.tostado_movimientos`, por lote y forma) se muele (`moler_tostado`) y se empaca (`empacar_tostado`) las veces que haga falta. Ese empaque es un proceso de empaque de marca propia **sin origen**: no consume saldo de ninguna tostión (ya lo consumió el empaque que pesó la tanda), por eso `v_origenes_disponibles` no lo cuenta contra el café recibido y `procesos_origen_coherente` lo admite. Consecuencia: el estado del lote (`listo`) se mide con el cierre de sus tandas, no con lo que aún espera en planta; ese café se ve en Inventario → «Tostado sin empacar».

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { etiquetaPresentacion, nombreProductoTerminado } from "./productos";
+import { etiquetaPresentacion, nombreProductoTerminado, nombreProductoVisible } from "./productos";
 
 // Los mismos casos que `supabase/tests/95_cafe_tipos.test.sql` comprueba con `cafe.etiqueta_presentacion()`.
 describe("etiquetaPresentacion", () => {
@@ -28,5 +28,13 @@ describe("nombreProductoTerminado", () => {
 
   it("normaliza los espacios del tipo", () => {
     expect(nombreProductoTerminado("  Excelso   Premium ", 500)).toBe("Excelso Premium 500 g");
+  });
+});
+
+describe("nombreProductoVisible", () => {
+  it("rotula el grano y respeta el molido", () => {
+    expect(nombreProductoVisible("Excelso 500 g")).toBe("Excelso 500 g grano");
+    expect(nombreProductoVisible("Excelso 2.500 g molido")).toBe("Excelso 2.500 g molido");
+    expect(nombreProductoVisible("Consumo 500 g grano")).toBe("Consumo 500 g grano");
   });
 });

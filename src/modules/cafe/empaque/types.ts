@@ -122,3 +122,15 @@ export const REF_LOTE = "cafe.lote";
 export const REF_CONVERSION = "cafe.conversion";
 /** `ref_tipo` de una venta (CO-31): `ref_id` = la venta. */
 export const REF_VENTA = "cafe.venta";
+
+/** Respuesta de `cafe.empacar_tostado`: empaque desde el tostado en planta (sin báscula ni tanda). */
+export interface ResultadoEmpaqueDesdePlanta {
+  proceso_id: string;
+  en_bolsas_kg: number;
+  grano_restante_kg: number;
+  molido_restante_kg: number;
+  lineas: { presentacion_g: number; unidades: number; kg: number; forma?: "grano" | "molido"; etiquetas: number; producto_id: string | null; producto: string | null }[];
+  stocks: { articulo_id: string; stock: number; bajo_minimo: boolean }[];
+  costo_insumos?: { total: number; completo: boolean; aplica: boolean } | null;
+  advertencias: { articulo_id: string; articulo?: string | null; stock_resultante: number }[];
+}

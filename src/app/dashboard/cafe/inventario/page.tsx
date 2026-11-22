@@ -46,7 +46,7 @@ export default async function InventarioPage({ searchParams }: { searchParams: P
       </div>
       <InventarioPestanas activa={tab} enPlanta={lotesTerceros.length} bajos={bajos.length} />
 
-      {tab === "marca-propia" && <PestanaMarcaPropia puedeRegistrar={rolTenant !== "viewer"} zonaHoraria={tenant.zonaHoraria} hoy={hoy} />}
+      {tab === "marca-propia" && <PestanaMarcaPropia puedeRegistrar={rolTenant !== "viewer"} zonaHoraria={tenant.zonaHoraria} hoy={hoy} presentaciones={presentacionesConBolsa(insumos)} />}
       {tab === "servicios" && <PestanaServicios lotes={lotesTerceros} />}
       {tab === "insumos" && <PestanaInsumos insumos={insumos} bajoMinimo={bajos} rolTenant={rolTenant} zonaHoraria={tenant.zonaHoraria} hoy={hoy} />}
     </div>
@@ -61,7 +61,7 @@ async function AccionesDeCabecera({ puedeRegistrar, puedeAjustar, hoy }: { puede
   return <AccionesInventario productos={productos} saldosConvertibles={saldos} puedeRegistrar={puedeRegistrar} puedeAjustar={puedeAjustar} fechaHoy={hoy} />;
 }
 
-async function PestanaMarcaPropia({ puedeRegistrar, zonaHoraria, hoy }: { puedeRegistrar: boolean; zonaHoraria: string; hoy: string }) {
+async function PestanaMarcaPropia({ puedeRegistrar, zonaHoraria, hoy, presentaciones }: { puedeRegistrar: boolean; zonaHoraria: string; hoy: string; presentaciones: number[] }) {
   const [{ matriz, productos }, verde, tostado, cargaInicial, vendidas, umbralDias, mermaRefPct] = await Promise.all([
     getMatrizProductoTerminado(),
     getCafeVerde(),
@@ -86,7 +86,7 @@ async function PestanaMarcaPropia({ puedeRegistrar, zonaHoraria, hoy }: { puedeR
   return (
     <div className="space-y-5">
       <div className="grid gap-4 lg:grid-cols-3">
-        <BloquesGranel verde={verdeTotal} tostado={sumarCargaTostado(tostado, cargaInicial.tostado)} alcance={alcance} />
+        <BloquesGranel verde={verdeTotal} tostado={sumarCargaTostado(tostado, cargaInicial.tostado)} alcance={alcance} acciones={puedeRegistrar ? { presentaciones, fechaHoy: hoy } : undefined} />
         <ResumenProductoTerminado libras={global.libras} cobertura={global.cobertura} umbralDias={umbralDias} valor={valor} />
       </div>
       <ProductoTerminadoPanel filas={filas} productos={productos} puedeRegistrarSalida={puedeRegistrar} zonaHoraria={zonaHoraria} umbralDias={umbralDias} />
@@ -107,4 +107,9 @@ function PestanaInsumos({ insumos, bajoMinimo, rolTenant, zonaHoraria, hoy }: { 
       <InsumosPanel insumos={insumos} puedeComprar={rolTenant !== "viewer"} puedeAdministrar={rolTenant === "owner" || rolTenant === "admin"} fechaHoy={hoy} zonaHoraria={zonaHoraria} />
     </div>
   );
+}
+
+/** Presentaciones (g) con una bolsa activa, de menor a mayor: las que se pueden empacar desde planta. */
+function presentacionesConBolsa(insumos: Awaited<ReturnType<typeof getInsumosEmpaque>>): number[] {
+  return [...new Set(insumos.filter((i) => i.activo && i.clase === "bolsa").map((i) => i.presentacionG))].sort((a, b) => a - b);
 }

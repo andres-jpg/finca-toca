@@ -18,6 +18,7 @@ import {
   type VentaDetalle,
   type VentaFila,
 } from "../types";
+import { nombreProductoVisible } from "../../tipos/lib/productos";
 
 // Módulo plano (no "use server"): solo lo llama código de servidor. La autorización es el RLS de `cafe.ventas`: sin
 // el módulo `cafe.ventas` activo, o sin membresía en el cliente actual, todo sale vacío.
@@ -158,7 +159,7 @@ export const getVenta = cache(async (id: string): Promise<VentaDetalle | null> =
   if (ids.length > 0) {
     const { data: articulos, error: errArticulos } = await supabase.from("articulos").select("id, nombre").in("id", ids);
     if (errArticulos) throw new Error("No se pudieron cargar los productos de la venta");
-    for (const a of articulos ?? []) nombres.set(a.id, a.nombre);
+    for (const a of articulos ?? []) nombres.set(a.id, nombreProductoVisible(a.nombre));
   }
 
   // Las líneas de una venta se insertan juntas (mismo `created_at`): se ordenan por producto para que el orden sea estable.
@@ -175,7 +176,7 @@ export const getVenta = cache(async (id: string): Promise<VentaDetalle | null> =
   const movimientos: MovimientoVenta[] = (movRes.data ?? []).map((m) => ({
     id: m.id ?? "",
     fecha: m.fecha ?? "",
-    producto: m.articulo_nombre ?? "",
+    producto: m.articulo_nombre ? nombreProductoVisible(m.articulo_nombre) : "",
     motivo: m.motivo ?? "",
     cantidad: num(m.cantidad),
   }));
@@ -216,7 +217,7 @@ export async function getProductosParaVenta(): Promise<ProductoVenta[]> {
         orden: tipo?.orden ?? 999,
         producto: {
           articuloId: s.articulo_id,
-          nombre: s.nombre,
+          nombre: nombreProductoVisible(s.nombre),
           tipoCafe: tipo?.nombre ?? "Café",
           presentacionG: a.presentacionG,
           stock: s.stock,

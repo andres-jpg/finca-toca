@@ -5,7 +5,7 @@ import { abrirPlanta, elegirTueste, irA, NAVEGACION_LENTA, registrarPaso, textoD
 test.use(usarRol("cafeAdmin"));
 
 // QA FIN-140 · escenario 1 «Terceros a crédito»: 220 kg de pergamino con trilla, tostión (medio, 205 °C, 12 min) y molienda;
-// tostión sin peso de salida; empaque 12 × 10 kg + 5 × 5 kg con báscula y sobrante entregado a granel; entrega
+// tostión sin peso de salida; empaque solo con báscula (sin bolsas del cliente); entrega
 // junto con otro lote listo del mismo cliente (UNA remisión). Por la interfaz, salvo el segundo lote (punto de partida).
 
 test("terceros a crédito: recepción, trilla, tostión por tandas, molienda, empaque y entrega de dos lotes @tablet", async ({ page }) => {
@@ -17,6 +17,8 @@ test("terceros a crédito: recepción, trilla, tostión por tandas, molienda, em
   await irA(page, "/dashboard/cafe/recibir?tipo=servicios");
   await page.getByText("Selecciona o crea el cliente").click();
   await page.getByRole("option", { name: /Cliente E2E/ }).click();
+  await page.getByLabel("Tipo de café").click();
+  await page.getByRole("option", { name: "Excelso" }).click();
   await page.getByLabel("Peso recibido (kg)").fill("220");
   for (const servicio of ["Trilla", "Tostión", "Molienda"]) {
     await page.getByRole("button", { name: servicio, exact: true }).click();
@@ -53,15 +55,11 @@ test("terceros a crédito: recepción, trilla, tostión por tandas, molienda, em
   await expect(page.getByText("La molienda no genera merma.")).toBeVisible();
   await registrarPaso(page, "Molienda realizada → Por empacar");
 
-  // --- 5. Empaque: 12 × 10 kg + 5 × 5 kg = 145 kg; báscula 146,1 kg → sobrante 1,1 kg que se entrega a granel -------------------
+  // --- 5. Empaque: solo la báscula (146,1 kg); no se registran las bolsas del cliente ---------------------------------------------
   await abrirPlanta(page, codigo!);
   await page.getByRole("radio", { name: /^Empaque/ }).click();
-  await page.getByLabel("Número de bolsas").first().fill("12");
-  await page.getByRole("button", { name: "Agregar bolsas" }).click();
-  await page.getByRole("radio", { name: "5 kg" }).nth(1).click();
-  await page.getByLabel("Número de bolsas").nth(1).fill("5");
   await page.getByLabel("Peso total en báscula (kg)").fill("146,1");
-  await expect(page.getByText("Se entrega a granel.")).toBeVisible();
+  await expect(page.getByLabel("Número de bolsas")).toHaveCount(0);
   await page.getByRole("button", { name: "Registrar empaque" }).click();
 
   // Era el último servicio: se ofrece entregar ahora y llega con el lote preseleccionado.

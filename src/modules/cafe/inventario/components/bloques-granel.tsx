@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatKg } from "@/modules/core/formato/numeros";
 import type { CafeVerdeTipo, TostadoSinEmpacar } from "../queries/inventario.queries";
 import { textoDias } from "../lib/inventario";
+import { TostadoPlantaAcciones } from "./tostado-planta-acciones";
 
 /**
  * Los dos primeros bloques de la marca propia: 1 · café verde por tostar (kg por tipo de café, con «alcanza para N días de
@@ -12,11 +13,14 @@ export function BloquesGranel({
   verde,
   tostado,
   alcance = {},
+  acciones,
 }: {
   verde: CafeVerdeTipo[];
   tostado: (Omit<TostadoSinEmpacar, "forma"> & { forma: TostadoSinEmpacar["forma"] | null })[];
   /** Días de venta que alcanza el café verde de cada tipo (nombre del tipo → días); `null` o ausente sin ventas. */
   alcance?: Record<string, number | null>;
+  /** Moler y empacar desde planta (owner/admin/operativo): presentaciones con bolsa activa y fecha de hoy. `undefined` = solo lectura. */
+  acciones?: { presentaciones: number[]; fechaHoy: string };
 }) {
   const conAlcance = verde.filter((v) => (alcance[v.tipoCafe] ?? null) !== null);
   return (
@@ -74,12 +78,25 @@ export function BloquesGranel({
                     )}
                   </span>
                 </span>
-                <span className="text-lg font-bold tabular-nums text-gray-900">{formatKg(g.kg)}</span>
+                <span className="flex items-center gap-3">
+                  {acciones && g.loteId && g.forma && (
+                    <TostadoPlantaAcciones
+                      loteId={g.loteId}
+                      codigo={g.codigo}
+                      forma={g.forma}
+                      granoKg={tostado.find((x) => x.loteId === g.loteId && x.forma === "grano")?.kg ?? 0}
+                      molidoKg={tostado.find((x) => x.loteId === g.loteId && x.forma === "molido")?.kg ?? 0}
+                      presentaciones={acciones.presentaciones}
+                      fechaHoy={acciones.fechaHoy}
+                    />
+                  )}
+                  <span className="text-lg font-bold tabular-nums text-gray-900">{formatKg(g.kg)}</span>
+                </span>
               </li>
             ))}
           </ul>
         )}
-        <p className="mt-2 text-xs text-gray-500">Sobrantes de empaque. Se ofrecen en el próximo empaque de la misma calidad y forma.</p>
+        <p className="mt-2 text-xs text-gray-500">Café tostado que sigue en planta (sobrante de una tanda o tanda pesada sin empacar). Se muele y se empaca poco a poco.</p>
       </section>
     </>
   );

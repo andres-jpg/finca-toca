@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { empaqueSchema, payloadEmpaque, payloadSalidaPt, salidaPtSchema } from "./empaque.schema";
+import { empacarTostadoSchema, empaqueSchema, molerTostadoSchema, payloadEmpacarTostado, payloadEmpaque, payloadSalidaPt, salidaPtSchema } from "./empaque.schema";
 
 const LOTE = "11111111-1111-4111-8111-111111111111";
 const TANDA = "22222222-2222-4222-8222-222222222222";
@@ -68,7 +68,9 @@ describe("empaqueSchema", () => {
     for (const malo of ["", "0", "1,5", "doce", "-4", "100000"]) {
       expect(empaqueSchema.safeParse({ ...base, lineas: [{ presentacionG: 500, unidades: malo }] }).success, malo).toBe(false);
     }
-    expect(empaqueSchema.safeParse({ ...base, lineas: [] }).success).toBe(false);
+    // Sin bolsas vale (pesar la tanda en marca propia, o terceros sin bolsas del cliente); con un café reabierto, no.
+    expect(empaqueSchema.safeParse({ ...base, pesoBasculaKg: null, lineas: [] }).success).toBe(true);
+    expect(empaqueSchema.safeParse({ ...base, reaperturaId: "0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d", lineas: [] }).success).toBe(false);
   });
 
   it("una presentación repetida es un error en la fila repetida", () => {
@@ -165,5 +167,46 @@ describe("forma (A-02)", () => {
 
   it("la forma desconocida se rechaza", () => {
     expect(empaqueSchema.safeParse({ ...baseMolido, lineas: [{ presentacionG: 500, unidades: 1, forma: "tostado" }] }).success).toBe(false);
+  });
+});
+
+describe("etiquetas en el empaque", () => {
+  const base = { loteId: "0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d", fecha: "2026-11-05", pesoBasculaKg: 40 };
+  it("viajan a la RPC solo en marca propia y cuando se indicaron", () => {
+    const v = empaqueSchema.parse({ ...base, lineas: [{ presentacionG: 500, unidades: 60, etiquetas: 20 }, { presentacionG: 2500, unidades: 4 }] });
+    const lineas = (payloadEmpaque(v) as { lineas: Record<string, unknown>[] }).lineas;
+    expect(lineas[0]).toMatchObject({ etiquetas: 20 });
+    expect(lineas[1]).not.toHaveProperty("etiquetas");
+  });
+  it("no admite más etiquetas que bolsas", () => {
+    expect(empaqueSchema.safeParse({ ...base, lineas: [{ presentacionG: 500, unidades: 5, etiquetas: 6 }] }).success).toBe(false);
+  });
+});
+
+describe("poco a poco: pesar sin bolsas, moler y empacar desde planta", () => {
+  const LOTE = "0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d";
+  it("un empaque sin bolsas es válido con báscula (pesar y dejar todo en planta)", () => {
+    expect(empaqueSchema.safeParse({ loteId: LOTE, fecha: "2026-11-05", pesoBasculaKg: 41, lineas: [] }).success).toBe(true);
+  });
+  it("moler pide kilos mayores que cero", () => {
+    expect(molerTostadoSchema.safeParse({ loteId: LOTE, kg: "10,5" }).success).toBe(true);
+    expect(molerTostadoSchema.safeParse({ loteId: LOTE, kg: "" }).success).toBe(false);
+    expect(molerTostadoSchema.safeParse({ loteId: LOTE, kg: "0" }).success).toBe(false);
+  });
+  it("empacar desde planta monta la carga de la RPC con forma y etiquetas", () => {
+    const v = empacarTostadoSchema.parse({
+      loteId: LOTE,
+      fecha: "2026-11-05",
+      lineas: [{ presentacionG: 500, unidades: "20", etiquetas: 5 }, { presentacionG: 500, unidades: 10, forma: "molido", etiquetas: 0 }],
+    });
+    expect(payloadEmpacarTostado(v)).toEqual({
+      lote_id: LOTE,
+      fecha: "2026-11-05",
+      lineas: [{ presentacion_g: 500, unidades: 20, etiquetas: 5 }, { presentacion_g: 500, unidades: 10, forma: "molido", etiquetas: 0 }],
+      observaciones: null,
+    });
+  });
+  it("empacar desde planta exige al menos una línea", () => {
+    expect(empacarTostadoSchema.safeParse({ loteId: LOTE, fecha: "2026-11-05", lineas: [] }).success).toBe(false);
   });
 });

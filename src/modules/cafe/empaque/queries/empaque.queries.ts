@@ -18,6 +18,7 @@ import {
   type LineaEmpaqueVista,
   type PresentacionEmpaque,
 } from "../types";
+import { nombreProductoVisible } from "../../tipos/lib/productos";
 
 // Módulo plano (no "use server"): solo lo llama código de servidor. La autorización es el RLS: sin el módulo o sin
 // membresía en el cliente actual las listas salen vacías. El stock nunca se guarda: es la suma de movimientos.
@@ -65,8 +66,8 @@ export async function getConfigEmpaque(loteId: string): Promise<ConfigEmpaque> {
         presentacionG: g,
         bolsa: aInsumo(bolsas.get(g)!, precios),
         etiqueta: etiqueta ? aInsumo(etiqueta, precios) : null,
-        producto: producto ? { id: producto.articulo_id, nombre: producto.nombre, stock: producto.stock } : null,
-        productoMolido: molido ? { id: molido.articulo_id, nombre: molido.nombre, stock: molido.stock } : null,
+        producto: producto ? { id: producto.articulo_id, nombre: nombreProductoVisible(producto.nombre), stock: producto.stock } : null,
+        productoMolido: molido ? { id: molido.articulo_id, nombre: nombreProductoVisible(molido.nombre), stock: molido.stock } : null,
       };
     });
 
@@ -84,7 +85,7 @@ export async function getMatrizProductoTerminado(): Promise<{ matriz: MatrizProd
 
   const productos = stock.flatMap((s): ProductoTerminado[] => {
     const a = leerAtributosProducto(s.atributos);
-    return a ? [{ articuloId: s.articulo_id, nombre: s.nombre, stock: s.stock, tipoCafeId: a.tipoCafeId, presentacionG: a.presentacionG, forma: a.forma, activo: s.activo }] : [];
+    return a ? [{ articuloId: s.articulo_id, nombre: nombreProductoVisible(s.nombre), stock: s.stock, tipoCafeId: a.tipoCafeId, presentacionG: a.presentacionG, forma: a.forma, activo: s.activo }] : [];
   });
   const tipos: TipoCafeMatriz[] = (tiposRes.data ?? []).map((t) => ({ id: t.id, nombre: t.nombre, activo: t.activo, orden: t.orden }));
   return { matriz: construirMatriz(productos, tipos), productos };
@@ -221,7 +222,7 @@ export async function getLineasEmpaque(procesoIds: readonly string[]): Promise<M
   if (idsProductos.length > 0) {
     const { data: articulos, error: errArticulos } = await supabase.from("articulos").select("id, nombre").in("id", idsProductos);
     if (errArticulos) throw new Error("No se pudieron cargar los productos empacados");
-    for (const a of articulos ?? []) nombre.set(a.id, a.nombre);
+    for (const a of articulos ?? []) nombre.set(a.id, nombreProductoVisible(a.nombre));
   }
 
   for (const l of lineas) {

@@ -49,9 +49,9 @@ export function TarjetaLote({ entrada, zonaHoraria, hoy }: { entrada: EntradaTab
 
       <div className="min-w-0">
         <p className="text-xl font-bold tracking-tight text-gray-900 tabular-nums">{lote.codigo}</p>
-        <p className="truncate text-sm text-gray-700">
+        <p className="truncate text-base font-bold text-gray-900">
           {lote.tercero}
-          {lote.tipoCafe && <span className="text-gray-500"> · {lote.tipoCafe}</span>}
+          {lote.tipoCafe && <span className="text-sm font-normal text-gray-500"> · {lote.tipoCafe}</span>}
         </p>
       </div>
 

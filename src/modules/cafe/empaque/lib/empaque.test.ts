@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   costoInsumosEmpaque,
   enteroConMiles,
+  etiquetasDeLinea,
+  textoEtiquetas,
   faltantesDeInsumo,
   kgPorUnidades,
   parsearUnidades,
@@ -222,5 +224,28 @@ describe("costoInsumosEmpaque · B-13", () => {
   });
   it("sin unidades no cuenta", () => {
     expect(costoInsumosEmpaque([{ unidades: 0, bolsaPrecio: null, etiquetaPrecio: null }])).toEqual({ total: 0, completo: true });
+  });
+});
+
+describe("etiquetas por línea (sí / no / algunas)", () => {
+  it("«Sí» = todas, «No» = ninguna, «Algunas» = las escritas", () => {
+    expect(etiquetasDeLinea("si", 60, "")).toBe(60);
+    expect(etiquetasDeLinea("no", 60, "20")).toBe(0);
+    expect(etiquetasDeLinea("algunas", 60, "20")).toBe(20);
+    expect(etiquetasDeLinea("algunas", 60, "0")).toBe(0);
+  });
+  it("«Algunas» no vale vacío, decimal, negativo ni mayor que las bolsas", () => {
+    for (const t of ["", "x", "1,5", "-1", "61"]) expect(etiquetasDeLinea("algunas", 60, t)).toBeNull();
+  });
+  it("el texto de resumen separa con y sin etiqueta", () => {
+    expect(textoEtiquetas(60, 20)).toBe("20 con etiqueta · 40 sin etiqueta");
+  });
+  it("solo las etiquetas con etiqueta consumen etiquetas y cuestan", () => {
+    expect(faltantesDeInsumo([{ presentacionG: 500, unidades: 60, etiquetas: 0, bolsaStock: 100, etiquetaStock: 0 }])).toEqual([]);
+    expect(faltantesDeInsumo([{ presentacionG: 500, unidades: 60, etiquetas: 20, bolsaStock: 100, etiquetaStock: 10 }])).toEqual([
+      { clase: "etiqueta", presentacionG: 500, resultante: -10 },
+    ]);
+    expect(costoInsumosEmpaque([{ unidades: 60, etiquetas: 20, bolsaPrecio: 700, etiquetaPrecio: 200 }])).toEqual({ total: 46000, completo: true });
+    expect(costoInsumosEmpaque([{ unidades: 40, etiquetas: 0, bolsaPrecio: 700, etiquetaPrecio: null }])).toEqual({ total: 28000, completo: true });
   });
 });

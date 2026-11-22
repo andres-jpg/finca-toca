@@ -29,7 +29,7 @@ export default async function NuevaVentaPage() {
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-800">
             Ventas marca propia <LineaBadge linea="marca_propia" />
           </h1>
-          <Link href="/dashboard/cafe/ventas" className="inline-flex min-h-11 items-center gap-1.5 text-sm text-sky-700 underline underline-offset-2 sm:min-h-0">
+          <Link href="/dashboard/cafe/ventas" className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900">
             Ventas anteriores
           </Link>
         </div>

@@ -53,6 +53,13 @@ export const lineaEmpaqueSchema = z.object({
     .enum(FORMAS_CAFE, { message: "La forma del café es grano o molido" })
     .nullish()
     .transform((v) => v ?? "grano"),
+  /** Marca propia: cuántas de las bolsas llevan etiqueta (0 = ninguna). Sin dato = todas. */
+  etiquetas: z
+    .number({ message: "Las etiquetas son un número entero" })
+    .int("Las etiquetas son un número entero")
+    .min(0, "Las etiquetas no pueden ser negativas")
+    .nullish()
+    .transform((v) => v ?? null),
   /** Servicios a terceros: la bolsa la trae el cliente (siempre `true`, nunca descuenta insumos). En marca propia siempre es `false`. */
   bolsaCliente: z
     .boolean()
@@ -97,7 +104,7 @@ export const empaqueSchema = z
       .transform((v) => v ?? null),
     lineas: z
       .array(lineaEmpaqueSchema)
-      .min(1, "Indica las unidades de al menos una presentación")
+      // Cero bolsas: pesar la tanda y dejar todo en planta (marca propia) o, en terceros, entregar lo pesado sin registrar bolsas.
       .max(MAX_PRESENTACIONES, "Demasiadas presentaciones"),
     observaciones: z
       .string()
@@ -107,6 +114,10 @@ export const empaqueSchema = z
       .transform((v) => (v ? v : null)),
   })
   .superRefine((v, ctx) => {
+    // Sin bolsas vale para pesar una tanda (marca propia) o entregar lo pesado (terceros); la base lo exige según el lote. Un café reabierto sí necesita bolsas.
+    if (v.lineas.length === 0 && v.reaperturaId !== null) {
+      ctx.addIssue({ code: "custom", path: ["lineas"], message: "Indica las unidades de al menos una presentación" });
+    }
     const vistas = new Set<string>();
     for (const [i, l] of v.lineas.entries()) {
       const clave = `${l.presentacionG}:${l.forma}`;
@@ -114,6 +125,9 @@ export const empaqueSchema = z
         ctx.addIssue({ code: "custom", path: ["lineas", i, "presentacionG"], message: "Esa presentación está repetida" });
       }
       vistas.add(clave);
+      if (l.etiquetas !== null && l.etiquetas > l.unidades) {
+        ctx.addIssue({ code: "custom", path: ["lineas", i, "etiquetas"], message: "No puede haber más etiquetas que bolsas" });
+      }
     }
   });
 
@@ -138,6 +152,56 @@ export function payloadEmpaque(v: EmpaqueValues): Json {
       unidades: l.unidades,
       ...(l.forma === "molido" ? { forma: "molido" } : {}),
       ...(l.bolsaCliente ? { bolsa_cliente: true } : {}),
+      ...(l.etiquetas !== null && !l.bolsaCliente ? { etiquetas: l.etiquetas } : {}),
+    })),
+    observaciones: v.observaciones,
+  };
+}
+
+// --- Tostado en planta: moler y empacar poco a poco (marca propia) -----------------------------------------------
+
+/** Kilos de grano a moler (de lo que hay tostado en planta de un lote). */
+export const molerTostadoSchema = z.object({
+  loteId: z.uuid({ message: "El lote no es válido" }),
+  kg: kilosOpcional.refine((n) => n !== null, "Indica los kilos a moler"),
+});
+export type MolerTostadoFormInput = z.input<typeof molerTostadoSchema>;
+
+/** Empaque desde el tostado en planta: sin báscula ni tanda, solo bolsas por presentación y forma (con sus etiquetas). */
+export const empacarTostadoSchema = z.object({
+  loteId: z.uuid({ message: "El lote no es válido" }),
+  fecha: z.string({ message: "Indica la fecha" }).regex(/^\d{4}-\d{2}-\d{2}$/, "La fecha no es válida"),
+  lineas: z
+    .array(
+      z.object({
+        presentacionG: lineaEmpaqueSchema.shape.presentacionG,
+        unidades,
+        forma: lineaEmpaqueSchema.shape.forma,
+        etiquetas: lineaEmpaqueSchema.shape.etiquetas,
+      }),
+    )
+    .min(1, "Indica las unidades de al menos una presentación")
+    .max(MAX_PRESENTACIONES, "Demasiadas presentaciones"),
+  observaciones: z
+    .string()
+    .trim()
+    .max(500, "Máximo 500 caracteres")
+    .nullish()
+    .transform((v) => (v ? v : null)),
+});
+export type EmpacarTostadoFormInput = z.input<typeof empacarTostadoSchema>;
+export type EmpacarTostadoValues = z.output<typeof empacarTostadoSchema>;
+
+/** Los nombres que espera `cafe.empacar_tostado` (snake_case). */
+export function payloadEmpacarTostado(v: EmpacarTostadoValues): Json {
+  return {
+    lote_id: v.loteId,
+    fecha: v.fecha,
+    lineas: v.lineas.map((l) => ({
+      presentacion_g: l.presentacionG,
+      unidades: l.unidades,
+      ...(l.forma === "molido" ? { forma: "molido" } : {}),
+      ...(l.etiquetas !== null ? { etiquetas: l.etiquetas } : {}),
     })),
     observaciones: v.observaciones,
   };

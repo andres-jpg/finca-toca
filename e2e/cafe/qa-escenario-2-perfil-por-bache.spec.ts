@@ -37,9 +37,6 @@ test("perfil por bache: baches con el perfil, bache 3 a 212 °C resaltado y merm
   // Empaque con una báscula que deja una merma del 30 %: «Revisar · alta» pero se puede guardar.
   await abrirPlanta(page, lote.codigo);
   await page.getByRole("radio", { name: /^Empaque/ }).click();
-  await page.getByRole("radio", { name: "Otro (kg)" }).click();
-  await page.getByLabel("Peso por bolsa en kilos").fill("1");
-  await page.getByLabel("Número de bolsas").fill("22");
   await page.getByLabel("Peso total en báscula (kg)").fill("22,9");
   await expect(page.getByText("Revisar · alta").first()).toBeVisible();
   const boton = page.getByRole("button", { name: "Registrar empaque" });

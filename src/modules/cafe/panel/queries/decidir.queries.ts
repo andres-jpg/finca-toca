@@ -11,6 +11,7 @@ import { calcularParaDecidir, SEMANAS_RITMO, type ItemDecidir, type ProveedorFue
 import { estadoProveedor } from "../lib/proveedores";
 import { resolverPeriodo, sumarDias } from "../lib/periodo";
 import { getProveedoresMarcaPropia, getRangoHumedad, getReferenciasPanel, getVentasPresentacion } from "./panel.queries";
+import { nombreProductoVisible } from "../../tipos/lib/productos";
 
 // «Para decidir hoy»: junta lo que ya leen Inventario y Planta, el ritmo de venta de las últimas 4 semanas y los proveedores del
 // mes. Módulo plano (no "use server"). La autorización es el RLS de cada tabla: un módulo que el cliente no tiene aporta una
@@ -45,7 +46,7 @@ export const getParaDecidir = cache(async (hoy: string): Promise<ItemDecidir[]> 
   return calcularParaDecidir({
     presentacionesAgotadas: productos
       .filter((p) => p.activo && estadoPresentacion(p.stock, p.stock_minimo) === "agotado")
-      .map((p) => ({ nombre: p.nombre, unidades4Semanas: unidades.get(p.articulo_id) ?? 0 })),
+      .map((p) => ({ nombre: nombreProductoVisible(p.nombre), unidades4Semanas: unidades.get(p.articulo_id) ?? 0 })),
     insumosBajoMinimo: insumos.map((i) => i.nombre),
     lotesSinRecoger: cola
       .filter((t) => t.estado === "listo" && t.linea === "servicio" && t.listoDesde && diasEntre(t.listoDesde, hoy) > diasSinRecoger)

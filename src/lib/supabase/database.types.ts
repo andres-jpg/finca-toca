@@ -71,14 +71,14 @@ isOneToOne: false
                   ]
                 },"empaque_lineas": {
                   Row: {
-                    "articulo_pt_id": string | null,"bolsa_cliente": boolean,"costo_bolsa": number | null,"costo_etiqueta": number | null,"created_at": string,"created_by": string | null,"forma": string,"id": string,"presentacion_g": number,"proceso_id": string,"tenant_id": string,"unidades": number
+                    "articulo_pt_id": string | null,"bolsa_cliente": boolean,"costo_bolsa": number | null,"costo_etiqueta": number | null,"created_at": string,"created_by": string | null,"etiquetas": number | null,"forma": string,"id": string,"presentacion_g": number,"proceso_id": string,"tenant_id": string,"unidades": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "articulo_pt_id"?: string | null,"bolsa_cliente"?: boolean,"costo_bolsa"?: number | null,"costo_etiqueta"?: number | null,"created_at"?: string,"created_by"?: string | null,"forma"?: string,"id"?: string,"presentacion_g": number,"proceso_id": string,"tenant_id"?: string,"unidades": number
+                    "articulo_pt_id"?: string | null,"bolsa_cliente"?: boolean,"costo_bolsa"?: number | null,"costo_etiqueta"?: number | null,"created_at"?: string,"created_by"?: string | null,"etiquetas"?: number | null,"forma"?: string,"id"?: string,"presentacion_g": number,"proceso_id": string,"tenant_id"?: string,"unidades": number
                   }
                   Update: {
-                    "articulo_pt_id"?: string | null,"bolsa_cliente"?: boolean,"costo_bolsa"?: number | null,"costo_etiqueta"?: number | null,"created_at"?: string,"created_by"?: string | null,"forma"?: string,"id"?: string,"presentacion_g"?: number,"proceso_id"?: string,"tenant_id"?: string,"unidades"?: number
+                    "articulo_pt_id"?: string | null,"bolsa_cliente"?: boolean,"costo_bolsa"?: number | null,"costo_etiqueta"?: number | null,"created_at"?: string,"created_by"?: string | null,"etiquetas"?: number | null,"forma"?: string,"id"?: string,"presentacion_g"?: number,"proceso_id"?: string,"tenant_id"?: string,"unidades"?: number
                   }
                   Relationships: [
                     {
@@ -905,6 +905,9 @@ isOneToOne: false
 "editar_lote":
 { Args: { "p_input": Json }; Returns: Json
                            },
+"empacar_tostado":
+{ Args: { "p": Json }; Returns: Json
+                           },
 "entregar_lotes":
 { Args: { "p": Json }; Returns: Json
                            },
@@ -931,6 +934,9 @@ isOneToOne: false
                            },
 "lote_bloqueo_edicion":
 { Args: { "p_lote": string }; Returns: string
+                           },
+"moler_tostado":
+{ Args: { "p": Json }; Returns: Json
                            },
 "orden_proceso":
 { Args: { "t": Database["cafe"]['Enums']["tipo_proceso"] }; Returns: number

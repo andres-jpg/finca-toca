@@ -13,6 +13,8 @@ test("v2 · maquila con dos perfiles: de la recepción a la remisión @tablet", 
   await irA(page, "/dashboard/cafe/recibir?tipo=servicios");
   await page.getByText("Selecciona o crea el cliente").click();
   await page.getByRole("option", { name: /Cliente E2E/ }).click();
+  await page.getByLabel("Tipo de café").click();
+  await page.getByRole("option", { name: "Excelso" }).click();
   await page.getByLabel("Peso recibido (kg)").fill("50");
   for (const servicio of ["Trilla", "Tostión", "Molienda"]) await page.getByRole("button", { name: servicio, exact: true }).click();
 
@@ -58,24 +60,15 @@ test("v2 · maquila con dos perfiles: de la recepción a la remisión @tablet", 
   await expect(page.getByText("La molienda no genera merma.")).toBeVisible();
   await registrarPaso(page, "Molienda realizada → Por empacar");
 
-  // --- 5. Empaque con bolsas del cliente, en grano y molido -------------------------------------------------------------------
+  // --- 5. Empaque solo con báscula (sin bolsas del cliente) -------------------------------------------------------------------
   await abrirPlanta(page, codigo!);
   await page.getByRole("radio", { name: /^Empaque/ }).click();
   await expect(page.getByText("Entró a tostión en esta tanda")).toBeVisible();
   await expect(page.getByText("16,6 kg").first()).toBeVisible(); // molienda solicitada: la mitad de los 33,2 kg estimados
-  const bolsas = page.getByRole("region", { name: "Bolsas del cliente" });
-  await bolsas.getByRole("radio", { name: "Otro (kg)" }).click();
-  await bolsas.getByLabel("Peso por bolsa en kilos").fill("1");
-  await bolsas.getByLabel("Número de bolsas").fill("16");
-  await bolsas.getByRole("button", { name: "Agregar bolsas" }).click();
-  await bolsas.getByRole("radiogroup", { name: "Peso por bolsa" }).nth(1).getByRole("radio", { name: "Otro (kg)" }).click();
-  await bolsas.getByLabel("Peso por bolsa en kilos").nth(1).fill("1");
-  await bolsas.getByRole("radiogroup", { name: "Forma" }).nth(1).getByRole("radio", { name: "Molido" }).click();
-  await bolsas.getByLabel("Número de bolsas").nth(1).fill("16");
   await page.getByLabel("Peso total en báscula (kg)").fill("33,2");
   const cierre = page.getByRole("region", { name: "Cierre del empaque" });
-  await expect(cierre).toContainText(/En bolsas \(kg\)\s*32,0/);
-  await expect(cierre).toContainText(/Sobrante \(kg\)\s*1,2/);
+  await expect(cierre).toContainText(/En bolsas \(kg\)\s*33,2/);
+  await expect(cierre).toContainText(/Sobrante \(kg\)\s*0,0/);
   await expect(cierre).toContainText("18,0 %");
   await page.getByRole("button", { name: "Registrar empaque" }).click();
   // Era el último servicio: la planta ofrece «Lote listo · ¿Entregar ahora?».

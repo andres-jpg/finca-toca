@@ -22,7 +22,7 @@ import { registrarProceso } from "../actions/procesos.actions";
 import { bachesSinTocar, estadoBaches, filasPorPerfil, filasSugeridas, repartirKgPorPerfil, type BacheFila, type PerfilBache } from "../lib/baches-form";
 import { decisionDeMolienda, estimarMolienda, textoEstimadoTostion, type ModoMolienda } from "../lib/molienda";
 import { aTextoDecimal, fechaCorta, formatearPeso, formatearPorcentaje, parsearDecimal } from "../lib/numero";
-import { ARTICULO_PASO, evaluarPasos, origenPeso, type LotePasos, type OrigenPlanta } from "../lib/pasos";
+import { ARTICULO_PASO, destinoTrilla, evaluarPasosPrevistos, origenPeso, type LotePasos, type OrigenPlanta } from "../lib/pasos";
 import { mermaEnVivo, textoEstadoLote, textoProcesoRegistrado, valorDelServicio } from "../lib/resumen";
 import { NIVELES_TUESTE, procesoSchema, type ProcesoFormInput, type ProcesoValues } from "../schemas/proceso.schema";
 import type { ConfigPlanta, LoteParaProceso, ProcesoHistorial } from "../types-planta";
@@ -58,7 +58,7 @@ interface ProcesoPlantaFormProps {
 /** Selector de paso + formulario del paso elegido. */
 export function ProcesoPlantaForm({ lote, origenes, procesos, config, fechaHoy, puedeConfigurarTarifas, tipoInicial, empaque, incluibles = [] }: ProcesoPlantaFormProps) {
   const lotePasos: LotePasos = useMemo(() => ({ linea: lote.linea, servicios: lote.servicios }), [lote.linea, lote.servicios]);
-  const evaluaciones = useMemo(() => evaluarPasos(lotePasos, origenes), [lotePasos, origenes]);
+  const evaluaciones = useMemo(() => evaluarPasosPrevistos(lotePasos, origenes), [lotePasos, origenes]);
   const [tipo, setTipo] = useState<TipoProceso | null>(tipoInicial);
   const evaluacion = evaluaciones.find((e) => e.tipo === tipo) ?? null;
 
@@ -328,7 +328,7 @@ function FormularioPaso({ lote, config, tipo, origenes, fechaHoy, puedeConfigura
   const textoBoton = esTostion
     ? `Registrar tostión → ${hayMolienda ? "Por moler" : "Por empacar"}`
     : esTrilla
-      ? "Registrar trilla → Por tostar"
+      ? `Registrar trilla → ${destinoTrilla({ linea: lote.linea, servicios: lote.servicios })}`
       : `Registrar ${etiquetaServicio(tipo).toLowerCase()}`;
   const onInvalid = () => toast.error("Revisar los campos marcados en rojo.");
 

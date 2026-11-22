@@ -19,6 +19,8 @@ export const ETIQUETA_FORMA: Readonly<Record<FormaCafe, string>> = { grano: "Gra
 export interface LineaEmpaqueEntrada {
   presentacionG: number;
   unidades: number;
+  /** Marca propia: cuántas de las bolsas llevan etiqueta (por defecto todas). */
+  etiquetas?: number;
   /** Por defecto `grano`. */
   forma?: FormaCafe;
 }
@@ -153,6 +155,8 @@ export interface FaltanteInsumo {
 export interface FilaStockPresentacion {
   presentacionG: number;
   unidades: number;
+  /** Bolsas que llevan etiqueta (por defecto todas). */
+  etiquetas?: number;
   bolsaStock: number | null;
   etiquetaStock: number | null;
 }
@@ -168,8 +172,9 @@ export function faltantesDeInsumo(filas: readonly FilaStockPresentacion[]): Falt
     if (f.bolsaStock !== null && f.bolsaStock - f.unidades < 0) {
       faltantes.push({ clase: "bolsa", presentacionG: f.presentacionG, resultante: f.bolsaStock - f.unidades });
     }
-    if (f.etiquetaStock !== null && f.etiquetaStock - f.unidades < 0) {
-      faltantes.push({ clase: "etiqueta", presentacionG: f.presentacionG, resultante: f.etiquetaStock - f.unidades });
+    const etiquetas = f.etiquetas ?? f.unidades;
+    if (f.etiquetaStock !== null && etiquetas > 0 && f.etiquetaStock - etiquetas < 0) {
+      faltantes.push({ clase: "etiqueta", presentacionG: f.presentacionG, resultante: f.etiquetaStock - etiquetas });
     }
   }
   return faltantes;
@@ -188,17 +193,40 @@ export function textoFaltante(f: FaltanteInsumo): string {
  * empacada le falta el precio de la bolsa o de la etiqueta: entonces el total solo suma lo que sí tiene precio.
  */
 export function costoInsumosEmpaque(
-  presentaciones: readonly { unidades: number; bolsaPrecio: number | null; etiquetaPrecio: number | null }[],
+  presentaciones: readonly { unidades: number; etiquetas?: number; bolsaPrecio: number | null; etiquetaPrecio: number | null }[],
 ): { total: number; completo: boolean } {
   let total = 0;
   let completo = true;
   for (const p of presentaciones) {
     if (p.unidades <= 0) continue;
-    if (p.bolsaPrecio === null || p.etiquetaPrecio === null) {
+    const etiquetas = p.etiquetas ?? p.unidades;
+    if (p.bolsaPrecio === null || (p.etiquetaPrecio === null && etiquetas > 0)) {
       completo = false;
       continue;
     }
-    total += p.unidades * (p.bolsaPrecio + p.etiquetaPrecio);
+    total += p.unidades * p.bolsaPrecio + etiquetas * (p.etiquetaPrecio ?? 0);
   }
   return { total: Math.round(total), completo };
+}
+
+/** Cómo se etiquetan las bolsas de una línea: todas, ninguna o solo algunas. */
+export type ModoEtiqueta = "si" | "no" | "algunas";
+export const ETIQUETA_MODO_ETIQUETA: Readonly<Record<ModoEtiqueta, string>> = { si: "Sí", no: "No", algunas: "Algunas" };
+
+/**
+ * Etiquetas de una línea según lo elegido: «Sí» = todas las bolsas, «No» = ninguna, «Algunas» = las que se escriban (entre 0 y
+ * las bolsas). `null` si «Algunas» no tiene una cantidad válida: el formulario no deja guardar.
+ */
+export function etiquetasDeLinea(modo: ModoEtiqueta, unidades: number, texto: string): number | null {
+  if (modo === "si") return unidades;
+  if (modo === "no") return 0;
+  const t = texto.trim();
+  if (!/^\d+$/.test(t)) return null;
+  const n = Number(t);
+  return n <= unidades ? n : null;
+}
+
+/** «20 con etiqueta · 40 sin etiqueta» (lo que queda por línea en el resumen). */
+export function textoEtiquetas(unidades: number, etiquetas: number): string {
+  return `${enteroConMiles(etiquetas)} con etiqueta · ${enteroConMiles(unidades - etiquetas)} sin etiqueta`;
 }
