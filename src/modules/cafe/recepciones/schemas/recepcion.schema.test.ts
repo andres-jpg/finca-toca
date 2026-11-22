@@ -5,6 +5,7 @@ const TERCERO = "0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d";
 
 const base = {
   terceroId: TERCERO,
+  tipoCafeId: "b1c2d3e4-0000-4000-8000-000000000001",
   fecha: "2026-11-05",
   pesoKg: 500,
   humedadPct: 11.5,
@@ -85,6 +86,7 @@ describe("payloadRecepcion", () => {
     const v = recepcionSchema.parse({ ...base, servicios: ["trilla", "tostion", "molienda"], nivelTueste: "medio" });
     expect(payloadRecepcion(v)).toEqual({
       tercero_id: TERCERO,
+      tipo_cafe_id: base.tipoCafeId,
       fecha: "2026-11-05",
       peso_kg: 500,
       humedad_pct: 11.5,
@@ -186,5 +188,12 @@ describe("cantidad a moler (B-03)", () => {
   it("sin molienda contratada no hay cantidad a moler", () => {
     const v = recepcionSchema.parse({ ...base, servicios: ["tostion"], nivelTueste: "medio", moliendaModo: "mitad" });
     expect(v).toMatchObject({ moliendaModo: null, moliendaKg: null });
+  });
+});
+
+describe("tipo de café de la recepción", () => {
+  it("es obligatorio y viaja a la RPC", () => {
+    expect(recepcionSchema.safeParse({ ...base, tipoCafeId: undefined }).success).toBe(false);
+    expect(payloadRecepcion(recepcionSchema.parse(base))).toMatchObject({ tipo_cafe_id: base.tipoCafeId });
   });
 });

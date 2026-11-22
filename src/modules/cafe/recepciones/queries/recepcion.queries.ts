@@ -1,5 +1,6 @@
 import { getParametro } from "@/modules/core/parametros/queries/parametros.queries";
 import { getTarifasVigentes } from "@/modules/core/tarifas/queries/tarifas.queries";
+import { listarTiposCafe } from "../../tipos/queries/tipos.queries";
 import { PARAMETROS_CAFE } from "../../parametros";
 import { obtenerPerfilTuesteVigente } from "../../perfiles/queries/perfiles.queries";
 import type { RangoCalidad } from "../lib/calidad";
@@ -20,10 +21,12 @@ export interface ConfigRecepcion {
   tarifas: Record<ServicioTarifado, number | null>;
   /** Perfil predeterminado de maquila vigente hoy (B-18): precarga el panel «Perfil de tueste»; `null` = sin configurar. */
   perfilMaquila: { nivel: NivelTueste; tempC: number; tiempoMin: number } | null;
+  /** Tipos de café activos del cliente: el que entrega el cliente de servicios se elige de aquí. */
+  tipos: { id: string; nombre: string }[];
 }
 
 export async function getConfigRecepcion(fechaHoy: string): Promise<ConfigRecepcion> {
-  const [rangoHumedad, rangoDensidad, mermaTrilla, tostionBajo, tostionMedio, tostionAlto, vigentes, perfil] = await Promise.all([
+  const [rangoHumedad, rangoDensidad, mermaTrilla, tostionBajo, tostionMedio, tostionAlto, vigentes, perfil, tipos] = await Promise.all([
     getParametro(PARAMETROS_CAFE.humedadRangoPct),
     getParametro(PARAMETROS_CAFE.densidadRango),
     getParametro(PARAMETROS_CAFE.mermaReferenciaTrillaPct),
@@ -32,6 +35,7 @@ export async function getConfigRecepcion(fechaHoy: string): Promise<ConfigRecepc
     getParametro(PARAMETROS_CAFE.mermaReferenciaTostionAltoPct),
     getTarifasVigentes(),
     obtenerPerfilTuesteVigente(null, fechaHoy),
+    listarTiposCafe(),
   ]);
 
   const tarifa = (concepto: string) => vigentes.find((t) => t.concepto === concepto)?.valor ?? null;
@@ -46,5 +50,6 @@ export async function getConfigRecepcion(fechaHoy: string): Promise<ConfigRecepc
       molienda: tarifa("cafe.molienda"),
     },
     perfilMaquila: perfil ? { nivel: perfil.nivel, tempC: perfil.tempC, tiempoMin: perfil.tiempoMin } : null,
+    tipos: tipos.filter((t) => t.activo).map((t) => ({ id: t.id, nombre: t.nombre })),
   };
 }

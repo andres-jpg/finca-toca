@@ -6,7 +6,7 @@
 --   r1 owner A   r2 operativo A   r3 viewer A   r4 owner B
 begin;
 
-select plan(56);
+select plan(59);
 
 -- 0. Preparación --------------------------------------------------------------------------------------------
 insert into auth.users (id, aud, role, email) values
@@ -196,6 +196,27 @@ select throws_ok(
   'P0001', 'tercero_no_encontrado',
   'el tercero de otro cliente no existe para este (RLS)'
 );
+-- 5b. Tipo de café que entrega el cliente (opcional en la RPC; la pantalla lo pide) ------------------------------
+insert into res
+select 'con_tipo', cafe.registrar_recepcion(pg_temp.carga('ca', jsonb_build_object(
+  'tipo_cafe_id', (select t.id from cafe.tipos_cafe t where t.nombre = 'Excelso'))));
+select is(
+  (select l.tipo_cafe_id from cafe.lotes l where l.id = (select (r ->> 'id')::uuid from res where k = 'con_tipo')),
+  (select t.id from cafe.tipos_cafe t where t.nombre = 'Excelso'),
+  'el tipo de café del cliente queda en el lote de servicio'
+);
+select throws_ok(
+  $$ select cafe.registrar_recepcion(pg_temp.carga('ca', jsonb_build_object('tipo_cafe_id', gen_random_uuid()))) $$,
+  'P0001', 'tipo_cafe_invalido',
+  'un tipo de café que no existe (o es de otro cliente) se rechaza'
+);
+insert into res select 'sin_tipo', cafe.registrar_recepcion(pg_temp.carga('ca'));
+select is(
+  (select l.tipo_cafe_id from cafe.lotes l where l.id = (select (r ->> 'id')::uuid from res where k = 'sin_tipo')),
+  null,
+  'sin tipo de café la RPC sigue aceptando la recepción (clientes anteriores)'
+);
+
 select throws_ok(
   $$ select cafe.registrar_recepcion(pg_temp.carga('ca', jsonb_build_object('tercero_id', gen_random_uuid()))) $$,
   'P0001', 'tercero_no_encontrado',

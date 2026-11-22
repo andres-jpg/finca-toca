@@ -11,9 +11,9 @@ test("solo trilla con desvío de merma y remisión", async ({ page }) => {
   await irA(page, "/dashboard/cafe/recibir?tipo=servicios");
   await page.getByText("Selecciona o crea el cliente").click();
   await page.getByRole("option", { name: /Cliente E2E/ }).click();
+  await page.getByLabel("Tipo de café").click();
+  await page.getByRole("option", { name: "Excelso" }).click();
   await page.getByLabel("Peso recibido (kg)").fill("125");
-  await page.getByLabel("Humedad (%)").fill("11");
-  await page.getByLabel("Densidad").fill("680");
   await page.getByRole("button", { name: "Trilla", exact: true }).click();
   await page.getByRole("button", { name: "Guardar y enviar a planta" }).click();
   const codigo = (await textoDelAviso(page, /Recepción registrada: MQ-/)).match(/MQ-\d{4}-\d+/)?.[0];

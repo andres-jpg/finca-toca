@@ -46,6 +46,8 @@ function construirSchema(mermaTrillaPct: number) {
   return z
   .object({
     terceroId: z.uuid({ message: "Elige el cliente" }),
+    /** Tipo de café que entrega el cliente (catálogo `cafe.tipos_cafe`). */
+    tipoCafeId: z.uuid({ message: "Elige el tipo de café" }),
     /** `YYYY-MM-DD` en la zona del cliente. */
     fecha: z.string({ message: "Indica la fecha" }).regex(/^\d{4}-\d{2}-\d{2}$/, "La fecha no es válida"),
     pesoKg: z
@@ -152,6 +154,7 @@ export type RecepcionValues = z.output<typeof recepcionSchema>;
 export function payloadRecepcion(v: RecepcionValues): Record<string, Json> {
   return {
     tercero_id: v.terceroId,
+    tipo_cafe_id: v.tipoCafeId,
     fecha: v.fecha,
     peso_kg: v.pesoKg,
     humedad_pct: v.humedadPct,

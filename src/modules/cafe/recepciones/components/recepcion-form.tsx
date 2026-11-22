@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { TerceroCombobox } from "@/modules/core/terceros/components/tercero-combobox";
@@ -24,15 +25,7 @@ import {
 } from "../../procesos/lib/molienda";
 import { parsearDecimal } from "../../procesos/lib/numero";
 import { agregarRolClienteServicio, registrarRecepcion } from "../actions/recepciones.actions";
-import {
-  ETIQUETA_ALERTA_CALIDAD,
-  formatearRango,
-  mensajeFueraDeRango,
-  mensajeRangoSinConfigurar,
-  posicionEnRango,
-  type MagnitudCalidad,
-  type RangoCalidad,
-} from "../lib/calidad";
+import { ETIQUETA_ALERTA_CALIDAD } from "../lib/calidad";
 import { estimarServicios, mermaTostionPonderada } from "../lib/estimar-servicios";
 import { kgATostar } from "../lib/perfiles";
 import type { ConfigRecepcion } from "../queries/recepcion.queries";
@@ -46,9 +39,8 @@ import { EstimacionPanel } from "./estimacion-panel";
 import { PerfilTuestePanel } from "./perfil-tueste-panel";
 
 // Formulario pensado para la tablet de recepción: campos y botones de 44 px como mínimo y teclado decimal
-// (`inputMode="decimal"`) en peso, humedad y densidad.
+// (`inputMode="decimal"`) en el peso.
 const CAMPO = "h-11 text-base";
-const ENLACE_TARIFAS = "/dashboard/tarifas";
 
 const AYUDA_SERVICIO: Record<(typeof SERVICIOS_RECEPCION)[number], string> = {
   trilla: "Pergamino → excelso",
@@ -66,43 +58,6 @@ interface RecepcionFormProps {
   puedeAdministrar: boolean;
 }
 
-/** Aviso en línea de humedad o densidad: ámbar si está fuera del rango, gris si está bien o no hay rango. */
-function AvisoCalidad({
-  magnitud,
-  valor,
-  rango,
-  puedeConfigurar,
-}: {
-  magnitud: MagnitudCalidad;
-  valor: number | null | undefined;
-  rango: RangoCalidad | null;
-  puedeConfigurar: boolean;
-}) {
-  if (!rango) {
-    return (
-      <p className="text-xs text-gray-500">
-        {mensajeRangoSinConfigurar(magnitud)}
-        {puedeConfigurar && (
-          <>
-            {" · "}
-            <Link href={ENLACE_TARIFAS} className="font-medium underline underline-offset-2">
-              Configurar en Tarifas y parámetros
-            </Link>
-          </>
-        )}
-      </p>
-    );
-  }
-  if (posicionEnRango(valor, rango) && typeof valor === "number") {
-    return (
-      <p role="status" className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
-        {mensajeFueraDeRango(magnitud, valor, rango)}
-      </p>
-    );
-  }
-  return <p className="text-xs text-gray-500">Rango aceptable: {formatearRango(rango, magnitud)}</p>;
-}
-
 /** Recepción de café de un cliente para trilla y/o maquila (HU-F1-02 y HU-F1-03). */
 export function RecepcionForm({ config, fechaHoy, puedeAdministrar }: RecepcionFormProps) {
   const router = useRouter();
@@ -116,6 +71,7 @@ export function RecepcionForm({ config, fechaHoy, puedeAdministrar }: RecepcionF
     resolver: zodResolver(recepcionSchema),
     defaultValues: {
       terceroId: "",
+      tipoCafeId: config.tipos.length === 1 ? config.tipos[0].id : "",
       fecha: fechaHoy,
       servicios: [],
       // Terceros abre con el perfil de maquila vigente (B-18): nadie digita nada para el caso común.
@@ -126,8 +82,6 @@ export function RecepcionForm({ config, fechaHoy, puedeAdministrar }: RecepcionF
       perfiles: [],
       moliendaModo: null,
       moliendaKg: null,
-      humedadPct: null,
-      densidad: null,
       observaciones: "",
     },
   });
@@ -136,8 +90,6 @@ export function RecepcionForm({ config, fechaHoy, puedeAdministrar }: RecepcionF
   const [agregandoRol, setAgregandoRol] = useState(false);
   const pesoKg = useWatch({ control, name: "pesoKg" });
   const servicios = useWatch({ control, name: "servicios" });
-  const humedadPct = useWatch({ control, name: "humedadPct" });
-  const densidad = useWatch({ control, name: "densidad" });
   const nivelTueste = useWatch({ control, name: "nivelTueste" });
   const kgTostar = kgATostar(Number(pesoKg), servicios, config.mermasRef.trilla ?? 19);
   const hayTostion = servicios.includes("tostion");
@@ -281,6 +233,29 @@ export function RecepcionForm({ config, fechaHoy, puedeAdministrar }: RecepcionF
                 )}
               </div>
             )}
+          </div>
+
+          <div className="space-y-1.5 sm:max-w-xs">
+            <Label htmlFor="rec-tipo">Tipo de café</Label>
+            <Controller
+              control={control}
+              name="tipoCafeId"
+              render={({ field }) => (
+                <Select value={field.value || ""} onValueChange={field.onChange}>
+                  <SelectTrigger id="rec-tipo" className="w-full text-base data-[size=default]:h-11">
+                    <SelectValue placeholder="Selecciona el tipo de café" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {config.tipos.map((t) => (
+                      <SelectItem key={t.id} value={t.id} className="py-2.5 text-base">
+                        {t.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            {errors.tipoCafeId && <p className="text-xs text-red-500">{errors.tipoCafeId.message}</p>}
           </div>
 
           <div className="space-y-1.5 sm:max-w-xs">
@@ -438,47 +413,6 @@ export function RecepcionForm({ config, fechaHoy, puedeAdministrar }: RecepcionF
               {...register("pesoKg", { valueAsNumber: true })}
             />
             {errors.pesoKg && <p className="text-xs text-red-500">{errors.pesoKg.message}</p>}
-          </div>
-        </section>
-
-        {/* Calidad */}
-        <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <div>
-            <h2 className="text-base font-semibold text-gray-800">Calidad del café</h2>
-            <p className="text-xs text-gray-500">Opcional. Si algo queda fuera de rango se avisa, pero no se bloquea el registro.</p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="rec-humedad">Humedad (%)</Label>
-              <Input
-                id="rec-humedad"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                max={100}
-                step="any"
-                placeholder="Ej: 11,5"
-                className={CAMPO}
-                {...register("humedadPct", { setValueAs: numeroOpcional })}
-              />
-              {errors.humedadPct && <p className="text-xs text-red-500">{errors.humedadPct.message}</p>}
-              <AvisoCalidad magnitud="humedad" valor={humedadPct} rango={config.rangoHumedad} puedeConfigurar={puedeAdministrar} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="rec-densidad">Densidad</Label>
-              <Input
-                id="rec-densidad"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step="any"
-                placeholder="Ej: 680"
-                className={CAMPO}
-                {...register("densidad", { setValueAs: numeroOpcional })}
-              />
-              {errors.densidad && <p className="text-xs text-red-500">{errors.densidad.message}</p>}
-              <AvisoCalidad magnitud="densidad" valor={densidad} rango={config.rangoDensidad} puedeConfigurar={puedeAdministrar} />
-            </div>
           </div>
         </section>
 

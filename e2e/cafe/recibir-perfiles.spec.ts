@@ -22,6 +22,8 @@ test("terceros: perfil de maquila precargado y varios perfiles por kilos @tablet
   await irA(page, "/dashboard/cafe/recibir?tipo=servicios");
   await page.getByText("Selecciona o crea el cliente").click();
   await page.getByRole("option", { name: /Cliente E2E/ }).click();
+  await page.getByLabel("Tipo de café").click();
+  await page.getByRole("option", { name: "Excelso" }).click();
   await page.getByLabel("Peso recibido (kg)").fill("40.5");
   await page.getByRole("button", { name: "Tostión", exact: true }).click();
 
