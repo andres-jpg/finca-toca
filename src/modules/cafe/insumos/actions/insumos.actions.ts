@@ -16,11 +16,14 @@ import { getKardexInsumo } from "../queries/insumos.queries";
 import {
   ajusteInsumoSchema,
   compraInsumoSchema,
+  compraMultipleSchema,
+  costoUnitarioDeLinea,
   editarInsumoSchema,
   insumoSchema,
   precioInsumoSchema,
   type AjusteInsumoFormInput,
   type CompraInsumoFormInput,
+  type CompraMultipleFormInput,
   type EditarInsumoFormInput,
   type InsumoFormInput,
   type PrecioInsumoFormInput,
@@ -180,6 +183,47 @@ export async function registrarCompraInsumo(input: CompraInsumoFormInput): Promi
   };
   const r = await callRpc<"public", "registrar_movimientos", RespuestaMovimientos>("public", "registrar_movimientos", {
     p_movs: [movimiento],
+    p_permitir_negativo: false,
+  });
+  if (r.ok) revalidatePath(RUTA);
+  return r;
+}
+
+/**
+ * Compra de VARIOS insumos con una sola fecha, proveedor y observación (p. ej. la factura). Todas las líneas entran en una
+ * sola llamada a `registrar_movimientos`: o se registran todas o ninguna. Cada línea acepta el precio unitario o el total.
+ */
+export async function registrarComprasInsumos(input: CompraMultipleFormInput): Promise<Result<RespuestaMovimientos>> {
+  const sesion = await autorizar(ROLES_OPERACION);
+  const parsed = compraMultipleSchema.safeParse(input);
+  if (!parsed.success) return datosInvalidos(parsed.error.issues[0]?.message);
+  const { lineas, terceroId, fecha, observaciones } = parsed.data;
+
+  for (const l of lineas) if (!(await cargarInsumo(l.articuloId))) return noEncontrado();
+
+  const zona = sesion.tenant.zonaHoraria;
+  const hoy = fechaHoyEnZona(zona);
+  if (fecha > hoy) return datosInvalidos("La fecha de la compra no puede ser futura.");
+  const instante = fecha === hoy ? null : instanteMediodia(fecha, zona);
+  if (fecha !== hoy && !instante) return datosInvalidos("La fecha no es válida.");
+
+  if (terceroId) {
+    const supabase = await createClient();
+    const { data } = await supabase.from("terceros").select("roles").eq("id", terceroId).maybeSingle();
+    if (!data?.roles.includes("proveedor")) return datosInvalidos("El proveedor no existe o no está registrado como proveedor.");
+  }
+
+  const movimientos: Record<string, Json>[] = lineas.map((l) => ({
+    articulo_id: l.articuloId,
+    cantidad: l.cantidad,
+    motivo: "compra",
+    ...(instante ? { fecha: instante } : {}),
+    costo_unitario: costoUnitarioDeLinea(l),
+    ...(terceroId ? { ref_tipo: REF_TERCERO, ref_id: terceroId } : {}),
+    ...(observaciones ? { observaciones } : {}),
+  }));
+  const r = await callRpc<"public", "registrar_movimientos", RespuestaMovimientos>("public", "registrar_movimientos", {
+    p_movs: movimientos,
     p_permitir_negativo: false,
   });
   if (r.ok) revalidatePath(RUTA);

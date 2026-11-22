@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CircleDollarSign, Pencil, PackagePlus, Plus, Power, PowerOff, ScrollText, SlidersHorizontal } from "lucide-react";
+import { CircleDollarSign, Pencil, PackagePlus, Plus, Power, PowerOff, ScrollText, ShoppingCart, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { DeleteConfirmationDialog } from "@/components/shared/delete-confirmation-dialog";
 import { EntityModal } from "@/components/shared/entity-modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatCOP } from "@/modules/core/formato/numeros";
 import { StockBadge } from "@/modules/core/inventario/components/stock-badge";
@@ -17,6 +18,7 @@ import type { InsumoEmpaque } from "../types";
 import { etiquetaPresentacion } from "../../tipos/lib/productos";
 import { AjusteInsumoForm } from "./ajuste-insumo-form";
 import { CompraInsumoForm } from "./compra-insumo-form";
+import { CompraMultipleForm } from "./compra-multiple-form";
 import { InsumoForm } from "./insumo-form";
 import { KardexInsumoDialog } from "./kardex-insumo-dialog";
 import { PrecioInsumoForm } from "./precio-insumo-form";
@@ -34,6 +36,7 @@ interface InsumosPanelProps {
 
 type Dialogo =
   | { tipo: "nuevo" }
+  | { tipo: "compra_multiple" }
   | { tipo: "compra" | "editar" | "ajuste" | "desactivar" | "precio"; insumo: InsumoEmpaque }
   | null;
 
@@ -69,12 +72,20 @@ export function InsumosPanel({ insumos, puedeComprar, puedeAdministrar, fechaHoy
             {!puedeComprar && " · solo lectura"}
           </p>
         </div>
-        {puedeAdministrar && (
-          <Button onClick={() => setDialogo({ tipo: "nuevo" })} className="h-11 w-full sm:h-9 sm:w-auto">
-            <Plus className="mr-2 h-4 w-4" />
-            Nuevo insumo
-          </Button>
-        )}
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {puedeComprar && (
+            <Button variant="outline" onClick={() => setDialogo({ tipo: "compra_multiple" })} className="h-11 w-full sm:h-9 sm:w-auto">
+              <ShoppingCart className="mr-2 h-4 w-4" />
+              Registrar varias compras
+            </Button>
+          )}
+          {puedeAdministrar && (
+            <Button onClick={() => setDialogo({ tipo: "nuevo" })} className="h-11 w-full sm:h-9 sm:w-auto">
+              <Plus className="mr-2 h-4 w-4" />
+              Nuevo insumo
+            </Button>
+          )}
+        </div>
       </div>
 
       {grupos.length === 0 && (
@@ -204,6 +215,16 @@ export function InsumosPanel({ insumos, puedeComprar, puedeAdministrar, fechaHoy
       <EntityModal open={dialogo?.tipo === "nuevo"} onClose={cerrar} title="Nuevo insumo de empaque">
         {dialogo?.tipo === "nuevo" && <InsumoForm onSuccess={cerrar} />}
       </EntityModal>
+      <Sheet open={dialogo?.tipo === "compra_multiple"} onOpenChange={(abierto) => !abierto && cerrar()}>
+        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
+          <SheetHeader className="pb-4">
+            <SheetTitle>Registrar varias compras</SheetTitle>
+          </SheetHeader>
+          <div className="px-4 pb-6">
+            {dialogo?.tipo === "compra_multiple" && <CompraMultipleForm insumos={insumos} fechaHoy={fechaHoy} onSuccess={cerrar} />}
+          </div>
+        </SheetContent>
+      </Sheet>
       <EntityModal open={dialogo?.tipo === "editar"} onClose={cerrar} title="Editar insumo">
         {dialogo?.tipo === "editar" && <InsumoForm insumo={dialogo.insumo} onSuccess={cerrar} />}
       </EntityModal>

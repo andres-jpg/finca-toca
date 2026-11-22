@@ -4,6 +4,8 @@ import {
   ajusteInsumoSchema,
   cantidadAjuste,
   compraInsumoSchema,
+  compraMultipleSchema,
+  costoUnitarioDeLinea,
   editarInsumoSchema,
   insumoSchema,
 } from "./insumo.schema";
@@ -127,5 +129,27 @@ describe("ajusteFormSchema", () => {
     expect(ajusteFormSchema.safeParse({ cantidad: 5, observaciones: "Conteo" }).success).toBe(false);
     expect(ajusteFormSchema.safeParse({ direccion: "aumenta", cantidad: -5, observaciones: "Conteo" }).success).toBe(false);
     expect(ajusteFormSchema.safeParse({ direccion: "aumenta", cantidad: 5, observaciones: "" }).success).toBe(false);
+  });
+});
+
+describe("compra de varios insumos", () => {
+  const A = "0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d";
+  const B = "1b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d";
+  const base = { fecha: "2026-11-05", lineas: [{ articuloId: A, cantidad: 100, modoPrecio: "unitario" as const, precio: 700 }, { articuloId: B, cantidad: 3, modoPrecio: "total" as const, precio: 100000 }] };
+
+  it("proveedor y observaciones son opcionales", () => {
+    const v = compraMultipleSchema.parse(base);
+    expect(v.terceroId).toBeNull();
+    expect(v.observaciones).toBeNull();
+  });
+  it("el precio total se convierte a unitario con 2 decimales", () => {
+    const v = compraMultipleSchema.parse(base);
+    expect(costoUnitarioDeLinea(v.lineas[0])).toBe(700);
+    expect(costoUnitarioDeLinea(v.lineas[1])).toBe(33333.33);
+  });
+  it("rechaza insumos repetidos, cantidades inválidas y compras vacías", () => {
+    expect(compraMultipleSchema.safeParse({ ...base, lineas: [base.lineas[0], base.lineas[0]] }).success).toBe(false);
+    expect(compraMultipleSchema.safeParse({ ...base, lineas: [{ ...base.lineas[0], cantidad: 0 }] }).success).toBe(false);
+    expect(compraMultipleSchema.safeParse({ ...base, lineas: [] }).success).toBe(false);
   });
 });

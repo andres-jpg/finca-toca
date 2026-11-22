@@ -79,6 +79,44 @@ export const compraInsumoSchema = z.object({
 export type CompraInsumoFormInput = z.input<typeof compraInsumoSchema>;
 export type CompraInsumoValues = z.output<typeof compraInsumoSchema>;
 
+// --- Compra de varios insumos a la vez ------------------------------------------------------------------
+
+/** Una línea de la compra múltiple: el insumo, la cantidad y el precio, unitario o total de esa línea. */
+export const lineaCompraMultipleSchema = z
+  .object({
+    articuloId,
+    cantidad: compraInsumoSchema.shape.cantidad,
+    /** El precio que escribió quien compra: por unidad o el total de la línea. */
+    modoPrecio: z.enum(["unitario", "total"], { message: "Indica si el precio es unitario o total" }),
+    precio: z
+      .number({ message: "Indica el precio" })
+      .refine(Number.isFinite, { message: "Indica el precio" })
+      .min(0, "El precio no puede ser negativo")
+      .max(100_000_000_000, "El precio es demasiado grande"),
+  });
+
+/** Varias compras con UNA fecha, un proveedor opcional y una observación opcional (p. ej. el número de factura). */
+export const compraMultipleSchema = z
+  .object({
+    fecha: compraInsumoSchema.shape.fecha,
+    terceroId: compraInsumoSchema.shape.terceroId,
+    observaciones,
+    lineas: z.array(lineaCompraMultipleSchema).min(1, "Agrega al menos un insumo").max(50, "Máximo 50 insumos por compra"),
+  })
+  .refine((v) => new Set(v.lineas.map((l) => l.articuloId)).size === v.lineas.length, {
+    path: ["lineas"],
+    message: "Hay un insumo repetido: suma sus cantidades en una sola línea",
+  });
+
+export type CompraMultipleFormInput = z.input<typeof compraMultipleSchema>;
+export type CompraMultipleValues = z.output<typeof compraMultipleSchema>;
+
+/** Precio unitario (COP, 2 decimales, como `costo_unitario`) de una línea: si escribió el total, se divide entre la cantidad. */
+export function costoUnitarioDeLinea(l: Pick<CompraMultipleValues["lineas"][number], "cantidad" | "modoPrecio" | "precio">): number {
+  const unitario = l.modoPrecio === "total" ? l.precio / l.cantidad : l.precio;
+  return Math.round(unitario * 100) / 100;
+}
+
 // --- Ajuste ---------------------------------------------------------------------------------------------
 
 /** Corrección de stock: la cantidad lleva signo (+ aumenta, − disminuye) y la observación es obligatoria. */
