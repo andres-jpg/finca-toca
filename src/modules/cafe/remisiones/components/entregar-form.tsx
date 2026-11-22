@@ -37,8 +37,9 @@ export function EntregarForm({ clientes, clienteInicial, loteInicial, fechaHoy }
   const router = useRouter();
   const [terceroId, setTerceroId] = useState<string>(clienteInicial ?? "");
   const [elegidos, setElegidos] = useState<Set<string>>(new Set(loteInicial ? [loteInicial] : []));
-  const [nombre, setNombre] = useState("");
-  const [documento, setDocumento] = useState("");
+  const inicial = clientes.find((c) => c.terceroId === clienteInicial) ?? null;
+  const [nombre, setNombre] = useState(inicial?.nombre ?? "");
+  const [documento, setDocumento] = useState(soloDigitos(inicial?.identificacion ?? ""));
   const [fecha, setFecha] = useState(fechaHoy);
   const [observaciones, setObservaciones] = useState("");
   const [intentado, setIntentado] = useState(false);
@@ -51,9 +52,16 @@ export function EntregarForm({ clientes, clienteInicial, loteInicial, fechaHoy }
   const hayErrores = Boolean(errores.nombre || errores.documento);
   const fechaMin = seleccion.reduce((m, l) => (l.fechaRecepcion > m ? l.fechaRecepcion : m), "");
 
+  // «Quién recibe» arranca con los datos del cliente; se pueden cambiar si recibe otra persona.
+  function precargarQuienRecibe(c: ClienteConLotes | null) {
+    setNombre(c?.nombre ?? "");
+    setDocumento(soloDigitos(c?.identificacion ?? ""));
+  }
+
   function cambiarCliente(id: string) {
     setTerceroId(id);
     setElegidos(new Set());
+    precargarQuienRecibe(clientes.find((c) => c.terceroId === id) ?? null);
   }
 
   function alternar(id: string) {
@@ -140,6 +148,7 @@ export function EntregarForm({ clientes, clienteInicial, loteInicial, fechaHoy }
 
         <section className="space-y-3" aria-labelledby="paso-recibe">
           <h2 id="paso-recibe" className="text-base font-semibold text-gray-800">3 · Quién recibe</h2>
+          <p className="text-sm text-gray-500">Se llena con los datos del cliente; cámbialos si recibe otra persona.</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="entrega-nombre">Nombre de quien recibe</Label>

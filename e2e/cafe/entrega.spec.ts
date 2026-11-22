@@ -31,7 +31,10 @@ test("entrega multi-lote: dos lotes del cliente en una sola remisión con quién
   await expect(resumen).toContainText(b.codigo);
   await expect(resumen).toContainText("la remisión no es una factura", { ignoreCase: true });
 
-  // 3 · Quién recibe: sin nombre y cédula no se entrega.
+  // 3 · Quién recibe: llega precargado con los datos del cliente; sin nombre y cédula no se entrega.
+  await expect(page.getByLabel("Nombre de quien recibe")).toHaveValue(/Cliente E2E/i);
+  await page.getByLabel("Nombre de quien recibe").fill("");
+  await page.getByLabel("Cédula").fill("");
   await page.getByRole("button", { name: "Entregar e imprimir remisión" }).click();
   await expect(page).toHaveURL(/\/planta\/entregar/, { timeout: NAVEGACION_LENTA });
   await expect(page.getByLabel("Nombre de quien recibe")).toHaveAttribute("aria-invalid", "true");
@@ -69,10 +72,7 @@ test("empaque del último servicio: ofrece «Entregar ahora» y lleva a /planta/
   const tostado = await registrarTostion(lote, 50.625);
   await irA(page, `/dashboard/cafe/planta/${lote.id}`);
   await page.getByRole("radio", { name: /^Empaque/ }).click();
-  // Terceros: líneas de bolsas del cliente de peso libre y el peso total en báscula (incluye el sobrante).
-  await page.getByRole("radio", { name: "Otro (kg)" }).click();
-  await page.getByLabel("Peso por bolsa en kilos").fill("1");
-  await page.getByLabel("Número de bolsas").fill(String(Math.floor(tostado)));
+  // Terceros: solo el peso total en báscula (no se registran las bolsas del cliente).
   await page.getByLabel("Peso total en báscula (kg)").fill(String(tostado).replace(".", ","));
   await page.getByRole("button", { name: "Registrar empaque" }).click();
   const dialogo = page.getByRole("dialog");

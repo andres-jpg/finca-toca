@@ -13,6 +13,7 @@ export interface LoteEntregable {
   codigo: string;
   terceroId: string;
   cliente: string;
+  clienteIdentificacion: string | null;
   /** `YYYY-MM-DD`. */
   fechaRecepcion: string;
   pesoRecibidoKg: number;
@@ -20,9 +21,12 @@ export interface LoteEntregable {
   servicios: { tipo: TipoProceso; valor: number; kgEntrada: number; kgSalida: number }[];
 }
 
+
 export interface ClienteConLotes {
   terceroId: string;
   nombre: string;
+  /** Identificación del cliente: precarga «Quién recibe» (editable). */
+  identificacion: string | null;
   lotes: LoteEntregable[];
 }
 
@@ -30,7 +34,7 @@ export interface ClienteConLotes {
 export function agruparPorCliente(lotes: readonly LoteEntregable[]): ClienteConLotes[] {
   const mapa = new Map<string, ClienteConLotes>();
   for (const l of lotes) {
-    const c = mapa.get(l.terceroId) ?? { terceroId: l.terceroId, nombre: l.cliente, lotes: [] };
+    const c = mapa.get(l.terceroId) ?? { terceroId: l.terceroId, nombre: l.cliente, identificacion: l.clienteIdentificacion, lotes: [] };
     c.lotes.push(l);
     mapa.set(l.terceroId, c);
   }
@@ -87,13 +91,18 @@ export function validarQuienRecibe(nombre: string, documento: string): ErroresQu
 export interface ExtrasLoteTiquete {
   llegadaEn: string;
   fechaRecepcion: string;
+  /** Tipo de café del lote (Excelso, Consumo…); `null` en lotes anteriores que no lo registraron. */
+  tipoCafe: string | null;
   nivelTueste: NivelTueste | null;
   perfilTempC: number | null;
   perfilTiempoMin: number | null;
-  /** Bolsas que trajo el cliente: tamaño («5 kg») y unidades. */
-  bolsasCliente: { tamano: string; unidades: number }[];
   /** Café que quedó suelto (sin bolsa), en kg. */
   sueltoKg: number;
+}
+
+/** Línea «Tipo de café» del tiquete: siempre sale; sin dato, «Sin registrar». */
+export function lineaTipoCafe(e: Pick<ExtrasLoteTiquete, "tipoCafe"> | undefined): string {
+  return e?.tipoCafe?.trim() || "Sin registrar";
 }
 
 /** «12/11/2026 · 8:42 a. m. · 500,0 kg» (B-17: kilos, sin bultos). */
@@ -105,12 +114,6 @@ export function lineaLlegada(e: Pick<ExtrasLoteTiquete, "llegadaEn" | "fechaRece
 export function lineaPerfil(e: Pick<ExtrasLoteTiquete, "nivelTueste" | "perfilTempC" | "perfilTiempoMin">): string | null {
   const t = textoPerfilTueste({ nivel: e.nivelTueste, tempC: e.perfilTempC, tiempoMin: e.perfilTiempoMin });
   return t ? t.charAt(0).toUpperCase() + t.slice(1) : null;
-}
-
-/** «2 × 5 kg · 3 × 500 g» o `null` si el cliente no trajo bolsas. */
-export function lineaBolsasCliente(bolsas: readonly { tamano: string; unidades: number }[]): string | null {
-  if (bolsas.length === 0) return null;
-  return bolsas.map((b) => `${b.unidades} × ${b.tamano}`).join(" · ");
 }
 
 /** «2,1 kg» o `null` si no quedó nada a granel. */

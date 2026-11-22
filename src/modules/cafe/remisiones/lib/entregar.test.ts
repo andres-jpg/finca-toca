@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   agruparPorCliente,
-  lineaBolsasCliente,
   lineaLlegada,
   lineaPerfil,
   lineaSuelto,
+  lineaTipoCafe,
   resumirEntrega,
   soloDigitos,
   validarQuienRecibe,
@@ -15,6 +15,7 @@ function lote(p: Partial<LoteEntregable> & Pick<LoteEntregable, "id" | "codigo">
   return {
     terceroId: "t1",
     cliente: "Juan Pérez",
+    clienteIdentificacion: "1234567",
     fechaRecepcion: "2026-11-10",
     pesoRecibidoKg: 100,
     pesoEntregadoKg: 80,
@@ -72,9 +73,7 @@ describe("validarQuienRecibe", () => {
 });
 
 describe("textos del tiquete", () => {
-  it("bolsas del cliente y suelto", () => {
-    expect(lineaBolsasCliente([])).toBeNull();
-    expect(lineaBolsasCliente([{ tamano: "5 kg", unidades: 2 }, { tamano: "500 g", unidades: 3 }])).toBe("2 × 5 kg · 3 × 500 g");
+  it("café suelto", () => {
     expect(lineaSuelto(0)).toBeNull();
     expect(lineaSuelto(3.5)).toBe("3,5 kg");
   });
@@ -89,5 +88,16 @@ describe("textos del tiquete", () => {
     expect(t).toContain("8:42");
     expect(t).toContain("500,0 kg");
     expect(t).not.toMatch(/bulto/i);
+  });
+});
+
+describe("tipo de café y quién recibe", () => {
+  it("el tiquete siempre muestra el tipo de café", () => {
+    expect(lineaTipoCafe({ tipoCafe: "Excelso" })).toBe("Excelso");
+    expect(lineaTipoCafe({ tipoCafe: null })).toBe("Sin registrar");
+    expect(lineaTipoCafe(undefined)).toBe("Sin registrar");
+  });
+  it("el cliente agrupado trae su identificación para precargar quién recibe", () => {
+    expect(agruparPorCliente([lote({ id: "a", codigo: "MQ-1" })])[0]).toMatchObject({ nombre: "Juan Pérez", identificacion: "1234567" });
   });
 });

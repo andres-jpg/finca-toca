@@ -25,7 +25,7 @@ import {
   resumenEntrega,
   valorReferencia,
 } from "@/modules/cafe/remisiones/lib/tiquete";
-import { lineaBolsasCliente, lineaLlegada, lineaPerfil, lineaSuelto } from "@/modules/cafe/remisiones/lib/entregar";
+import { lineaLlegada, lineaPerfil, lineaSuelto, lineaTipoCafe } from "@/modules/cafe/remisiones/lib/entregar";
 import { getExtrasTiquete } from "@/modules/cafe/remisiones/queries/entregar.queries";
 import { getNitDelCliente, getRemision } from "@/modules/cafe/remisiones/queries/remisiones.queries";
 
@@ -90,16 +90,15 @@ export default async function RemisionTiquetePage({ params, searchParams }: Remi
         {remision.lotes.map((l) => {
           const e = extras.get(l.loteId);
           const perfil = e ? lineaPerfil(e) : null;
-          const bolsas = e ? lineaBolsasCliente(e.bolsasCliente) : null;
           const granel = e ? lineaSuelto(e.sueltoKg) : null;
           const empaque = l.detalle.some((d) => d.servicio === "empaque");
           return (
             <div key={l.loteId}>
               <TicketSeparador />
               <TicketLinea etiqueta="Lote" valor={l.loteCodigo} fuerte />
+              <TicketLinea etiqueta="Tipo de café" valor={lineaTipoCafe(e)} />
               {e && <TicketLinea etiqueta="Llegada" valor={lineaLlegada(e, l.pesoRecibidoKg, tenant.zonaHoraria)} />}
               <ServiciosTiquete detalle={l.detalle} perfil={perfil} />
-              {empaque && bolsas && <TicketLinea etiqueta="Bolsas del cliente" valor={bolsas} />}
               {empaque && granel && <TicketLinea etiqueta="A granel" valor={granel} />}
               <TicketLinea etiqueta="Entregado" valor={formatKg(l.pesoEntregadoKg)} />
             </div>
