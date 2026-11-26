@@ -31,7 +31,7 @@ test("cortesía: no cambia el ingreso del panel y sí baja el stock", async ({ p
   await expect(page.getByText("no suma al ingreso del día")).toBeVisible();
   // El destinatario es obligatorio y no puede ser el consumidor final: se elige un cliente del maestro.
   await page.getByText("Selecciona o crea el destinatario").click();
-  await page.getByRole("option", { name: /Cliente marca propia E2E/ }).click();
+  await page.getByRole("option", { name: /Cliente marca propia E2E/i }).click();
   await elegirProductoDeVenta(page, "Excelso 500 g");
   await page.getByLabel("Cantidad", { exact: true }).fill("5");
   await page.getByLabel("Motivo de la cortesía").fill(nota);
