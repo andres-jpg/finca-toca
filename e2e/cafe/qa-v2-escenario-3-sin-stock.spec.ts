@@ -31,11 +31,11 @@ test("v2 · sin stock: bloqueo en cero, «+» deshabilitado en el máximo y la A
   await irA(page, "/dashboard/cafe/ventas/nueva");
 
   // --- 1. Consumo 2.500 g en grano, en cero: la tarjeta está bloqueada y dice «Agotado» --------------------------------------------
-  const consumo = page.getByRole("button", { name: "Agregar Consumo 2.500 g", exact: true });
+  const consumo = page.getByRole("button", { name: "Agregar Consumo 2.500 g grano", exact: true });
   await expect(consumo).toBeDisabled();
   await expect(consumo).toContainText("Agotado");
   await consumo.click({ force: true });
-  await expect(page.getByRole("group", { name: "Unidades de Consumo 2.500 g" })).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "Unidades de Consumo 2.500 g grano" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Guardar venta" })).toBeDisabled();
 
   // --- 2. Excelso 2.500 g molido: se lleva al máximo y el «+» se deshabilita -------------------------------------------------------

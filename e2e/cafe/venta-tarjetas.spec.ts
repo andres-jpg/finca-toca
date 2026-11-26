@@ -20,7 +20,7 @@ test("venta nueva por tarjetas de producto: toques, total en vivo y descuento de
 
   // Un toque agrega la línea con el precio vigente; dos toques más suman unidades.
   await elegirProductoDeVenta(page, "Excelso 500 g");
-  const tarjeta = page.getByRole("button", { name: "Agregar Excelso 500 g", exact: true });
+  const tarjeta = page.getByRole("button", { name: "Agregar Excelso 500 g grano", exact: true });
   await tarjeta.click();
   await tarjeta.click();
   await expect(page.getByLabel("Cantidad", { exact: true })).toHaveValue("3");

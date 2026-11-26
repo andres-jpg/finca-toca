@@ -24,7 +24,7 @@ test("servicio trilla + maquila: recepción, planta completa, remisión con copi
   // --- 1. Recepción: 500 kg ---------------------------------------------------
   await irA(page, "/dashboard/cafe/recibir?tipo=servicios");
   await page.getByText("Selecciona o crea el cliente").click();
-  await page.getByRole("option", { name: /Cliente E2E/ }).click();
+  await page.getByRole("option", { name: /Cliente E2E/i }).click();
   await page.getByLabel("Tipo de café").click();
   await page.getByRole("option", { name: "Excelso" }).click();
   await page.getByLabel("Peso recibido (kg)").fill("500");
@@ -105,7 +105,7 @@ test("servicio trilla + maquila: recepción, planta completa, remisión con copi
   for (const ticket of await impresion.locator(".ticket").all()) {
     await expect(ticket).toContainText(numeroRemision!);
     await expect(ticket).toContainText(codigo!);
-    await expect(ticket).toContainText("Cliente E2E");
+    await expect(ticket).toContainText(/Cliente E2E/i);
     await expect(ticket).toContainText("Peso entregado");
     // B-17: sin merma total, sin merma de molienda/empaque, sin bultos ni «Perfil pedido».
     await expect(ticket).not.toContainText(/merma total|merma de molienda|merma de empaque|bulto|perfil pedido/i);

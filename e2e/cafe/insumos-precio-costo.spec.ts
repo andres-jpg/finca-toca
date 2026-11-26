@@ -48,7 +48,7 @@ test.describe("administrador", () => {
     await expect(page.getByRole("heading", { name: "1 · Café verde por tostar" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "2 · Tostado sin empacar" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "3 · Producto terminado · listo para vender" })).toBeVisible();
-    await expect(page.getByText("Sobrantes de empaque. Se ofrecen en el próximo empaque de la misma calidad y forma.")).toBeVisible();
+    await expect(page.getByText("Café tostado que sigue en planta (sobrante de una tanda o tanda pesada sin empacar). Se muele y se empaca poco a poco.")).toBeVisible();
     await expect(page.getByText("1 lb = 500 g")).toBeVisible();
     for (const columna of ["Producto terminado", "Grano · und", "Molido · und", "Libras", "Alcanza para"]) {
       await expect(page.getByRole("columnheader", { name: columna })).toBeVisible();

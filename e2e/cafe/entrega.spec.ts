@@ -19,7 +19,7 @@ test("entrega multi-lote: dos lotes del cliente en una sola remisión con quién
 
   // 1 · Cliente (un lote no se entrega hasta elegir cliente).
   const cliente = page.getByLabel("Cliente", { exact: true });
-  const valor = await cliente.locator("option").filter({ hasText: /^Cliente E2E/ }).first().getAttribute("value");
+  const valor = await cliente.locator("option").filter({ hasText: /^Cliente E2E/i }).first().getAttribute("value");
   expect(valor, "Cliente E2E tiene lotes listos").toBeTruthy();
   await cliente.selectOption(valor!);
 

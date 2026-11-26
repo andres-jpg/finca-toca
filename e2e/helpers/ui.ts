@@ -94,7 +94,13 @@ export async function registrarPaso(page: Page, boton: string | RegExp): Promise
 }
 
 /** En el formulario de venta, agrega el producto tocando su tarjeta («Excelso 500 g»); un segundo toque suma una unidad. */
+/** Nombre con que la pantalla rotula un producto: el de grano lleva «grano» explícito (`nombreProductoVisible`). */
+export function nombreVisible(nombre: string): string {
+  return /\s(molido|grano)$/i.test(nombre.trim()) ? nombre.trim() : `${nombre.trim()} grano`;
+}
+
 export async function elegirProductoDeVenta(page: Page, nombre: string): Promise<void> {
-  await page.getByRole("button", { name: `Agregar ${nombre}`, exact: true }).click();
-  await expect(page.getByRole("group", { name: `Unidades de ${nombre}` })).toBeVisible();
+  const visible = nombreVisible(nombre);
+  await page.getByRole("button", { name: `Agregar ${visible}`, exact: true }).click();
+  await expect(page.getByRole("group", { name: `Unidades de ${visible}` })).toBeVisible();
 }
