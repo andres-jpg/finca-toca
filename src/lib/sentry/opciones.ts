@@ -1,8 +1,8 @@
 /**
  * Opciones de `Sentry.init` comunes a cliente, servidor y edge.
  *
- * Sin DSN, `enabled` queda en `false`: el SDK no envía nada, y la app y el build funcionan
- * igual (CI, local y cualquier preview sin las variables).
+ * Sin DSN, o en un Preview de Vercel, `enabled` queda en `false`: el SDK no envía nada, y la app
+ * y el build funcionan igual (CI, local y cualquier preview sin las variables).
  */
 import type { NodeOptions } from "@sentry/nextjs";
 import { antesDeEnviar, limpiarBreadcrumb, limpiarSpan } from "./filtros";
@@ -46,12 +46,20 @@ export function tasaTrazas(entorno: EntornoSentry): number {
   return entorno === "production" ? 0.1 : 1.0;
 }
 
+/**
+ * Los Preview de Vercel no envían nada a Sentry: ruido y CPU activa. `VERCEL_ENV` en servidor y
+ * `NEXT_PUBLIC_VERCEL_ENV` (publicada por `next.config.ts`) en cliente.
+ */
+export function esPreviewVercel(): boolean {
+  return (process.env.VERCEL_ENV || process.env.NEXT_PUBLIC_VERCEL_ENV) === "preview";
+}
+
 export function opcionesSentry(dsn: string | undefined) {
   const environment = entornoSentry();
 
   return {
     dsn: dsn || undefined,
-    enabled: !!dsn,
+    enabled: !!dsn && !esPreviewVercel(),
     environment,
     tracesSampleRate: tasaTrazas(environment),
     dataCollection: SIN_DATOS_PERSONALES,

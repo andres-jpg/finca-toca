@@ -6,6 +6,8 @@ const nextConfig: NextConfig = {
   // El bundle de cliente no ve SENTRY_ENVIRONMENT: se publica con el mismo valor (lib/sentry/opciones.ts).
   env: {
     NEXT_PUBLIC_SENTRY_ENVIRONMENT: process.env.SENTRY_ENVIRONMENT ?? "",
+    // Idem para VERCEL_ENV: el cliente necesita saber si es un Preview para no iniciar Sentry.
+    NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV ?? "",
   },
   experimental: {
     optimizePackageImports: ["lucide-react", "react-icons", "dexie"],
