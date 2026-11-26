@@ -29,7 +29,7 @@ test("marca propia completa: compra, tostión parcial, empaque, venta y factura 
   await page.getByRole("option", { name: "Excelso" }).click();
   // El selector de terceros no expone nombre accesible: se abre por su texto.
   await page.getByText("Selecciona un proveedor").click();
-  await page.getByRole("option", { name: /Proveedor E2E SAS/ }).click();
+  await page.getByRole("option", { name: /Proveedor E2E SAS/i }).click();
   await expect(page.getByLabel(/bulto/i)).toHaveCount(0);
   await page.getByLabel("Peso recibido (kg)").fill("320");
   await page.getByLabel("Precio por kilo ($)").fill("18500");

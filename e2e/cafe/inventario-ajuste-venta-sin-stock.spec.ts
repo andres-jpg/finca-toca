@@ -73,7 +73,7 @@ test.describe("B-15 · ajustar inventario", () => {
       await irA(page, "/dashboard/cafe/inventario");
       await page.getByRole("button", { name: "Ajustar inventario" }).click();
       await page.getByRole("combobox", { name: "Producto" }).click();
-      await page.getByRole("option", { name: /^Excelso 500 g/ }).click();
+      await page.getByRole("option", { name: /^Excelso 500 g grano/ }).click();
       await page.getByRole("radio", { name: "Diferencia" }).click();
       await page.getByRole("combobox", { name: "La diferencia" }).click();
       await page.getByRole("option", { name: "Resta del stock" }).click();
@@ -92,7 +92,7 @@ test.describe("B-15 · ajustar inventario", () => {
       expect(await stockDe("Excelso 500 g")).toBe(antes - 2);
 
       // Quién, cuándo y por qué: en el kardex del producto.
-      await page.getByRole("button", { name: "Ver kardex de Excelso 500 g" }).click();
+      await page.getByRole("button", { name: "Ver kardex de Excelso 500 g grano" }).click();
       await expect(page.getByRole("dialog").getByText(new RegExp(`Conteo físico · ${antes} → ${antes - 2} · ${nota}`))).toBeVisible();
     });
 

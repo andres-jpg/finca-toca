@@ -41,7 +41,7 @@ test("v2 · marca propia por tandas: cifras exactas de la ficha @tablet", async 
   await page.getByRole("combobox", { name: "Tipo de café" }).click();
   await page.getByRole("option", { name: "Excelso" }).click();
   await page.getByText("Selecciona un proveedor").click();
-  await page.getByRole("option", { name: /Proveedor E2E SAS/ }).click();
+  await page.getByRole("option", { name: /Proveedor E2E SAS/i }).click();
   await page.getByLabel("Peso recibido (kg)").fill("320");
   await page.getByLabel("Precio por kilo ($)").fill("28500");
   await expect(page.getByText("$9.120.000")).toBeVisible();

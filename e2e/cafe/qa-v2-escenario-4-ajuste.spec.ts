@@ -22,7 +22,7 @@ test("v2 · ajuste: el −3 de Consumo 2.500 g se corrige con «conteo físico»
   // --- 2. Ajustar inventario: «Cantidad nueva» 0, motivo «Conteo físico» --------------------------------------------------------------
   await page.getByRole("button", { name: "Ajustar inventario" }).click();
   await page.getByRole("combobox", { name: "Producto" }).click();
-  await page.getByRole("option", { name: /^Consumo 2\.500 g/ }).click();
+  await page.getByRole("option", { name: /^Consumo 2\.500 g grano/ }).click();
   await expect(page.getByText("Stock actual: −3 u")).toBeVisible();
   await page.getByRole("radio", { name: "Cantidad nueva" }).click();
   await page.getByLabel("Cantidad nueva (unidades)").fill("0");
@@ -35,7 +35,7 @@ test("v2 · ajuste: el −3 de Consumo 2.500 g se corrige con «conteo físico»
   expect(await stockDe("Consumo 2.500 g")).toBe(0);
 
   // --- 3. Kardex: motivo, antes → después y observación --------------------------------------------------------------------------------
-  await page.getByRole("button", { name: "Ver kardex de Consumo 2.500 g" }).click();
+  await page.getByRole("button", { name: "Ver kardex de Consumo 2.500 g grano" }).click();
   const dialogo = page.getByRole("dialog");
   await expect(dialogo.getByText(new RegExp(`Conteo físico · [-−]3 → 0 · ${nota}`))).toBeVisible();
   // Quién lo hizo: el usuario queda en la misma fila del kardex.
