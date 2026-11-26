@@ -59,7 +59,9 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
+  // Solo pasan por el proxy las páginas. Se excluye lo que no necesita sesión: estáticos, PWA
+  // (sw.js, workbox, manifest), imágenes y /api (cada ruta valida sesión o CRON_SECRET por sí misma).
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)",
+    "/((?!_next/static|_next/image|api/|sw\\.js|workbox-.*\\.js|manifest\\.webmanifest|marca/|screenshots/|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:png|jpg|jpeg|svg|ico|webp)$).*)",
   ],
 };
